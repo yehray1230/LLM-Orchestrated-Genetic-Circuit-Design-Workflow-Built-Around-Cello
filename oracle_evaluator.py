@@ -151,8 +151,24 @@ class CircuitEvaluator:
                 mc_feedbacks.append(f"樣本 {i}: UNINTENDED_BURDEN (Max burden {max_burden:.2f} > {TOXICITY_THRESHOLD})")
                 continue
                 
-            # 一般邏輯與 Fold Change 判定
-            res = self.evaluate_results(ode_results, target_spec, target_species)
+            # 檢查是否有 ODE 運算崩潰錯誤
+            has_error = False
+            for state_name, df in ode_results.items():
+                if "ODE_ERROR" in df.columns:
+                    err_msg = df["ODE_ERROR"].iloc[0]
+                    res = {
+                        "pass": False,
+                        "score": 0.0,
+                        "feedback_string": f"【ODE 運算發散或崩潰】{err_msg}。可能存在剛性方程奇異點或代數環迴路發散，請更改拓樸結構或修正參數。",
+                        "fold_change": 0.0
+                    }
+                    has_error = True
+                    break
+                    
+            if not has_error:
+                # 一般邏輯與 Fold Change 判定
+                res = self.evaluate_results(ode_results, target_spec, target_species)
+                
             if res["pass"]:
                 pass_count += 1
             else:
