@@ -1,69 +1,99 @@
 from __future__ import annotations
 
 import json
+
 from schemas.state import CircuitState
 from utils.llm_utils import call_llm
 
+
 def _build_system_prompt(state: CircuitState) -> str:
-    system_prompt = (
-    "【角色與職責】\n"
-    "你是一位專精於合成生物學的「生物邏輯架構師（Bio-Logic Architect）」。\n"
-    "你的任務是將使用者的自然語言需求，轉化為具備「生物物理學感知」的基因電路邏輯網路。\n"
-    "請記住：你的設計最終將由 Cello CAD 系統編譯為實體 DNA。你【必須】考量生物資源極限與訊號延遲，並輸出 Cello 能夠理解且不會錯誤優化（Optimize away）的代碼格式。\n\n"
-    
-    "【Skill Library 閱讀與應用指南】\n"
-    "系統會提供一份 JSON 格式的 Skill Library 作為你的標準元件庫。設計時請遵守以下原則：\n"
-    "- `estimated_repressor_cost`：單一方案的總抑制子消耗量【絕對不可超過 10 個】。\n"
-    "- 防禦競爭危害 (Race Condition)：若並行訊號邏輯深度不同，請主動安插 Buffer (如雙重 NOT 閘) 來對齊訊號。\n"
-    "- 【極度重要：Cello 編譯器陷阱】：Cello 是一個純組合邏輯化簡器。若你設計了動態網路 (如 Pulse Generator 的 I1-FFL)，Cello 會將 `A AND NOT(A)` 化簡為 `0`。因此，涉及時間動態的 Motif，你【必須】使用特殊標籤保護，或者使用「結構化 Verilog (Structural Verilog, 即明確呼叫 NOR/NOT 閘)」而非「行為化 Verilog (assign Y = A & B)」。\n\n"
+    system_prompt = f"""You are Bio-Logic Architect, a synthetic biology design agent.
 
-    f"【最高設計法則：基於生物學妥協 (Trade-offs) 的多樣性】\n"
-    f"為了達成用戶目標：【{state.user_intent}】，你必須提出 3 種基於不同生物學權衡的候選方案：\n"
-    "1. 方案 A (Minimal Cost)：追求最低的 repressor_cost，容許輕微漏電。\n"
-    "2. 方案 B (Minimal Delay)：追求最淺的 logic_depth，降低轉錄級聯延遲。\n"
-    "3. 方案 C (Robust & Dynamic)：容許高資源消耗，主動安插抗噪或動態控制 Motif。\n\n"
-    
-    "【輸出格式規範】"
-    "請嚴格以 JSON 格式輸出，不要包含任何 Markdown 標記，直接輸出合法 JSON 字串。"
-    "{\n"
-    '  "proposal_a": {\n'
-    '    "strategy_description": "描述你的設計策略與妥協考量",\n'
-    '    "total_logic_depth": 2,\n'
-    '    "total_repressor_cost": 3,\n'
-    '    "logic_blueprint": "Z = PULSE_GENERATOR(X, Y_repressor)", // 使用高階的 Motif 或邏輯表達式\n'
-    '    "translator_directives": ["PRESERVE_LOGIC: PULSE_GENERATOR", "USE_STRUCTURAL_INSTANTIATION"] // 給 Translator 的明確施工指令\n'
-    '  },\n'
-    '  "proposal_b": { ... },\n'
-    '  "proposal_c": { ... }\n'
-    "}\n"
-)
-    # 附加 Skill Library (以字串形式注入前述建構好的 JSON)
-    # 載入「設計邏輯」Skill Library 標準元件庫
+Goal:
+- Convert the user's intent into three Cello-compatible genetic circuit design proposals.
+- Keep designs combinational and suitable for Cello CAD technology mapping.
+- Prefer designs that can later be translated to simple Verilog gates (`and`, `or`, `not`, `nand`, `nor`, `xor`, `xnor`, or `assign`).
+
+Target host:
+{state.host_organism}
+
+User intent:
+{state.user_intent}
+
+Design constraints:
+- Return exactly three proposals: `proposal_a`, `proposal_b`, and `proposal_c`.
+- Proposal A should minimize biological part cost.
+- Proposal B should minimize logic depth and delay.
+- Proposal C should prioritize robustness or dynamic behavior while remaining Cello-compatible.
+- Avoid sequential logic, delay syntax, clocks, memory elements, or Verilog constructs Cello cannot map.
+- If you use motifs such as pulse-like behavior or feed-forward logic, describe them in a way the Translator can preserve as structural combinational logic.
+- Include translator directives when a design requires structural instantiation rather than a simplified Boolean expression.
+
+Output only valid JSON. No Markdown, no comments.
+
+Required schema:
+{{
+  "proposal_a": {{
+    "strategy_description": "short design rationale",
+    "total_logic_depth": 2,
+    "total_repressor_cost": 3,
+    "logic_blueprint": "Y = A AND NOT B",
+    "translator_directives": ["USE_STRUCTURAL_INSTANTIATION"]
+  }},
+  "proposal_b": {{
+    "strategy_description": "short design rationale",
+    "total_logic_depth": 1,
+    "total_repressor_cost": 4,
+    "logic_blueprint": "Y = A OR B",
+    "translator_directives": []
+  }},
+  "proposal_c": {{
+    "strategy_description": "short design rationale",
+    "total_logic_depth": 3,
+    "total_repressor_cost": 5,
+    "logic_blueprint": "Y = ROBUST_COMBINATIONAL_MOTIF(A, B)",
+    "translator_directives": ["PRESERVE_LOGIC"]
+  }}
+}}
+"""
+
     try:
-        with open("邏輯設計skill.json", "r", encoding="utf-8") as f:
-            skill_library = f.read()
-        system_prompt += f"\n\n【邏輯設計 (Skill Library 標準元件庫)】\n{skill_library}"
+        try:
+            with open("skill.json", "r", encoding="utf-8") as f:
+                skill_library = f.read()
+        except FileNotFoundError:
+            with open("邏輯設計skill.json", "r", encoding="utf-8") as f:
+                skill_library = f.read()
+        system_prompt += f"\nReusable design skill library:\n{skill_library}\n"
     except Exception:
-        # 如果檔案讀取失敗，則回退至 state 提供的內容
-        if hasattr(state, 'skill_library_context') and state.skill_library_context:
-            system_prompt += f"\n\n【本次載入的 Skill Library 標準元件庫】\n{state.skill_library_context}"
-        elif state.rag_context: 
-            system_prompt += f"\n\n【本次檢索到的參考知識 (Skill Library / RAG)】\n{state.rag_context}"
+        if getattr(state, "skill_library_context", None):
+            system_prompt += f"\nReusable design skill context:\n{state.skill_library_context}\n"
+        elif state.rag_context:
+            system_prompt += f"\nRetrieved context:\n{state.rag_context}\n"
 
-    # 若有 Critic 提供的退回修改建議，加入背景中
     if state.latest_critic_feedback:
         system_prompt += (
-            "\n\n【來自 Critic 的退回修改/HITL 介入建議】\n"
-            "前一次的邏輯設計在轉譯、Cello 實體編譯或人類審查時，發現存在缺陷或有新的追加條件。\n"
-            f"請務必嚴格遵循以下反饋重新設計邏輯：\n{state.latest_critic_feedback}\n"
+            "\nCritic feedback to address in this revision:\n"
+            f"{state.latest_critic_feedback}\n"
         )
-        
+
     return system_prompt
 
-def call_builder(state: CircuitState, api_key: str | None, model_name: str, api_base: str | None = None, force_zero_shot: bool = False, **kwargs) -> CircuitState:
+
+def call_builder(
+    state: CircuitState,
+    api_key: str | None,
+    model_name: str,
+    api_base: str | None = None,
+    force_zero_shot: bool = False,
+    **kwargs,
+) -> CircuitState:
     system_prompt = _build_system_prompt(state)
-    user_content = "請根據系統提示的規則與使用者的需求，以純 JSON 格式輸出 3 個不同的設計方案。"
-    
+    user_content = (
+        "Generate three alternative Cello-compatible genetic circuit proposals "
+        "for the target intent. Output only the JSON object described in the system prompt."
+    )
+
     response = call_llm(
         api_key=api_key,
         model_name=model_name,
@@ -71,33 +101,33 @@ def call_builder(state: CircuitState, api_key: str | None, model_name: str, api_
         user_content=user_content,
         api_base=api_base,
     )
-    
+
     if response.startswith("ERROR:"):
         state.last_error = response
         return state
-        
+
     try:
         start = response.find("{")
         end = response.rfind("}")
         if start != -1 and end != -1:
-            json_str = response[start:end+1]
+            json_str = response[start : end + 1]
             data = json.loads(json_str)
-            
-            proposals = []
-            for k, v in data.items():
-                if isinstance(v, dict):
-                    proposals.append(json.dumps(v, ensure_ascii=False))
-            
-            if not proposals:
-                state.logic_proposals = [json_str]
-            else:
-                state.logic_proposals = proposals
+            proposals = [
+                json.dumps(value, ensure_ascii=False)
+                for value in data.values()
+                if isinstance(value, dict)
+            ]
+            state.logic_proposals = proposals or [json_str]
         else:
             state.logic_proposals = [response]
-            
+
         state.current_topology = state.logic_proposals[0] if state.logic_proposals else ""
-        
-    except Exception as e:
-        state.last_error = f"ERROR: 無法解析 Builder 回傳的 JSON。錯誤：{str(e)}\n回傳內容：{response}"
-        
+        state.last_error = None
+
+    except Exception as exc:
+        state.last_error = (
+            f"ERROR: Builder response could not be parsed as JSON: {exc}\n"
+            f"Raw response:\n{response}"
+        )
+
     return state
