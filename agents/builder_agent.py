@@ -1,12 +1,10 @@
 from __future__ import annotations
-
 import json
-
-from schemas.state import CircuitState
+from schemas.state import DesignState
+from agents.base import AgentProtocol
 from utils.llm_utils import call_llm
 
-
-def _build_system_prompt(state: CircuitState) -> str:
+def _build_system_prompt(state: DesignState) -> str:
     system_prompt = f"""You are Bio-Logic Architect, a synthetic biology design agent.
 
 Goal:
@@ -56,7 +54,6 @@ Required schema:
   }}
 }}
 """
-
     try:
         try:
             with open("skill.json", "r", encoding="utf-8") as f:
@@ -68,26 +65,43 @@ Required schema:
     except Exception:
         if getattr(state, "skill_library_context", None):
             system_prompt += f"\nReusable design skill context:\n{state.skill_library_context}\n"
-        elif state.rag_context:
-            system_prompt += f"\nRetrieved context:\n{state.rag_context}\n"
+    if state.rag_context:
+        system_prompt += (
+            f"\n=== Historical Design Rules & Constraints ===\n"
+            f"{state.rag_context}\n"
+            "在構建真值表與邏輯閘時，必須嚴格遵守上述提取的生物學與物理定律，避開已知的失敗模式 (Avoid Patterns)。\n"
+        )
+
+    if getattr(state, "seed_debate_transcript", None):
+        system_prompt += (
+            "\nPrevious debate and design iterations (for context):\n"
+            f"{state.seed_debate_transcript}\n"
+        )
 
     if state.latest_critic_feedback:
         system_prompt += (
             "\nCritic feedback to address in this revision:\n"
             f"{state.latest_critic_feedback}\n"
         )
+        
+    node_id = state.current_node_id
+    if node_id and node_id in state.tree_nodes:
+        mode = state.tree_nodes[node_id].search_mode
+        system_prompt += f"\nCurrent Search Mode: {mode}\n"
+        if mode == "Repair":
+            system_prompt += "You are in REPAIR mode. You must rethink the logic based on the critic feedback.\n"
 
     return system_prompt
 
-
 def call_builder(
-    state: CircuitState,
+    state: DesignState,
     api_key: str | None,
     model_name: str,
     api_base: str | None = None,
     force_zero_shot: bool = False,
+    temperature: float = 0.7,
     **kwargs,
-) -> CircuitState:
+) -> DesignState:
     system_prompt = _build_system_prompt(state)
     user_content = (
         "Generate three alternative Cello-compatible genetic circuit proposals "
@@ -100,6 +114,8 @@ def call_builder(
         system_prompt=system_prompt,
         user_content=user_content,
         api_base=api_base,
+        temperature=temperature,
+        **kwargs
     )
 
     if response.startswith("ERROR:"):
@@ -117,11 +133,22 @@ def call_builder(
                 for value in data.values()
                 if isinstance(value, dict)
             ]
-            state.logic_proposals = proposals or [json_str]
+            
+            node_id = state.current_node_id
+            if node_id and node_id in state.tree_nodes:
+                node = state.tree_nodes[node_id]
+                node.logic_proposals = proposals or [json_str]
+                node.current_topology = node.logic_proposals[0] if node.logic_proposals else ""
+                state.logic_proposals = node.logic_proposals
+                state.current_topology = node.current_topology
+            else:
+                state.logic_proposals = proposals or [json_str]
+                state.current_topology = state.logic_proposals[0] if state.logic_proposals else ""
         else:
             state.logic_proposals = [response]
+            if state.current_node_id and state.current_node_id in state.tree_nodes:
+                state.tree_nodes[state.current_node_id].logic_proposals = state.logic_proposals
 
-        state.current_topology = state.logic_proposals[0] if state.logic_proposals else ""
         state.last_error = None
 
     except Exception as exc:
@@ -131,3 +158,32 @@ def call_builder(
         )
 
     return state
+
+class BuilderAgent(AgentProtocol):
+    def __init__(
+        self,
+        api_key: str | None,
+        model_name: str,
+        api_base: str | None = None,
+        force_zero_shot: bool = False,
+        **kwargs
+    ):
+        self.api_key = api_key
+        self.model_name = model_name
+        self.api_base = api_base
+        self.force_zero_shot = force_zero_shot
+        self.kwargs = kwargs
+
+    def run(self, state: DesignState) -> DesignState:
+        state.iteration_count += 1
+        state = call_builder(
+            state=state,
+            api_key=self.api_key,
+            model_name=self.model_name,
+            api_base=self.api_base,
+            force_zero_shot=self.force_zero_shot,
+            **self.kwargs
+        )
+        if state.last_error:
+            state.is_completed = True
+        return state
