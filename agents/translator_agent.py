@@ -1,35 +1,26 @@
 from __future__ import annotations
-
 import logging
 import re
-
 import litellm
-
-from schemas.state import CircuitState
-
+from schemas.state import DesignState
 
 def _validate_verilog_ast(code: str) -> tuple[bool, str]:
-    """Validate a small Cello-compatible combinational Verilog module."""
     if "module " not in code or "endmodule" not in code:
         return False, "missing `module` or `endmodule`."
     if "input " not in code:
         return False, "missing input declaration."
     if "output " not in code:
         return False, "missing output declaration."
-
     has_logic = any(keyword in code for keyword in ["and(", "or(", "not(", "nor(", "nand(", "xor(", "xnor(", "assign "])
     if not has_logic:
         return False, "missing combinational logic (`assign` or primitive gates)."
-
     if re.search(r"\balways\b", code):
         return False, "`always` blocks are not Cello-compatible."
     if re.search(r"\breg\b", code):
         return False, "`reg` is not allowed; use `wire` and combinational assignments."
     if "#" in code:
         return False, "delay syntax (`#`) is not allowed."
-
     return True, ""
-
 
 def _translate_single_proposal(
     proposal: str,
@@ -38,6 +29,8 @@ def _translate_single_proposal(
     api_base: str | None = None,
     rag_context: str = "",
     feedback: str = "",
+    temperature: float = 0.1,
+    is_exploitation: bool = False,
 ) -> str:
     system_prompt = """You are an expert biological circuit compiler for Cello CAD.
 
@@ -51,9 +44,20 @@ Rules:
 - Do not use `always`, `reg`, clocks, latches, memories, temporal delays, or `#`.
 - If the proposal requests preserving a motif, use explicit wires and primitive gates instead of simplifying it away.
 """
+    if is_exploitation:
+        system_prompt += "\nMODE: EXPLOITATION. Do NOT change the logical architecture. Only modify part assignments or constraints to improve scoring based on the feedback.\n"
 
     if rag_context:
-        system_prompt += f"\nRelevant retrieved context:\n{rag_context}\n"
+        system_prompt += (
+            f"\n=== Historical Design Rules & Constraints ===\n"
+            f"{rag_context}\n"
+        )
+        
+    system_prompt += (
+        "\n若歷史經驗或 Critic 的最新反饋中提及特定元件（如某個 Promoter 或 RBS）具有高代謝負荷、毒性漏電等物理問題，"
+        "你必須在生成的 Verilog 代碼中，利用 Cello 的約束語法 (如 `// cello_constraint` 或元件指派) 強制避開或替換該實體元件，"
+        "且不得隨意修改原本正確的邏輯結構。\n"
+    )
 
     if feedback:
         system_prompt += f"\nCritic feedback to address:\n{feedback}\n"
@@ -69,11 +73,10 @@ Rules:
             response = litellm.completion(
                 model=model_name,
                 messages=messages,
-                temperature=0.1,
+                temperature=temperature,
                 api_key=api_key.strip() if api_key and api_key.strip() else None,
                 api_base=api_base.strip() if api_base and api_base.strip() else None,
             )
-
             raw_output = response.choices[0].message["content"]
             match = re.search(r"(?s)module\s+\w+\s*\(.*?\);.*?endmodule", raw_output, re.MULTILINE)
             if not match:
@@ -99,26 +102,39 @@ Rules:
             logging.error("Translation error: %s", exc)
             if attempt == max_retries - 1:
                 return f"ERROR: translation failed: {exc}"
-
     return "ERROR: translation failed after retries."
 
-
 def call_translator(
-    state: CircuitState,
+    state: DesignState,
     api_key: str | None,
     model_name: str,
     api_base: str | None = None,
+    temperature: float = 0.1,
     **kwargs,
-) -> CircuitState:
-    """Translate Builder proposals into Cello-compatible Verilog snippets."""
+) -> DesignState:
     state.verilog_codes = []
-
     rag_context = state.rag_context or ""
+    
+    node = None
+    if state.current_node_id and state.current_node_id in state.tree_nodes:
+        node = state.tree_nodes[state.current_node_id]
+        
     feedback = ""
-    if state.error_type == "PART_ERROR" and state.critic_feedbacks:
+    if node and node.error_type == "PART_ERROR" and node.critic_feedbacks:
+        feedback = node.critic_feedbacks[-1]
+    elif not node and state.error_type == "PART_ERROR" and state.critic_feedbacks:
         feedback = state.critic_feedbacks[-1]
-
-    proposals = state.logic_proposals or ([state.current_topology] if state.current_topology else [])
+        
+    is_exploitation = False
+    if node and node.search_mode == "Exploitation":
+        is_exploitation = True
+        
+    proposals = []
+    if node:
+        proposals = node.logic_proposals or ([node.current_topology] if node.current_topology else [])
+    if not proposals:
+        proposals = state.logic_proposals or ([state.current_topology] if state.current_topology else [])
+        
     if not proposals:
         state.last_error = "ERROR: Translator received no logic proposals."
         return state
@@ -131,8 +147,12 @@ def call_translator(
             api_base,
             rag_context=rag_context,
             feedback=feedback,
+            temperature=temperature,
+            is_exploitation=is_exploitation
         )
         state.verilog_codes.append(verilog_result)
+        if node:
+            node.verilog_codes.append(verilog_result)
 
     if all(code.startswith("ERROR:") for code in state.verilog_codes):
         state.last_error = "ERROR: all Verilog translations failed."
