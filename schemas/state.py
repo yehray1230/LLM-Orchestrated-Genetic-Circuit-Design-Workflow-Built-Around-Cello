@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 SearchMode = Literal["Exploration", "Repair", "Exploitation"]
-NodeStatus = Literal["Pending", "Evaluated", "Pass", "Dead_End"]
+NodeStatus = Literal["Pending", "Evaluated", "Pass", "Dead_End", "Needs_Human_Input"]
 ErrorType = Literal["LOGIC_ERROR", "PART_ERROR", "BOTH", "NONE"]
 
 
@@ -24,6 +24,7 @@ class SearchNode:
     score: float = -float("inf")
 
     critic_feedbacks: list[str] = field(default_factory=list)
+    failed_attempts: list[dict[str, Any]] = field(default_factory=list)
     is_approved: bool = False
     error_type: ErrorType = "NONE"
     last_error: str | None = None
@@ -43,6 +44,8 @@ class DesignState:
     rag_context: str = ""
     skill_library_context: str = ""
     seed_debate_transcript: str = ""
+    biokinetic_context: dict[str, Any] = field(default_factory=dict)
+    extracted_skills: list[dict[str, Any]] = field(default_factory=list)
 
     logic_proposals: list[str] = field(default_factory=list)
     verilog_codes: list[str] = field(default_factory=list)
@@ -51,9 +54,14 @@ class DesignState:
     best_topology: dict[str, Any] | None = None
 
     critic_feedbacks: list[str] = field(default_factory=list)
+    failed_attempts: list[dict[str, Any]] = field(default_factory=list)
     is_approved: bool = False
     error_type: ErrorType = "NONE"
     is_completed: bool = False
+    requires_human_input: bool = False
+    human_feedback_prompt: str | None = None
+    pause_reason: str | None = None
+    human_constraints: list[str] = field(default_factory=list)
     iteration_count: int = 0
     last_error: str | None = None
 

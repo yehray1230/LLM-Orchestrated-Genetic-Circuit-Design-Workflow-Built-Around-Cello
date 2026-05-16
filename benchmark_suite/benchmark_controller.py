@@ -11,5 +11,21 @@ def evaluate_candidate(candidate: dict) -> dict:
         score_kinetic(candidate),
         score_static_plausibility(candidate),
     ]
-    score = sum(result.score for result in results) / len(results)
-    return {"score": score, "details": [result.details for result in results]}
+    score = 1.0
+    for result in results:
+        score *= max(0.0, min(1.0, float(result.score)))
+    return {
+        "score": score,
+        "grade": _grade(score),
+        "details": [result.details | {"score": result.score} for result in results],
+        "scoring_model": "multiplicative_penalty",
+    }
+
+
+def _grade(score: float) -> str:
+    scaled = score * 100.0
+    if scaled >= 80.0:
+        return "Excellent"
+    if scaled >= 60.0:
+        return "Pass"
+    return "Fail"

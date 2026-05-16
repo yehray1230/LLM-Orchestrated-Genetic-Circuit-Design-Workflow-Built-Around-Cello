@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import os
@@ -21,6 +20,7 @@ def call_llm(
     system_prompt: str,
     user_content: str,
     api_base: str | None = None,
+    temperature: float = 0.3,
 ) -> str:
     """
     Simple one-shot LiteLLM call.
@@ -32,7 +32,7 @@ def call_llm(
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_content},
             ],
-            temperature=0.3,
+            temperature=temperature,
             api_key=api_key.strip() if api_key and api_key.strip() else None,
             api_base=api_base.strip() if api_base and api_base.strip() else None,
             caching=ENABLE_LLM_CACHE,
@@ -82,16 +82,6 @@ def run_llm_with_tools(
     tool_executor_kwargs: dict[str, dict[str, Any]] | None = None,
     error_prefix: str = "LLM",
 ) -> dict[str, Any]:
-    """
-    Shared LiteLLM tool-calling loop used by multiple agents.
-
-    Returns:
-    - ok: bool
-    - final_content: str
-    - messages: list[dict[str, Any]]
-    - tool_outputs: list[dict[str, Any]]
-    - error: str | None
-    """
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_content},
@@ -111,38 +101,6 @@ def run_llm_with_tools(
                 api_base=api_base.strip() if api_base and api_base.strip() else None,
                 caching=ENABLE_LLM_CACHE,
             )
-        except litellm.exceptions.AuthenticationError:
-            return {
-                "ok": False,
-                "final_content": "",
-                "messages": messages,
-                "tool_outputs": collected_tool_outputs,
-                "error": f"ERROR: {error_prefix} authentication failed.",
-            }
-        except litellm.exceptions.RateLimitError:
-            return {
-                "ok": False,
-                "final_content": "",
-                "messages": messages,
-                "tool_outputs": collected_tool_outputs,
-                "error": f"ERROR: {error_prefix} rate limited.",
-            }
-        except litellm.exceptions.BadRequestError as exc:
-            return {
-                "ok": False,
-                "final_content": "",
-                "messages": messages,
-                "tool_outputs": collected_tool_outputs,
-                "error": f"ERROR: {error_prefix} bad request: {exc}",
-            }
-        except litellm.exceptions.APIError as exc:
-            return {
-                "ok": False,
-                "final_content": "",
-                "messages": messages,
-                "tool_outputs": collected_tool_outputs,
-                "error": f"ERROR: {error_prefix} API error: {exc}",
-            }
         except Exception as exc:
             return {
                 "ok": False,
