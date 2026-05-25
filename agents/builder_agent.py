@@ -104,10 +104,10 @@ Required schema:
     skill_context = _retrieve_skill_context(state, skill_retriever, skill_file_path)
     if skill_context:
         system_prompt += (
-            "\n=== Retrieved Successful Design Skills ===\n"
+            "\n=== Retrieved Design Memory ===\n"
             f"{skill_context}\n"
-            "Please apply the successful skills above, including Boolean decomposition strategies "
-            "and known risks, to this topology generation.\n"
+            "Apply reusable successful patterns when relevant, and treat avoid/repair memories "
+            "as constraints that should prevent repeated failed designs.\n"
         )
     elif getattr(state, "skill_library_context", None):
         system_prompt += f"\nReusable design skill context:\n{state.skill_library_context}\n"
@@ -151,6 +151,9 @@ def _retrieve_skill_context(
             retriever = None
 
     if retriever:
+        mode = "Exploration"
+        if state.current_node_id and state.current_node_id in state.tree_nodes:
+            mode = state.tree_nodes[state.current_node_id].search_mode
         query = " ".join(
             value
             for value in [
@@ -161,7 +164,7 @@ def _retrieve_skill_context(
             ]
             if value
         )
-        retrieved = retriever.retrieve_skills(query or state.user_intent, mode="Exploration", k=5)
+        retrieved = retriever.retrieve_skills(query or state.user_intent, mode=mode, k=5)
         if retrieved and retrieved not in snippets:
             snippets.append(retrieved)
     return "\n".join(snippets)

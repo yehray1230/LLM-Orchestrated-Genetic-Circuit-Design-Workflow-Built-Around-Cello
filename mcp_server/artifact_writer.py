@@ -61,7 +61,42 @@ def write_state_artifacts(state: Any, run_dir: Path, charts: list[Path] | None =
 
     for chart in charts or []:
         artifacts[chart.stem] = str(chart.resolve())
+
+    manifest_path = run_dir / "manifest.json"
+    artifacts["manifest_json"] = str(manifest_path.resolve())
+    write_json(manifest_path, _artifact_manifest(state, run_dir, artifacts))
     return artifacts
+
+
+def _artifact_manifest(state: Any, run_dir: Path, artifacts: dict[str, str]) -> dict[str, Any]:
+    descriptions = {
+        "state_json": ("json", "Full serialized design state."),
+        "summary_json": ("json", "Agent-friendly summary of the design state."),
+        "best_topology_json": ("json", "Best topology summary and benchmark details."),
+        "best_verilog": ("verilog", "Best available Cello-compatible Verilog design."),
+        "run_summary_md": ("markdown", "Human-readable run summary."),
+        "manifest_json": ("json", "Manifest describing all artifacts written by this run."),
+        "score_breakdown": ("image", "Score breakdown chart."),
+        "ode_summary": ("image", "ODE simulation summary chart."),
+    }
+    artifact_entries = []
+    for key, path in artifacts.items():
+        artifact_type, description = descriptions.get(key, ("file", f"Generated artifact: {key}."))
+        artifact_entries.append(
+            {
+                "key": key,
+                "path": path,
+                "type": artifact_type,
+                "description": description,
+            }
+        )
+    return {
+        "run_id": run_dir.name,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "user_intent": getattr(state, "user_intent", None),
+        "host_organism": getattr(state, "host_organism", None),
+        "artifacts": artifact_entries,
+    }
 
 
 def _summary_markdown(state: Any) -> str:

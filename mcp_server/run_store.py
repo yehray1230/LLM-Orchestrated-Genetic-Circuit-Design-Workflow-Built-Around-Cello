@@ -14,6 +14,7 @@ from mcp_server.serializers import to_jsonable
 
 
 TERMINAL_STATUSES = {"completed", "needs_human_input", "error", "failed", "cancelled"}
+NON_TERMINAL_STATUSES = {"queued", "running", "cancellation_requested"}
 
 
 class RunStore:
@@ -46,6 +47,8 @@ class RunStore:
             "run_dir": str(run_dir.resolve()),
             "result_path": str((run_dir / "result.json").resolve()),
             "error": None,
+            "error_type": None,
+            "cancellation_requested": False,
         }
         self._write_metadata(run_dir, metadata)
 
@@ -58,22 +61,110 @@ class RunStore:
     def status(self, run_id: str) -> dict[str, Any]:
         run_dir = self._run_dir(run_id)
         if not run_dir.exists():
-            return {"status": "not_found", "run_id": run_id, "error": f"Unknown run_id: {run_id}"}
+            return _not_found(run_id)
         metadata = self._read_metadata(run_dir)
         future = self._futures.get(run_id)
         if future and not future.done() and metadata.get("status") == "queued":
             metadata["status"] = "queued"
         return _public_status(metadata)
 
+    def list_runs(self, limit: int = 20) -> dict[str, Any]:
+        selected_limit = max(1, min(int(limit), 100))
+        runs = []
+        for run_dir in self.base_dir.iterdir():
+            if not run_dir.is_dir():
+                continue
+            metadata_path = run_dir / "metadata.json"
+            if not metadata_path.exists():
+                continue
+            try:
+                runs.append(_public_status(self._read_metadata(run_dir)))
+            except RuntimeError:
+                continue
+        runs.sort(key=lambda item: str(item.get("created_at") or ""), reverse=True)
+        return {
+            "status": "completed",
+            "error": None,
+            "error_type": None,
+            "runs": runs[:selected_limit],
+            "count": min(len(runs), selected_limit),
+            "total": len(runs),
+        }
+
+    def cancel(self, run_id: str) -> dict[str, Any]:
+        run_dir = self._run_dir(run_id)
+        if not run_dir.exists():
+            return _not_found(run_id)
+        metadata = self._read_metadata(run_dir)
+        status = str(metadata.get("status") or "unknown")
+        if status in TERMINAL_STATUSES:
+            return {
+                **_public_status(metadata),
+                "message": f"Run is already terminal with status: {status}.",
+            }
+
+        future = self._futures.get(run_id)
+        cancelled = bool(future.cancel()) if future else False
+        if cancelled:
+            result = {
+                "status": "cancelled",
+                "error": "Run was cancelled before it started.",
+                "error_type": "cancelled",
+                "async_run_id": run_id,
+                "async_run_dir": str(run_dir.resolve()),
+            }
+            write_json(run_dir / "result.json", result)
+            metadata.update(
+                {
+                    "status": "cancelled",
+                    "finished_at": _now_iso(),
+                    "updated_at": _now_iso(),
+                    "error": "Run was cancelled before it started.",
+                    "error_type": "cancelled",
+                    "cancellation_requested": True,
+                }
+            )
+        else:
+            metadata.update(
+                {
+                    "status": "cancellation_requested",
+                    "updated_at": _now_iso(),
+                    "cancellation_requested": True,
+                    "message": "Cancellation requested. Running Python tasks cannot be force-stopped safely.",
+                }
+            )
+        self._write_metadata(run_dir, metadata)
+        return _public_status(metadata)
+
+    def artifacts(self, run_id: str) -> dict[str, Any]:
+        run_dir = self._run_dir(run_id)
+        if not run_dir.exists():
+            return _not_found(run_id)
+        metadata = self._read_metadata(run_dir)
+        artifacts = metadata.get("artifacts", {})
+        manifest = None
+        if isinstance(artifacts, dict):
+            manifest_path = artifacts.get("manifest_json")
+            if manifest_path and Path(str(manifest_path)).exists():
+                manifest = json.loads(Path(str(manifest_path)).read_text(encoding="utf-8"))
+        return {
+            **_public_status(metadata),
+            "error": None,
+            "error_type": None,
+            "artifacts": artifacts if isinstance(artifacts, dict) else {},
+            "manifest": manifest,
+        }
+
     def result(self, run_id: str) -> dict[str, Any]:
         run_dir = self._run_dir(run_id)
         if not run_dir.exists():
-            return {"status": "not_found", "run_id": run_id, "error": f"Unknown run_id: {run_id}"}
+            return _not_found(run_id)
         metadata = self._read_metadata(run_dir)
         status = str(metadata.get("status") or "unknown")
         if status not in TERMINAL_STATUSES:
             return {
                 **_public_status(metadata),
+                "error_type": None,
                 "message": "Run is not finished yet. Call get_design_run_status again later.",
             }
 
@@ -82,6 +173,7 @@ class RunStore:
             return {
                 **_public_status(metadata),
                 "error": metadata.get("error") or "Run finished but result.json was not written.",
+                "error_type": metadata.get("error_type") or "workflow_error",
             }
         return json.loads(result_path.read_text(encoding="utf-8"))
 
@@ -99,6 +191,9 @@ class RunStore:
             result["async_run_id"] = run_id
             result["async_run_dir"] = str(run_dir.resolve())
             write_json(run_dir / "result.json", result)
+            latest_metadata = self._read_metadata(run_dir)
+            cancellation_was_requested = bool(latest_metadata.get("cancellation_requested"))
+            metadata = latest_metadata
             metadata.update(
                 {
                     "status": status,
@@ -108,14 +203,19 @@ class RunStore:
                     "workflow_run_dir": result.get("run_dir"),
                     "artifacts": result.get("artifacts", {}),
                     "summary": _compact_summary(result.get("summary", {})),
+                    "error": result.get("error"),
+                    "error_type": result.get("error_type"),
                 }
             )
+            if cancellation_was_requested and status in TERMINAL_STATUSES:
+                metadata["message"] = "Cancellation was requested, but the run completed before it could stop."
         except Exception as exc:
             error_result = {
                 "status": "failed",
                 "async_run_id": run_id,
                 "async_run_dir": str(run_dir.resolve()),
                 "error": str(exc),
+                "error_type": "workflow_error",
             }
             write_json(run_dir / "result.json", error_result)
             metadata.update(
@@ -124,6 +224,7 @@ class RunStore:
                     "finished_at": _now_iso(),
                     "updated_at": _now_iso(),
                     "error": str(exc),
+                    "error_type": "workflow_error",
                 }
             )
         finally:
@@ -164,6 +265,20 @@ def _public_status(metadata: dict[str, Any]) -> dict[str, Any]:
         "summary": metadata.get("summary", {}),
         "artifacts": metadata.get("artifacts", {}),
         "error": metadata.get("error"),
+        "error_type": metadata.get("error_type"),
+        "cancellation_requested": metadata.get("cancellation_requested", False),
+        "message": metadata.get("message"),
+    }
+
+
+def _not_found(run_id: str) -> dict[str, Any]:
+    return {
+        "status": "not_found",
+        "run_id": run_id,
+        "error": f"Unknown run_id: {run_id}",
+        "error_type": "not_found",
+        "summary": {},
+        "artifacts": {},
     }
 
 
