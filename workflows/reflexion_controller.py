@@ -89,10 +89,29 @@ def _record_failed_attempt(state: DesignState, node: SearchNode) -> None:
         "missed_edge_cases": node.missed_edge_cases,
         "error_type": node.error_type,
         "feedback": _latest_feedback(node),
+        "last_error": node.last_error,
         "best_topology": _topology_summary(node.best_topology),
     }
     node.failed_attempts.append(attempt)
     state.failed_attempts.append(attempt)
+
+
+def _record_dead_end(state: DesignState, node: SearchNode) -> None:
+    node.status = "Dead_End"
+    if node.error_type == "NONE":
+        node.error_type = "BOTH"
+    _record_failed_attempt(state, node)
+
+
+def _extract_skill_memory(state: DesignState, skill_extractor) -> DesignState:
+    if not skill_extractor:
+        return state
+    try:
+        return skill_extractor.run(state)
+    except Exception as exc:
+        logging.exception("Skill extraction failed: %s", exc)
+        state.last_error = state.last_error or f"Skill extraction failed: {exc}"
+        return state
 
 
 def _consecutive_error_count(state: DesignState, error_type: str) -> int:
@@ -142,7 +161,7 @@ def run_reflexion_workflow(
     
     while state.active_frontier:
         if state.used_budget >= state.compute_budget:
-            return _pause_for_human_input(
+            state = _pause_for_human_input(
                 state,
                 state.tree_nodes.get(state.current_node_id) if state.current_node_id else None,
                 "compute_budget_exceeded",
@@ -152,6 +171,7 @@ def run_reflexion_workflow(
                     "or a preferred fallback topology before resuming."
                 ),
             )
+            return _extract_skill_memory(state, skill_extractor)
             
         current_node_id = state.active_frontier.pop(0)
         node = state.tree_nodes[current_node_id]
@@ -177,31 +197,31 @@ def run_reflexion_workflow(
             builder.kwargs["temperature"] = temperature
             state = builder.run(state)
             if state.last_error:
-                node.status = "Dead_End"
                 node.last_error = state.last_error
+                _record_dead_end(state, node)
                 continue
                 
         # 2. Translator
         translator.kwargs["temperature"] = temperature
         state = translator.run(state)
         if state.last_error:
-            node.status = "Dead_End"
             node.last_error = state.last_error
+            _record_dead_end(state, node)
             continue
             
         # 3. Cello (assuming it reads node.verilog_codes via state)
         state = cello_wrapper.run(state)
         if state.last_error:
-            node.status = "Dead_End"
             node.last_error = state.last_error
+            _record_dead_end(state, node)
             continue
             
         # 4. Optional biokinetic data mining, then batch ODE/DAE simulation
         if data_miner:
             state = data_miner.run(state)
             if state.last_error:
-                node.status = "Dead_End"
                 node.last_error = state.last_error
+                _record_dead_end(state, node)
                 continue
 
         state = batch_ode_simulator.run(state)
@@ -239,16 +259,17 @@ def run_reflexion_workflow(
         _record_failed_attempt(state, node)
 
         if state.requires_human_input:
-            return _pause_for_human_input(
+            state = _pause_for_human_input(
                 state,
                 node,
                 "critic_requested_human_input",
                 _latest_feedback(node)
                 or "The critic marked this design as requiring human guidance.",
             )
+            return _extract_skill_memory(state, skill_extractor)
 
         if _consecutive_error_count(state, node.error_type) >= MAX_CONSECUTIVE_ERROR_TYPE:
-            return _pause_for_human_input(
+            state = _pause_for_human_input(
                 state,
                 node,
                 "repeated_error_type",
@@ -258,6 +279,7 @@ def run_reflexion_workflow(
                     "or acceptable physical trade-offs."
                 ),
             )
+            return _extract_skill_memory(state, skill_extractor)
         
         if node.error_type in ["LOGIC_ERROR", "BOTH"]:
             # Generate Repair child
@@ -306,7 +328,7 @@ def run_reflexion_workflow(
                 state.tree_nodes[exploit_id] = exploit_node
                 state.active_frontier.append(exploit_id)
         else:
-            return _pause_for_human_input(
+            state = _pause_for_human_input(
                 state,
                 node,
                 "no_recoverable_route",
@@ -315,11 +337,12 @@ def run_reflexion_workflow(
                     "LOGIC_ERROR or PART_ERROR route. Please provide additional guidance."
                 ),
             )
+            return _extract_skill_memory(state, skill_extractor)
 
     # Degradation / Fallback selection
     if not state.is_completed:
         if not state.requires_human_input:
-            return _pause_for_human_input(
+            state = _pause_for_human_input(
                 state,
                 state.tree_nodes.get(state.current_node_id) if state.current_node_id else None,
                 "frontier_exhausted",
@@ -328,6 +351,7 @@ def run_reflexion_workflow(
                     "Please provide extra constraints or select a fallback candidate."
                 ),
             )
+            return _extract_skill_memory(state, skill_extractor)
         logging.warning("Workflow paused before approval. Best topology remains available as fallback.")
         best_node = None
         highest_score = -float('inf')
@@ -341,6 +365,5 @@ def run_reflexion_workflow(
             
     # 6. Consolidator
     state = consolidator.run(state)
-    if skill_extractor:
-        state = skill_extractor.run(state)
+    state = _extract_skill_memory(state, skill_extractor)
     return state

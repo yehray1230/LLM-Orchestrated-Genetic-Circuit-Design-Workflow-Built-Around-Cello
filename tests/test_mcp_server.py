@@ -1,10 +1,27 @@
 from __future__ import annotations
 
+import json
+import importlib
+import threading
 import time
+import sys
+import types
 from pathlib import Path
 
 from mcp_server.run_store import RunStore
-from mcp_server.service import evaluate_verilog, get_design_run_result, get_design_run_status, start_design_run, summarize_design_state
+from mcp_server.service import (
+    cancel_design_run,
+    compare_design_runs,
+    design_circuit_quick,
+    diagnose_design_run,
+    evaluate_verilog,
+    get_design_run_artifacts,
+    get_design_run_result,
+    get_design_run_status,
+    list_design_runs,
+    start_design_run,
+    summarize_design_state,
+)
 
 
 def _wait_for_completed(fetch_result):
@@ -30,7 +47,45 @@ def test_evaluate_verilog_writes_agent_artifacts(tmp_path: Path) -> None:
     assert Path(artifacts["best_topology_json"]).exists()
     assert Path(artifacts["best_verilog"]).exists()
     assert Path(artifacts["run_summary_md"]).exists()
+    assert Path(artifacts["manifest_json"]).exists()
+    assert result["error"] is None
+    assert result["error_type"] is None
     assert result["best_topology"]["mapping_status"] == "unmapped"
+    manifest = json.loads(Path(artifacts["manifest_json"]).read_text(encoding="utf-8"))
+    assert {item["key"] for item in manifest["artifacts"]} >= {"summary_json", "manifest_json"}
+
+
+def test_artifact_manifest_entries_are_complete_and_exist(tmp_path: Path) -> None:
+    result = evaluate_verilog(
+        "module genetic_circuit(input A, input B, output Y); assign Y = A & ~B; endmodule",
+        enable_ode=False,
+        output_dir=str(tmp_path),
+    )
+
+    manifest = json.loads(Path(result["artifacts"]["manifest_json"]).read_text(encoding="utf-8"))
+    entries = manifest["artifacts"]
+
+    assert manifest["run_id"]
+    assert manifest["created_at"]
+    assert any(entry["key"] == "manifest_json" for entry in entries)
+    for entry in entries:
+        assert set(entry) == {"key", "path", "type", "description"}
+        assert entry["key"]
+        assert entry["type"]
+        assert entry["description"]
+        assert Path(entry["path"]).exists()
+
+
+def test_service_validation_errors_use_standard_shape(tmp_path: Path) -> None:
+    verilog_result = evaluate_verilog("", output_dir=str(tmp_path))
+    design_result = design_circuit_quick(" ", output_dir=str(tmp_path))
+
+    assert verilog_result["status"] == "error"
+    assert verilog_result["error_type"] == "validation_error"
+    assert verilog_result["summary"] == {}
+    assert verilog_result["artifacts"] == {}
+    assert design_result["status"] == "error"
+    assert design_result["error_type"] == "validation_error"
 
 
 def test_summarize_design_state_accepts_saved_state_shape() -> None:
@@ -70,6 +125,95 @@ def test_run_store_background_task_persists_result(tmp_path: Path) -> None:
     assert status["summary"]["score"] == 0.8
     assert result["async_run_id"] == run_id
     assert Path(status["result_path"]).exists()
+    metadata = json.loads((tmp_path / run_id / "metadata.json").read_text(encoding="utf-8"))
+    assert metadata["request"]["api_key"] == "***"
+    assert "secret" not in json.dumps(metadata)
+
+
+def test_run_store_lists_runs_newest_first_and_limits(tmp_path: Path) -> None:
+    store = RunStore(base_dir=tmp_path, max_workers=1)
+    first = store.start(task=lambda: {"status": "completed"}, request={"user_intent": "first"})
+    time.sleep(0.01)
+    second = store.start(task=lambda: {"status": "completed"}, request={"user_intent": "second"})
+
+    _wait_for_completed(lambda: store.result(first["run_id"]))
+    _wait_for_completed(lambda: store.result(second["run_id"]))
+
+    listed = store.list_runs(limit=1)
+    assert listed["status"] == "completed"
+    assert listed["count"] == 1
+    assert listed["total"] == 2
+    assert listed["runs"][0]["run_id"] == second["run_id"]
+    assert store.list_runs(limit=0)["count"] == 1
+    assert store.list_runs(limit=101)["count"] == 2
+
+
+def test_run_store_cancel_running_task_reports_request(tmp_path: Path) -> None:
+    store = RunStore(base_dir=tmp_path, max_workers=1)
+    release = threading.Event()
+
+    def slow_task():
+        release.wait(1)
+        return {"status": "completed", "summary": {"user_intent": "slow"}}
+
+    started = store.start(task=slow_task, request={"user_intent": "slow"})
+    run_id = started["run_id"]
+    time.sleep(0.05)
+
+    cancelled = store.cancel(run_id)
+    assert cancelled["status"] in {"cancellation_requested", "cancelled", "completed"}
+    assert cancelled["error_type"] in {None, "cancelled"}
+
+    release.set()
+    result = _wait_for_completed(lambda: store.result(run_id))
+    assert result["status"] in {"completed", "cancelled"}
+
+
+def test_run_store_result_for_unfinished_run_has_standard_envelope(tmp_path: Path) -> None:
+    store = RunStore(base_dir=tmp_path, max_workers=1)
+    release = threading.Event()
+
+    started = store.start(task=lambda: {"status": "completed"} if release.wait(1) else {"status": "completed"}, request={})
+    result = store.result(started["run_id"])
+    release.set()
+
+    assert result["status"] in {"queued", "running"}
+    assert result["error"] is None
+    assert result["error_type"] is None
+    assert result["summary"] == {}
+    assert result["artifacts"] == {}
+
+
+def test_service_artifact_lookup_returns_manifest(monkeypatch, tmp_path: Path) -> None:
+    store = RunStore(base_dir=tmp_path / "async", max_workers=1)
+    workflow_dir = tmp_path / "workflow"
+    workflow_dir.mkdir()
+    manifest_path = workflow_dir / "manifest.json"
+    manifest_path.write_text(json.dumps({"run_id": "workflow", "artifacts": []}), encoding="utf-8")
+
+    def fake_design_circuit_quick(**kwargs):
+        return {
+            "status": "completed",
+            "run_dir": str(workflow_dir),
+            "summary": {"user_intent": kwargs["user_intent"]},
+            "artifacts": {"manifest_json": str(manifest_path), "summary_json": str(workflow_dir / "summary.json")},
+            "error": None,
+            "error_type": None,
+        }
+
+    monkeypatch.setattr("mcp_server.service.design_circuit_quick", fake_design_circuit_quick)
+    started = start_design_run(user_intent="A and not B", run_store=store)
+    run_id = started["run_id"]
+    _wait_for_completed(lambda: get_design_run_result(run_id, run_store=store))
+
+    artifacts = get_design_run_artifacts(run_id, run_store=store)
+    missing = get_design_run_artifacts("missing", run_store=store)
+
+    assert artifacts["status"] == "completed"
+    assert artifacts["manifest"]["run_id"] == "workflow"
+    assert "manifest_json" in artifacts["artifacts"]
+    assert missing["status"] == "not_found"
+    assert missing["error_type"] == "not_found"
 
 
 def test_service_async_design_run_uses_background_store(monkeypatch, tmp_path: Path) -> None:
@@ -102,3 +246,231 @@ def test_service_async_design_run_uses_background_store(monkeypatch, tmp_path: P
     assert status["status"] == "completed"
     assert status["workflow_run_dir"] == str(tmp_path / "workflow")
     assert result["summary"]["best_topology"]["score"] == 0.91
+
+
+def test_service_list_and_cancel_validate_inputs(tmp_path: Path) -> None:
+    store = RunStore(base_dir=tmp_path, max_workers=1)
+
+    assert list_design_runs(limit="bad", run_store=store)["error_type"] == "validation_error"
+    assert cancel_design_run("", run_store=store)["error_type"] == "validation_error"
+    assert cancel_design_run("missing", run_store=store)["error_type"] == "not_found"
+    assert get_design_run_status("missing", run_store=store)["error_type"] == "not_found"
+
+
+def test_cancel_completed_run_does_not_overwrite_result(tmp_path: Path) -> None:
+    store = RunStore(base_dir=tmp_path, max_workers=1)
+    started = store.start(
+        task=lambda: {"status": "completed", "summary": {"user_intent": "done"}},
+        request={"user_intent": "done"},
+    )
+    run_id = started["run_id"]
+    original_result = _wait_for_completed(lambda: store.result(run_id))
+
+    cancelled = cancel_design_run(run_id, run_store=store)
+    after_cancel_result = store.result(run_id)
+
+    assert cancelled["status"] == "completed"
+    assert "already terminal" in cancelled["message"]
+    assert after_cancel_result == original_result
+
+
+def test_compare_design_runs_ranks_completed_runs(tmp_path: Path) -> None:
+    store = RunStore(base_dir=tmp_path, max_workers=1)
+    low = store.start(
+        task=lambda: {
+            "status": "completed",
+            "summary": {
+                "best_topology": {
+                    "score": 0.4,
+                    "mapping_status": "unmapped",
+                    "ode_status": "disabled",
+                    "robustness_score": 0.3,
+                }
+            },
+            "artifacts": {"summary_json": "low-summary.json"},
+        },
+        request={"user_intent": "low"},
+    )
+    high = store.start(
+        task=lambda: {
+            "status": "completed",
+            "summary": {
+                "best_topology": {
+                    "score": 0.9,
+                    "mapping_status": "mapped",
+                    "ode_status": "completed",
+                    "cello_buildable": True,
+                    "robustness_score": 0.8,
+                    "toxicity_score": 0.9,
+                    "semantic_faithfulness_score": 0.95,
+                }
+            },
+            "artifacts": {"summary_json": "high-summary.json", "manifest_json": "manifest.json"},
+        },
+        request={"user_intent": "high"},
+    )
+    _wait_for_completed(lambda: store.result(low["run_id"]))
+    _wait_for_completed(lambda: store.result(high["run_id"]))
+
+    compared = compare_design_runs([low["run_id"], high["run_id"]], run_store=store)
+
+    assert compared["status"] == "completed"
+    assert compared["summary"]["best_run_id"] == high["run_id"]
+    assert compared["best_run"]["score"] == 0.9
+    assert [item["rank"] for item in compared["ranked_runs"]] == [1, 2]
+    assert compared["ranked_runs"][0]["run_id"] == high["run_id"]
+
+
+def test_compare_design_runs_reports_unavailable_runs(tmp_path: Path) -> None:
+    store = RunStore(base_dir=tmp_path, max_workers=1)
+    release = threading.Event()
+    complete = store.start(
+        task=lambda: {"status": "completed", "summary": {"best_topology": {"score": 0.7}}},
+        request={"user_intent": "complete"},
+    )
+    unfinished = store.start(
+        task=lambda: {"status": "completed"} if release.wait(1) else {"status": "completed"},
+        request={"user_intent": "unfinished"},
+    )
+    _wait_for_completed(lambda: store.result(complete["run_id"]))
+
+    compared = compare_design_runs([complete["run_id"], unfinished["run_id"], "missing"], run_store=store)
+    release.set()
+
+    assert compared["status"] == "completed"
+    assert compared["summary"]["available_run_count"] == 1
+    assert {item["run_id"] for item in compared["unavailable_runs"]} == {unfinished["run_id"], "missing"}
+
+
+def test_compare_design_runs_validates_run_id_count(tmp_path: Path) -> None:
+    store = RunStore(base_dir=tmp_path, max_workers=1)
+
+    assert compare_design_runs(["one"], run_store=store)["error_type"] == "validation_error"
+    assert compare_design_runs([str(index) for index in range(11)], run_store=store)["error_type"] == "validation_error"
+
+
+def test_diagnose_design_run_reports_healthy_completed_run(tmp_path: Path) -> None:
+    store = RunStore(base_dir=tmp_path, max_workers=1)
+    started = store.start(
+        task=lambda: {
+            "status": "completed",
+            "summary": {
+                "requires_human_input": False,
+                "best_topology": {
+                    "score": 0.92,
+                    "mapping_status": "mapped",
+                    "ode_status": "completed",
+                    "robustness_score": 0.8,
+                    "toxicity_score": 0.9,
+                    "semantic_faithfulness_score": 0.9,
+                },
+            },
+            "artifacts": {"summary_json": "summary.json"},
+        },
+        request={"user_intent": "healthy"},
+    )
+    _wait_for_completed(lambda: store.result(started["run_id"]))
+
+    diagnosis = diagnose_design_run(started["run_id"], run_store=store)
+
+    assert diagnosis["status"] == "completed"
+    assert diagnosis["diagnosis_status"] == "healthy"
+    assert diagnosis["findings"] == []
+    assert diagnosis["recommended_next_actions"] == ["No immediate action is required; keep the run as a viable candidate."]
+
+
+def test_diagnose_design_run_flags_mapping_human_input_and_low_metrics(tmp_path: Path) -> None:
+    store = RunStore(base_dir=tmp_path, max_workers=1)
+    started = store.start(
+        task=lambda: {
+            "status": "completed",
+            "summary": {
+                "requires_human_input": True,
+                "pause_reason": "compute_budget_exceeded",
+                "human_feedback_prompt": "Need constraints",
+                "latest_critic_feedback": "Mapping and robustness need work.",
+                "failed_attempts": [{"error_type": "PART_ERROR"}],
+                "best_topology": {
+                    "score": 0.2,
+                    "mapping_status": "failed",
+                    "ode_status": "disabled",
+                    "robustness_score": 0.3,
+                    "toxicity_score": 0.2,
+                    "semantic_faithfulness_score": 0.4,
+                },
+            },
+            "artifacts": {"summary_json": "summary.json"},
+        },
+        request={"user_intent": "needs work"},
+    )
+    _wait_for_completed(lambda: store.result(started["run_id"]))
+
+    diagnosis = diagnose_design_run(started["run_id"], run_store=store)
+    categories = {finding["category"] for finding in diagnosis["findings"]}
+
+    assert diagnosis["diagnosis_status"] == "needs_attention"
+    assert {"human_input", "mapping", "ode", "score", "robustness", "toxicity", "semantics", "critic", "search"} <= categories
+    assert diagnosis["summary"]["high_severity_count"] >= 1
+    assert any("Cello" in action for action in diagnosis["recommended_next_actions"])
+
+
+def test_diagnose_design_run_flags_missing_topology(tmp_path: Path) -> None:
+    store = RunStore(base_dir=tmp_path, max_workers=1)
+    started = store.start(
+        task=lambda: {"status": "completed", "summary": {"current_node_id": "root"}, "artifacts": {}},
+        request={"user_intent": "missing topology"},
+    )
+    _wait_for_completed(lambda: store.result(started["run_id"]))
+
+    diagnosis = diagnose_design_run(started["run_id"], run_store=store)
+
+    assert diagnosis["diagnosis_status"] == "needs_attention"
+    assert any(finding["category"] == "topology" for finding in diagnosis["findings"])
+
+
+def test_mcp_server_registers_expected_tools_without_real_mcp(monkeypatch) -> None:
+    registered_tools = {}
+
+    class FakeFastMCP:
+        def __init__(self, name):
+            self.name = name
+            self.tools = registered_tools
+
+        def tool(self):
+            def decorator(func):
+                self.tools[func.__name__] = func
+                return func
+
+            return decorator
+
+        def run(self):
+            return None
+
+    fake_mcp = types.ModuleType("mcp")
+    fake_server = types.ModuleType("mcp.server")
+    fake_fastmcp = types.ModuleType("mcp.server.fastmcp")
+    fake_fastmcp.FastMCP = FakeFastMCP
+    fake_mcp.server = fake_server
+    fake_server.fastmcp = fake_fastmcp
+
+    monkeypatch.setitem(sys.modules, "mcp", fake_mcp)
+    monkeypatch.setitem(sys.modules, "mcp.server", fake_server)
+    monkeypatch.setitem(sys.modules, "mcp.server.fastmcp", fake_fastmcp)
+
+    import mcp_server.server as server_module
+
+    importlib.reload(server_module)
+
+    assert set(registered_tools) == {
+        "design_genetic_circuit_quick",
+        "evaluate_cello_verilog",
+        "start_design_run",
+        "get_design_run_status",
+        "get_design_run_result",
+        "list_design_runs",
+        "cancel_design_run",
+        "get_design_run_artifacts",
+        "compare_design_runs",
+        "diagnose_design_run",
+        "summarize_mcp_design_state",
+    }

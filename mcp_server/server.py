@@ -3,10 +3,15 @@ from __future__ import annotations
 from typing import Any
 
 from mcp_server.service import (
+    cancel_design_run as service_cancel_design_run,
+    compare_design_runs as service_compare_design_runs,
     design_circuit_quick,
+    diagnose_design_run as service_diagnose_design_run,
     evaluate_verilog,
+    get_design_run_artifacts as service_get_design_run_artifacts,
     get_design_run_result as service_get_design_run_result,
     get_design_run_status as service_get_design_run_status,
+    list_design_runs as service_list_design_runs,
     start_design_run as service_start_design_run,
     summarize_design_state,
 )
@@ -122,6 +127,31 @@ if FastMCP is not None:
     def get_design_run_result(run_id: str) -> dict[str, Any]:
         """Return the final result and artifacts for a background design run."""
         return service_get_design_run_result(run_id)
+
+    @mcp.tool()
+    def list_design_runs(limit: int = 20) -> dict[str, Any]:
+        """List recent background design runs, newest first."""
+        return service_list_design_runs(limit=limit)
+
+    @mcp.tool()
+    def cancel_design_run(run_id: str) -> dict[str, Any]:
+        """Best-effort cancellation for a queued or running background design run."""
+        return service_cancel_design_run(run_id)
+
+    @mcp.tool()
+    def get_design_run_artifacts(run_id: str) -> dict[str, Any]:
+        """Return artifact paths and manifest details for a background design run."""
+        return service_get_design_run_artifacts(run_id)
+
+    @mcp.tool()
+    def compare_design_runs(run_ids: list[str]) -> dict[str, Any]:
+        """Compare completed design runs and rank them by design metrics."""
+        return service_compare_design_runs(run_ids)
+
+    @mcp.tool()
+    def diagnose_design_run(run_id: str) -> dict[str, Any]:
+        """Diagnose a design run using deterministic workflow and benchmark signals."""
+        return service_diagnose_design_run(run_id)
 
     @mcp.tool()
     def summarize_mcp_design_state(state_json: dict[str, Any]) -> dict[str, Any]:

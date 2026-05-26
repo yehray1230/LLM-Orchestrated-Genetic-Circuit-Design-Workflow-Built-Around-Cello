@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 DEFAULT_SKILL_LIBRARY_PATH = "邏輯設計skill.json"
+DEFAULT_EXTRACTED_SKILLS_PATH = "outputs/extracted_skills.jsonl"
 
 
 @dataclass
@@ -19,6 +21,8 @@ class SkillRetriever:
         cls,
         path: str | Path = DEFAULT_SKILL_LIBRARY_PATH,
         min_confidence: float = 0.5,
+        include_extracted: bool = False,
+        extracted_path: str | Path = DEFAULT_EXTRACTED_SKILLS_PATH,
     ) -> "SkillRetriever":
         skill_path = Path(path)
         if not skill_path.exists() and not skill_path.is_absolute():
@@ -28,27 +32,49 @@ class SkillRetriever:
         data = json.loads(skill_path.read_text(encoding="utf-8"))
         if not isinstance(data, list):
             raise ValueError(f"Skill library must be a JSON list: {skill_path}")
-        return cls(skills=[_normalize_skill(record) for record in data if isinstance(record, dict)], min_confidence=min_confidence)
+        skills = [_normalize_skill(record) for record in data if isinstance(record, dict)]
+        if include_extracted:
+            skills.extend(_load_extracted_skills(extracted_path))
+        return cls(skills=skills, min_confidence=min_confidence)
 
     def retrieve_skills(self, query: str, mode: str = "Exploration", k: int = 5) -> str:
-        query_terms = set(query.lower().split())
+        query_terms = _tokenize(query)
+        if not query_terms:
+            return ""
         tag_index = _build_tag_index(self.skills)
         backlink_index = _build_backlink_index(self.skills)
-        ranked: list[tuple[float, dict[str, Any]]] = []
+        positive_ranked: list[tuple[float, dict[str, Any]]] = []
+        avoid_ranked: list[tuple[float, dict[str, Any]]] = []
         for skill in self.skills:
             confidence = float(skill.get("confidence_score", 1.0))
             if confidence < self.min_confidence:
                 continue
             text = _searchable_text(skill)
-            overlap = len(query_terms.intersection(text.split()))
+            overlap = len(query_terms.intersection(_tokenize(text)))
             mode_bonus = _mode_bonus(skill, mode)
             graph_bonus = _graph_bonus(skill, query_terms, tag_index, backlink_index, self.tag_hops)
-            negative_penalty = _negative_memory_penalty(skill, mode)
             recency_bonus = float(skill.get("recency_score", 0.0)) * 0.15
-            ranked.append((overlap + confidence + mode_bonus + graph_bonus + recency_bonus - negative_penalty, skill))
-        ranked.sort(key=lambda item: item[0], reverse=True)
-        snippets = [_format_skill_snippet(skill) for _, skill in ranked[:k]]
-        return "\n".join(snippets)
+            relevance = overlap + graph_bonus
+            if relevance <= 0:
+                continue
+            score = relevance + confidence + mode_bonus + recency_bonus
+            if _is_negative_memory(skill):
+                avoid_ranked.append((score, skill))
+            else:
+                positive_ranked.append((score, skill))
+        positive_ranked.sort(key=lambda item: item[0], reverse=True)
+        avoid_ranked.sort(key=lambda item: item[0], reverse=True)
+
+        sections: list[str] = []
+        positive_snippets = [_format_skill_snippet(skill) for _, skill in positive_ranked[:k]]
+        if positive_snippets:
+            sections.append("Reusable successful patterns:\n" + "\n\n".join(positive_snippets))
+        if mode.lower() in {"repair", "exploitation"}:
+            avoid_limit = max(1, min(2, k // 2 or 1))
+            avoid_snippets = [_format_skill_snippet(skill) for _, skill in avoid_ranked[:avoid_limit]]
+            if avoid_snippets:
+                sections.append("Patterns to avoid or repair:\n" + "\n\n".join(avoid_snippets))
+        return "\n\n".join(sections)
 
 
 def _normalize_skill(record: dict[str, Any]) -> dict[str, Any]:
@@ -60,15 +86,20 @@ def _normalize_skill(record: dict[str, Any]) -> dict[str, Any]:
     tradeoffs = str(record.get("trade_offs") or "")
     purpose = str(record.get("purpose") or record.get("summary") or "")
     tags = _normalize_tags(record.get("tags", [])) + [title, category, boolean_template]
-    summary = (
-        f"Motif: {title}\n"
-        f"Category: {category}\n"
-        f"Boolean template: {boolean_template}\n"
-        f"Decomposition strategy: {decomposition}\n"
-        f"Trade-offs: {tradeoffs}\n"
-        f"Known risks: {risks}"
+    if record.get("summary") and not any([record.get("motif_name"), category, boolean_template]):
+        summary = str(record["summary"])
+    else:
+        summary = (
+            f"Motif: {title}\n"
+            f"Category: {category}\n"
+            f"Boolean template: {boolean_template}\n"
+            f"Decomposition strategy: {decomposition}\n"
+            f"Trade-offs: {tradeoffs}\n"
+            f"Known risks: {risks}"
+        )
+    search_text = " ".join(
+        [title, category, purpose, boolean_template, decomposition, tradeoffs, risks, str(record.get("search_text", ""))]
     )
-    search_text = " ".join([title, category, purpose, boolean_template, decomposition, tradeoffs, risks])
     return {
         **record,
         "title": title,
@@ -93,6 +124,10 @@ def _searchable_text(skill: dict[str, Any]) -> str:
         str(skill.get(key, ""))
         for key in ("title", "summary", "tags", "search_text", "backlinks", "source_node")
     ).lower()
+
+
+def _tokenize(text: str) -> set[str]:
+    return {token for token in re.findall(r"[\w+-]+", str(text).lower()) if token}
 
 
 def _normalize_tags(tags: Any) -> list[str]:
@@ -142,7 +177,7 @@ def _graph_bonus(
                     continue
                 seen_titles.add(title)
                 text = _searchable_text(neighbor)
-                if query_terms.intersection(text.split()):
+                if query_terms.intersection(_tokenize(text)):
                     bonus += 0.15 * float(neighbor.get("confidence_score", 1.0))
                 next_frontier.extend(t.lower() for t in _normalize_tags(neighbor.get("tags", [])))
         frontier = next_frontier
@@ -151,7 +186,7 @@ def _graph_bonus(
         key = backlink.strip("[]").lower()
         for neighbor in backlink_index.get(key, []):
             text = _searchable_text(neighbor)
-            if query_terms.intersection(text.split()):
+            if query_terms.intersection(_tokenize(text)):
                 bonus += 0.1 * float(neighbor.get("confidence_score", 1.0))
     return min(bonus, 1.0)
 
@@ -170,10 +205,30 @@ def _mode_bonus(skill: dict[str, Any], mode: str) -> float:
     return 0.0
 
 
-def _negative_memory_penalty(skill: dict[str, Any], mode: str) -> float:
+def _is_negative_memory(skill: dict[str, Any]) -> bool:
+    if str(skill.get("memory_kind", "")).lower() in {"avoid", "failure", "negative"}:
+        return True
     text = _searchable_text(skill)
-    if mode.lower() == "repair":
-        return 0.0
-    if "dead_end" in text or "dead-end" in text or "avoid" in text:
-        return 0.45
-    return 0.0
+    return any(token in text for token in ("dead_end", "dead-end", "avoid", "failure/", "status/dead"))
+
+
+def _load_extracted_skills(path: str | Path) -> list[dict[str, Any]]:
+    memory_path = Path(path)
+    if not memory_path.exists() and not memory_path.is_absolute():
+        repo_relative_path = Path(__file__).resolve().parents[1] / memory_path
+        if repo_relative_path.exists():
+            memory_path = repo_relative_path
+    if not memory_path.exists():
+        return []
+
+    skills: list[dict[str, Any]] = []
+    for line in memory_path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(record, dict):
+            skills.append(_normalize_skill(record))
+    return skills

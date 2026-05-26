@@ -80,6 +80,7 @@ def test_skill_retriever_loads_json_and_returns_motif_snippets() -> None:
     assert "XOR_GATE" in xor
     assert "NOR_GATE" in nor
     assert "Boolean template" in xor
+    assert retriever.retrieve_skills("", k=2) == ""
 
 
 def test_skill_retriever_default_path_is_repo_relative(monkeypatch, tmp_path: Path) -> None:
@@ -125,11 +126,13 @@ def test_skill_retriever_uses_graph_tags_and_mode_pruning() -> None:
     result = retriever.retrieve_skills("alternate mapping", mode="Exploitation", k=1)
 
     assert "Physical tuning" in result
-    assert "Avoid weak mapping" not in result
+    assert "Patterns to avoid or repair" in result
+    assert "Avoid weak mapping" in result
 
 
 def test_skill_extractor_writes_obsidian_card_and_vector_record(tmp_path: Path) -> None:
     vector_db = InMemoryVectorDB()
+    memory_path = tmp_path / "memory.jsonl"
     state = DesignState(user_intent="A and not B", host_organism="E coli")
     state.current_node_id = "root"
     state.tree_nodes["root"] = SearchNode(
@@ -140,10 +143,12 @@ def test_skill_extractor_writes_obsidian_card_and_vector_record(tmp_path: Path) 
         critic_feedbacks=["Design passed with good dynamic margin."],
     )
 
-    result = SkillExtractorAgent(vault_dir=tmp_path, vector_db=vector_db).run(state)
+    result = SkillExtractorAgent(vault_dir=tmp_path, vector_db=vector_db, memory_path=memory_path).run(state)
 
     assert len(result.extracted_skills) == 1
     assert len(vector_db.all()) == 1
+    assert memory_path.exists()
+    assert "A and not B" in memory_path.read_text(encoding="utf-8")
     card_path = Path(result.extracted_skills[0]["obsidian_path"])
     assert card_path.exists()
     assert "confidence_score: 0.84" in card_path.read_text(encoding="utf-8")
@@ -411,9 +416,9 @@ def test_builder_prompt_includes_retrieved_skills_and_apply_instruction(monkeypa
     result = call_builder(state, api_key=None, model_name="mock", skill_retriever=Retriever())
 
     assert result.last_error is None
-    assert "Retrieved Successful Design Skills" in captured["system_prompt"]
+    assert "Retrieved Design Memory" in captured["system_prompt"]
     assert "Motif: XOR_GATE" in captured["system_prompt"]
-    assert "Please apply the successful skills above" in captured["system_prompt"]
+    assert "Apply reusable successful patterns" in captured["system_prompt"]
 
 
 def test_cello_wrapper_mock_mode_is_unchanged() -> None:

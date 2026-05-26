@@ -1196,9 +1196,13 @@ def _run_byok_workflow(state: DesignState) -> None:
             batch_ode_simulator=BatchODESimulator() if options["enable_ode"] else _NoOpODESimulator(),
             critic=CriticAgent(api_key=api_key, model_name=model_name, api_base=api_base),
             consolidator=ConsolidatorAgent(),
-            skill_retriever=SkillRetriever.from_json_file() if options["enable_rag"] else None,
+            skill_retriever=SkillRetriever.from_json_file(include_extracted=True) if options["enable_rag"] else None,
             data_miner=DataMinerAgent() if options["enable_ode"] else None,
-            skill_extractor=SkillExtractorAgent(vault_dir="outputs/obsidian_skills", vector_db=InMemoryVectorDB()),
+            skill_extractor=SkillExtractorAgent(
+                vault_dir="outputs/obsidian_skills",
+                vector_db=InMemoryVectorDB(),
+                memory_path="outputs/extracted_skills.jsonl",
+            ),
         )
     except Exception as exc:
         state.last_error = f"錯誤：自備金鑰工作流程失敗：{exc}"

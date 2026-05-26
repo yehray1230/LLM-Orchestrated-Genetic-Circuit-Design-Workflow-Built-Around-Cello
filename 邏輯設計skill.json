@@ -2,142 +2,410 @@
   {
     "motif_name": "NOT_GATE",
     "category": "primitives",
+    "tags": ["combinational", "primitive", "high-speed", "low-burden"],
+    "memory_kind": "success",
+    "confidence_score": 1.0,
     "purpose": "反轉單一輸入訊號。無輸入時產生輸出，有輸入時關閉輸出。",
+    "purpose_en": "Inverts a single input signal. Output is ON when input is OFF; output is OFF when input is ON.",
+    "is_cyclic": false,
     "logic_depth": 1,
     "estimated_repressor_cost": 1,
+    "cost_description": "Requires exactly 1 repressor protein.",
     "decomposition_strategy": "基礎單元，無需分解。在實體層面直接映射到單一轉錄抑制蛋白 (如 PhlF, TetR)。",
     "boolean_template": "NOT(A)",
+    "truth_table": [
+      {"A": 0, "Y": 1},
+      {"A": 1, "Y": 0}
+    ],
+    "verilog_template": "module not_gate(input A, output Y);\n  not g1(Y, A);\nendmodule",
     "trade_offs": "訊號轉換最快速、代謝負擔最低。它是所有高階反相邏輯的基石。",
-    "known_risks": "若選用的抑制蛋白解離常數 (K 值) 不佳，在無訊號時可能會產生基礎漏電 (Leakage)，導致輸出無法達到完美的 1。"
+    "known_risks": "若選用的抑制蛋白解離常數 (K 值) 不佳，在無訊號時可能會產生基礎漏電 (Leakage)，導致輸出無法達到完美的 1。",
+    "application_scenarios": [
+      {
+        "scenario_name": "邏輯反相與信號抑制 / Logical Inversion & Signal Repression",
+        "description": "用於當輸入因子（如某種毒素或代謝物）消失時，才啟動特定的保護蛋白或目標通路的場景。",
+        "keywords": ["inversion", "repression", "off-switch", "反相", "抑制開關"],
+        "user_intent_example": "Produce downstream protein only when the input chemical is absent."
+      }
+    ]
   },
   {
     "motif_name": "NOR_GATE",
     "category": "primitives",
+    "tags": ["combinational", "primitive", "universal", "multi-input"],
+    "memory_kind": "success",
+    "confidence_score": 1.0,
     "purpose": "當任何一個輸入訊號存在時，即關閉輸出。只有當所有輸入皆為零時，才啟動下游表現。",
+    "purpose_en": "Outputs ON only when all inputs are OFF. If any input is ON, the output is turned OFF.",
+    "is_cyclic": false,
     "logic_depth": 1,
     "estimated_repressor_cost": 1,
+    "cost_description": "Typically constructed using tandem promoters driving 1 repressor.",
     "decomposition_strategy": "Cello 平台的核心泛用閘。通常由兩個輸入啟動子串聯 (Tandem promoters) 共同驅動同一個下游的抑制蛋白來達成。",
     "boolean_template": "A NOR B",
+    "truth_table": [
+      {"A": 0, "B": 0, "Y": 1},
+      {"A": 0, "B": 1, "Y": 0},
+      {"A": 1, "B": 0, "Y": 0},
+      {"A": 1, "B": 1, "Y": 0}
+    ],
+    "verilog_template": "module nor_gate(input A, input B, output Y);\n  nor g1(Y, A, B);\nendmodule",
     "trade_offs": "作為泛用閘，它可以組合出任何布林邏輯，是演算法化簡時最愛用的標準節點。",
-    "known_risks": "啟動子串聯時容易引發轉錄通讀 (Read-through) 或空間立體障礙 (Steric hindrance)，可能導致 A 與 B 兩個輸入的權重不相等。"
+    "known_risks": "啟動子串聯時容易引發轉錄通讀 (Read-through) 或空間立體障礙 (Steric hindrance)，可能導致 A 與 B 兩個輸入的權重不相等。",
+    "application_scenarios": [
+      {
+        "scenario_name": "多重風險感知與緊急關閉 / Multi-Risk Sensing & Emergency Shutdown",
+        "description": "適用於需要偵測多種有害環境或壓力訊號，且當其中「任何一個」訊號出現時，就必須立即關閉核心表現通路的場景。",
+        "keywords": ["emergency shutdown", "multi-input sensing", "safety cut-off", "安全切斷", "多重感測"],
+        "user_intent_example": "Stop cell growth or pathway expression if temperature exceeds limit OR toxicity is detected."
+      }
+    ]
   },
   {
     "motif_name": "OR_GATE",
     "category": "primitives",
+    "tags": ["combinational", "primitive", "low-burden", "no-repressor"],
+    "memory_kind": "success",
+    "confidence_score": 1.0,
     "purpose": "只要有任何一個輸入訊號存在，就啟動下游基因表現。",
+    "purpose_en": "Outputs ON if any input signal is ON. Low metabolic burden as it requires no intermediate repressor protein.",
+    "is_cyclic": false,
     "logic_depth": 1,
     "estimated_repressor_cost": 0,
+    "cost_description": "Requires 0 intermediate repressors, as promoters are directly driving the output.",
     "decomposition_strategy": "不需要使用抑制蛋白。直接將 A 與 B 兩個輸入對應的啟動子串聯，共同驅動最終的輸出基因。",
     "boolean_template": "A OR B",
+    "truth_table": [
+      {"A": 0, "B": 0, "Y": 0},
+      {"A": 0, "B": 1, "Y": 1},
+      {"A": 1, "B": 0, "Y": 1},
+      {"A": 1, "B": 1, "Y": 1}
+    ],
+    "verilog_template": "module or_gate(input A, input B, output Y);\n  or g1(Y, A, B);\nendmodule",
     "trade_offs": "不消耗任何細胞的轉譯資源（因為不需要生成額外的抑制蛋白），代謝負擔極低，反應時間也最快。",
-    "known_risks": "由於沒有經過抑制蛋白的「非線性轉換 (Non-linear transfer)」來重整訊號，OR 閘容易累積並放大上游傳遞過來的雜訊。"
+    "known_risks": "由於沒有經過抑制蛋白的「非線性轉換 (Non-linear transfer)」來重整訊號，OR 閘容易累積並放大上游傳遞過來的雜訊。",
+    "application_scenarios": [
+      {
+        "scenario_name": "多途徑備份啟動 / Multi-Pathway Redundant Activation",
+        "description": "適用於啟動特定代謝或生存通路，且希望「至少有一個」誘導物或環境信號存在時就能直接運作的場景，不需額外調節層級以節省能耗。",
+        "keywords": ["redundancy", "low-cost activation", "direct drive", "備份啟動", "直接驅動"],
+        "user_intent_example": "Activate reporter gene when either glucose OR galactose is present in the medium without using repressors."
+      }
+    ]
   },
   {
     "motif_name": "NAND_GATE",
     "category": "primitives",
+    "tags": ["combinational", "primitive", "indirect-logic"],
+    "memory_kind": "success",
+    "confidence_score": 1.0,
     "purpose": "除非所有輸入訊號同時存在，否則皆保持啟動狀態。只有在 A 與 B 皆存在時，才關閉輸出。",
+    "purpose_en": "Outputs ON unless all inputs are ON simultaneously. Output is turned OFF only when both inputs A and B are present.",
+    "is_cyclic": false,
     "logic_depth": 1,
     "estimated_repressor_cost": 2,
+    "cost_description": "Uses 2 orthogonal repressors whose promoters are placed in tandem to control output.",
     "decomposition_strategy": "根據迪摩根定律 NOT(A AND B) = NOT(A) OR NOT(B)。實體上會表現兩種不同的轉錄抑制蛋白 (分別被 A 與 B 誘導)，並將這兩個抑制蛋白對應的啟動子串聯起來驅動下游。",
     "boolean_template": "NOT(A) OR NOT(B)",
+    "truth_table": [
+      {"A": 0, "B": 0, "Y": 1},
+      {"A": 0, "B": 1, "Y": 1},
+      {"A": 1, "B": 0, "Y": 1},
+      {"A": 1, "B": 1, "Y": 0}
+    ],
+    "verilog_template": "module nand_gate(input A, input B, output Y);\n  nand g1(Y, A, B);\nendmodule",
     "trade_offs": "雖然在數位電路中 NAND 是泛用閘，但在生物系統中，NOR 閘的實作 (直接抑制) 比 NAND 閘 (雙重抑制加串聯) 更穩定，因此生物編譯器通常優先選用 NOR 而非 NAND。",
-    "known_risks": "需要消耗兩種正交 (Orthogonal) 的抑制蛋白，若庫存不足容易產生資源排擠。"
+    "known_risks": "需要消耗兩種正交 (Orthogonal) 的抑制蛋白，若庫存不足容易產生資源排擠。",
+    "application_scenarios": [
+      {
+        "scenario_name": "雙重防禦釋放 / Dual-Condition Defense Release",
+        "description": "只有當兩個關鍵健康指標（如溫度與養分）同時滿足正常時，才表示細胞安全；一旦其中任何一個失衡，就必須維持防禦或應激通路的啟動。",
+        "keywords": ["dual check", "safety default", "conditional release", "雙重檢查", "預設啟動"],
+        "user_intent_example": "Keep the protection gene active unless both oxygen is low and glucose is high."
+      }
+    ]
   },
   {
     "motif_name": "XOR_GATE",
     "category": "primitives",
+    "tags": ["combinational", "complex-logic", "high-burden"],
+    "memory_kind": "success",
+    "confidence_score": 1.0,
     "purpose": "互斥或閘。當輸入訊號 A 與 B 不相同時 (一有一無) 才啟動輸出；若兩者皆無，或兩者皆有，則關閉輸出。",
+    "purpose_en": "Exclusive OR. Outputs ON only when inputs A and B are in different states (one is ON, one is OFF).",
+    "is_cyclic": false,
     "logic_depth": 3,
     "estimated_repressor_cost": 4,
+    "cost_description": "Typically requires 4 distinct repressors arranged in a multi-layered network.",
     "decomposition_strategy": "生物體內幾乎沒有天然的 XOR 閘。必須由純 NOR 閘網路組合而成：(A NOR (A NOR B)) NOR (B NOR (A NOR B))，或者透過更複雜的多層級網路來實現。",
     "boolean_template": "A XOR B",
+    "truth_table": [
+      {"A": 0, "B": 0, "Y": 0},
+      {"A": 0, "B": 1, "Y": 1},
+      {"A": 1, "B": 0, "Y": 1},
+      {"A": 1, "B": 1, "Y": 0}
+    ],
+    "verilog_template": "module xor_gate(input A, input B, output Y);\n  xor g1(Y, A, B);\nendmodule",
     "trade_offs": "極度耗費細胞資源。高達 3 層的邏輯深度會帶來嚴重的訊號延遲，且需要 4 到 5 個完全互不干擾的抑制蛋白，這往往會逼近單一細胞的代謝負擔極限。",
-    "known_risks": "極易產生「競爭危害 (Race Condition / Logic Hazard)」。因為 A 與 B 的訊號在電路中經過的路徑長度 (邏輯深度) 不同，抵達末端的時間會有時間差，可能導致本該關閉的狀態出現短暫的錯誤脈衝 (Glitch)。"
+    "known_risks": "極易產生「競爭危害 (Race Condition / Logic Hazard)」。因為 A 與 B 的訊號在電路中經過的路徑長度 (邏輯深度) 不同，抵達末端的時間會有時間差，可能導致本該關閉的狀態出現短暫的錯誤脈衝 (Glitch)。",
+    "application_scenarios": [
+      {
+        "scenario_name": "雙重刺激異步響應 / Dual-Stimulus Asynchronous Response",
+        "description": "適用於需要區分單一變量與雙重變量的精密生物感測器。例如，當只有光照或只有低溫時才啟動合成，但若兩者皆無或兩者同時發生時則保持靜默。",
+        "keywords": ["coincidence detection", "exclusive behavior", "state disparity", "非一致性偵測", "互斥響應"],
+        "user_intent_example": "Turn on expression if only input A is present, or only input B is present, but not when both or neither are."
+      }
+    ]
   },
   {
     "motif_name": "XNOR_GATE",
     "category": "primitives",
+    "tags": ["combinational", "complex-logic", "maximum-burden"],
+    "memory_kind": "success",
+    "confidence_score": 1.0,
     "purpose": "反互斥或閘 (等價閘)。只有當輸入訊號 A 與 B 狀態完全一致時 (皆無或皆有)，才啟動輸出。",
+    "purpose_en": "Exclusive NOR. Outputs ON only when inputs A and B are in the same state (both ON or both OFF).",
+    "is_cyclic": false,
     "logic_depth": 3,
     "estimated_repressor_cost": 5,
+    "cost_description": "Extremely costly, typically requiring 4 to 5 repressors.",
     "decomposition_strategy": "本質上是 NOT(XOR)。在純 NOR 閘的合成中，通常需要比 XOR 再多加一層反相器，或者重新進行卡諾圖化簡。",
     "boolean_template": "A XNOR B",
-    "trade_offs": "這是基礎組合邏輯中最笨重的一個。如果 Agent 偵測到需要使用 XNOR，應該優先思考能否在更高層級的演算法中重新定義問題，以避開這個昂貴的結構。",
-    "known_risks": "除了與 XOR 相同的競爭危害與巨大代謝毒性外，過深的邏輯層數會讓訊號嚴重衰減，導致輸出的「On/Off 差異比 (Dynamic Range)」變得極度模糊。"
+    "truth_table": [
+      {"A": 0, "B": 0, "Y": 1},
+      {"A": 0, "B": 1, "Y": 0},
+      {"A": 1, "B": 0, "Y": 0},
+      {"A": 1, "B": 1, "Y": 1}
+    ],
+    "verilog_template": "module xnor_gate(input A, input B, output Y);\n  xnor g1(Y, A, B);\nendmodule",
+    "trade_offs": "這是專案組合邏輯中最笨重的一個。如果 Agent 偵測到需要使用 XNOR，應該優先思考能否在更高層級的演算法中重新定義問題，以避開這個昂貴的結構。",
+    "known_risks": "除了與 XOR 相同的競爭危害與巨大代謝毒性外，過深的邏輯層數會讓訊號嚴重衰減，導致輸出的「On/Off 差異比 (Dynamic Range)」變得極度模糊。",
+    "application_scenarios": [
+      {
+        "scenario_name": "一致性同步感測 / Consonance & State Matcher",
+        "description": "適用於需要驗證兩個生物指標狀態是否同步的系統。當兩者同時有或同時無時，輸出目標下游以啟動同步的生理行為。",
+        "keywords": ["coincidence verification", "equivalence logic", "synchronization", "同步化", "等價檢驗"],
+        "user_intent_example": "Activate output only when both chemical A and chemical B are present, or when both are absent."
+      }
+    ]
   },
   {
     "motif_name": "TOGGLE_SWITCH",
     "category": "sequential_memory",
+    "tags": ["sequential", "memory", "cyclic", "feedback", "bistable"],
+    "memory_kind": "success",
+    "confidence_score": 1.0,
     "purpose": "儲存 1-bit 的二進位記憶。能在短暫的誘導訊號後，永久維持細胞狀態的切換。",
-    "logic_depth": "迴圈網路 (環狀依賴)",
+    "purpose_en": "Stores a 1-bit binary state memory. Maintains stable output state after transient inducer input is removed.",
+    "is_cyclic": true,
+    "logic_depth": -1,
     "estimated_repressor_cost": 2,
+    "cost_description": "Requires exactly 2 mutually repressing repressors (e.g. LacI/TetR) to form a positive feedback loop.",
     "decomposition_strategy": "由兩個 NOT 閘互相抑制形成正回饋迴路。通常需要極度精準挑選兩個抑制蛋白 (如 LacI 與 TetR)，使其表現強度與降解率高度對稱。",
-    "dynamic_behavior": "雙穩態 (Bistability)。系統具有兩個穩定的吸引子 (Attractors)，不允許中間狀態的長期存在。",
+    "boolean_template": "Q = NOR(R, Qbar); Qbar = NOR(S, Q)",
+    "truth_table": [
+      {"S": 0, "R": 0, "prev_Q": 0, "Q": 0},
+      {"S": 1, "R": 0, "prev_Q": 0, "Q": 1},
+      {"S": 0, "R": 1, "prev_Q": 1, "Q": 0},
+      {"S": 0, "R": 0, "prev_Q": 1, "Q": 1}
+    ],
+    "verilog_template": "module toggle_switch(input S, input R, output Q, output Qbar);\n  nor g1(Q, R, Qbar);\n  nor g2(Qbar, S, Q);\nendmodule",
     "trade_offs": "記憶屬於揮發性 (Volatile)。如果細胞遭遇極端生長壓力或質體大量遺失，蛋白質濃度的平衡一旦崩潰，記憶就會被洗掉。",
-    "known_risks": "若選用的兩個 NOT 閘的希爾係數 (Hill Coefficient) 太低 (n < 2)，或者漏電 (Leakage) 太高，雙穩態將無法維持，系統會陷入兩者皆弱的灰色地帶。"
+    "known_risks": "若選用的兩個 NOT 閘的希爾係數 (Hill Coefficient) 太低 (n < 2)，或者漏電 (Leakage) 太高，雙穩態將無法維持，系統會陷入兩者皆弱的灰色地帶。",
+    "application_scenarios": [
+      {
+        "scenario_name": "暫態事件鎖存與記憶 / Transient Event Latching & Memory",
+        "description": "適用於需要記錄「某事件是否發生過」的場景。當輸入端接收到一個短暫的刺激脈衝（如短暫的環境刺激、藥物添加或物理擾動），電路會永久切換輸出狀態。即使該刺激隨後消失，輸出依然保持，直到接收到明確的重設（Reset）訊號。",
+        "keywords": ["transient detection", "bistable latch", "state storage", "memory switch", "暫態偵測", "狀態鎖存"],
+        "user_intent_example": "I need a genetic memory circuit that detects a temporary pulse of an input chemical and keeps the output gene on permanently."
+      }
+    ]
   },
   {
     "motif_name": "REPRESSILATOR",
     "category": "dynamic_oscillator",
+    "tags": ["dynamic", "oscillator", "cyclic", "feedback", "unstable"],
+    "memory_kind": "success",
+    "confidence_score": 1.0,
     "purpose": "作為細胞內建的生物時鐘，產生週期性的蛋白質濃度波動，用於控制定時任務。",
-    "logic_depth": "迴圈網路 (奇數環)",
+    "purpose_en": "A genetic clock/oscillator generating periodic protein concentration fluctuations to control timed tasks.",
+    "is_cyclic": true,
+    "logic_depth": -1,
     "estimated_repressor_cost": 3,
+    "cost_description": "Requires an odd loop of mutually repressing proteins (minimum 3).",
     "decomposition_strategy": "由三個 (或大於三的奇數個) NOT 閘頭尾相連組成。例如：A 抑制 B，B 抑制 C，C 抑制 A。",
-    "dynamic_behavior": "極限環震盪 (Limit Cycle Oscillation)。系統永遠無法達到穩定平衡點，呈現週期性的狀態輪轉。",
+    "boolean_template": "A = NOT(C); B = NOT(A); C = NOT(B)",
+    "truth_table": [
+      {"step": 0, "A": 1, "B": 0, "C": 0},
+      {"step": 1, "A": 0, "B": 1, "C": 0},
+      {"step": 2, "A": 0, "B": 0, "C": 1},
+      {"step": 3, "A": 1, "B": 0, "C": 0}
+    ],
+    "verilog_template": "module repressilator(output A, output B, output C);\n  not g1(A, C);\n  not g2(B, A);\n  not g3(C, B);\nendmodule",
     "trade_offs": "是極度難以穩定的「脆弱 (Fragile)」電路。任何一個節點的參數微小偏移，都會導致震盪停止。",
-    "known_risks": "嚴重依賴蛋白質的快速降解。若未在蛋白質序列後加上降解標籤 (如 ssrA tag)，累積的蛋白質會如同緩衝液般吸收訊號變化，使震盪訊號迅速衰減為直線 (Damped Oscillation)。"
+    "known_risks": "嚴重依賴蛋白質的快速降解。若未在蛋白質序列後加上降解標籤 (如 ssrA tag)，累積的蛋白質會如同緩衝液般吸收訊號變化，使震盪訊號迅速衰減為直線 (Damped Oscillation)。",
+    "application_scenarios": [
+      {
+        "scenario_name": "自主週期性釋放與控制 / Autonomous Periodic Pulse & Timing",
+        "description": "適用於不需要外部持續誘導、依靠細胞自主產生週期波動的定時控制器（例如週期性分泌藥物、定時細胞自裂解以釋放產物）。",
+        "keywords": ["oscillation", "clock", "timing", "periodic release", "生物鐘", "週期震盪"],
+        "user_intent_example": "Build a biological clock circuit that oscillates autonomously to drive periodic gene expression."
+      }
+    ]
   },
   {
     "motif_name": "COHERENT_FEED_FORWARD_LOOP",
     "category": "signal_processing",
+    "tags": ["combinational", "filter", "feed-forward", "noise-reduction"],
+    "memory_kind": "success",
+    "confidence_score": 1.0,
     "purpose": "雜訊濾波器 (Noise Filter) 或延遲啟動開關。只對持續時間夠長的真實訊號起反應，忽略短暫的環境雜訊。",
+    "purpose_en": "A sign-sensitive delay filter. Requires a persistent input signal to trigger output, filtering out brief transient noise.",
+    "is_cyclic": false,
     "logic_depth": 2,
-    "estimated_repressor_cost": "視具體拓樸而定 (通常為活化子或抑制子的混合)",
+    "estimated_repressor_cost": 2,
+    "cost_description": "Typically requires an activator/repressor mix and a co-promoter (acting as AND logic).",
     "decomposition_strategy": "信號路徑分岔後再匯合。X 啟動 Y，然後 X 和 Y 共同啟動 Z (此處通常包含一個隱含的 AND 邏輯)。",
-    "dynamic_behavior": "非對稱延遲 (Sign-sensitive delay)。啟動時有顯著的時間延遲 (需等待 Y 累積)，但訊號消失時，Z 可能會迅速關閉。",
+    "boolean_template": "Y = X; Z = X AND Y",
+    "truth_table": [
+      {"X": 0, "Y": 0, "Z": 0},
+      {"X_pulse": 1, "Y_delayed": 0, "Z": 0},
+      {"X_sustained": 1, "Y_accumulated": 1, "Z": 1}
+    ],
+    "verilog_template": "module coherent_ffl(input X, output Z);\n  wire Y;\n  assign Y = X; // Acts as a delay channel\n  and g1(Z, X, Y);\nendmodule",
     "trade_offs": "以犧牲反應速度為代價，換取極高的訊號保真度與抗雜訊能力。",
-    "known_risks": "若 Y 的轉譯速率過慢或降解過快，可能導致 Z 永遠無法跨越啟動的閾值。"
+    "known_risks": "若 Y 的轉譯速率過慢或降解過快，可能導致 Z 永遠無法跨越啟動的閾值。",
+    "application_scenarios": [
+      {
+        "scenario_name": "持續性信號識別與雜訊過濾 / Persistent Signal Detection & Noise Filtering",
+        "description": "適用於環境中充滿短暫波動雜訊的場景。電路在輸入訊號剛出現時會故意延遲反應（蓄積中間物），只有當輸入訊號持續時間跨越特定閾值時才開啟輸出。這能有效過濾掉瞬時的隨機雜訊，避免系統因誤觸而開啟高能耗下游。",
+        "keywords": ["noise reduction", "delay-on switch", "turn-on delay", "persistence detector", "去雜訊", "延遲啟動"],
+        "user_intent_example": "Design a filter circuit that ignores short spikes of input and only activates the downstream genes if the signal is stable and sustained."
+      }
+    ]
   },
   {
     "motif_name": "INCOHERENT_FEED_FORWARD_LOOP",
     "category": "signal_processing",
+    "tags": ["combinational", "filter", "feed-forward", "adaptation"],
+    "memory_kind": "success",
+    "confidence_score": 1.0,
     "purpose": "脈衝產生器 (Pulse Generator) 或折疊變化偵測器 (Fold-change Detector)。在持續的輸入訊號下，只產生短暫的輸出爆發，隨後自動適應並關閉。",
+    "purpose_en": "Outputs a transient pulse when input level rises, then automatically adapts and shuts down despite sustained input.",
+    "is_cyclic": false,
     "logic_depth": 2,
-    "estimated_repressor_cost": "至少 1 個抑制蛋白",
+    "estimated_repressor_cost": 1,
+    "cost_description": "Requires exactly 1 intermediate repressor.",
     "decomposition_strategy": "X 啟動目標基因 Z，但 X 同時也啟動抑制蛋白 Y，隨後 Y 會關閉 Z。創造了活化與抑制之間的時間差。",
-    "dynamic_behavior": "瞬態脈衝 (Transient Pulse) 與適應性 (Adaptation)。輸出的峰值高度與輸入訊號的絕對濃度無關，而是與濃度的「相對變化率」有關。",
+    "boolean_template": "Y = X; Z = X AND NOT(Y)",
+    "truth_table": [
+      {"X": 0, "Y": 0, "Z": 0},
+      {"X_initial": 1, "Y_delayed": 0, "Z": 1},
+      {"X_sustained": 1, "Y_accumulated": 1, "Z": 0}
+    ],
+    "verilog_template": "module incoherent_ffl(input X, output Z);\n  wire Y;\n  not g1(Y, X); // Y is intermediate repressor\n  and g2(Z, X, Y);\nendmodule",
     "trade_offs": "非常優雅且節省資源的脈衝產生方式，但脈衝的寬度 (Duration) 難以精準控制，高度依賴 Y 的生成動力學。",
-    "known_risks": "如果抑制蛋白 Y 漏電過高或基礎表現太強，一開始就把 Z 壓制住，那麼連短暫的脈衝都不會產生。"
+    "known_risks": "如果抑制蛋白 Y 漏電過高或基礎表現太強，一開始就把 Z 壓制住，那麼連短暫的脈衝都不會產生。",
+    "application_scenarios": [
+      {
+        "scenario_name": "瞬態脈衝產生與環境適應 / Transient Pulse Generation & Adaptation",
+        "description": "適用於需要對環境變化做出「即時但短暫反應」的場景。不論輸入訊號持續多久，系統只在輸入濃度上升時產生一個短暫的輸出脈衝，隨後自動適應並關閉。這可用於重整內部狀態或作為階段性發育信號。",
+        "keywords": ["pulse generator", "fold-change detection", "adaptation", "transient response", "脈衝產生", "自動適應"],
+        "user_intent_example": "I want a circuit that outputs a temporary burst of expression when the inducer level changes, but then returns to baseline even if the inducer remains."
+      }
+    ]
   },
   {
     "motif_name": "THRESHOLD_GATE",
     "category": "signal_processing",
+    "tags": ["combinational", "converter", "thresholding", "non-linear"],
+    "memory_kind": "success",
+    "confidence_score": 1.0,
     "purpose": "類比數位轉換器 (ADC) 或噪音消除器。設定一個絕對的濃度門檻，跨越前輸出為零，跨越後呈現極陡峭的啟動。",
+    "purpose_en": "Analog-to-digital converter or noise thresholding. Output stays strictly OFF below a threshold and turns sharply ON above it.",
+    "is_cyclic": false,
     "logic_depth": 1,
-    "estimated_repressor_cost": "需要額外的『分子海綿 (Decoys)』資源",
+    "estimated_repressor_cost": 1,
+    "cost_description": "Requires molecular decoys/sponges to soak up low levels of activator.",
     "decomposition_strategy": "引入與活化子具有極高親和力，但無法啟動下游的『誘餌分子』。在活化子填滿所有誘餌之前，系統保持絕對的關閉狀態。",
-    "dynamic_behavior": "極高非線性 (Ultra-sensitivity)。在濃度-反應曲線上創造一個宛如數位電晶體般的垂直切換點。",
+    "boolean_template": "Y = (A > Threshold) ? 1 : 0",
+    "truth_table": [
+      {"A_low": 0.2, "Decoys_bound": 0.2, "Y": 0},
+      {"A_mid": 0.5, "Decoys_bound": 0.5, "Y": 0},
+      {"A_high": 1.2, "Decoys_bound": 0.8, "Y": 1}
+    ],
+    "verilog_template": "module threshold_gate(input A, output Y);\n  wire w1;\n  not g1(w1, A);\n  not g2(Y, w1); // Double inversion acts as buffer with sharp threshold\nendmodule",
     "trade_offs": "能完美切斷底層雜訊漏電，但需要持續消耗細胞資源來製造大量毫無運算功能的誘餌分子，代謝負擔隱蔽且沉重。",
-    "known_risks": "誘餌分子的表現量必須保持絕對穩定。若細胞狀態改變導致誘餌數量波動，整個系統的啟動閾值就會隨之瘋狂漂移。"
+    "known_risks": "誘餌分子的表現量必須保持絕對穩定。若細胞狀態改變導致誘餌數量波動，整個系統的啟動閾值就會隨之瘋狂漂移。",
+    "application_scenarios": [
+      {
+        "scenario_name": "類比數位轉換與噪音消除 / Analog-to-Digital Conversion & Leakage Minimization",
+        "description": "適用於消除上游啟動子微弱的漏電（leakage）訊號。利用誘餌分子吸收低濃度的活化因子，直到輸入濃度達到足夠強烈的高水平時，才使下游基因發出陡峭的數位式啟動反應。",
+        "keywords": ["noise gate", "adc", "sharp response", "ultrasensitivity", "消除漏電", "類比數位轉換"],
+        "user_intent_example": "Design a buffer gate that filters out promoter leakage and only activates output when input exceeds a high threshold."
+      }
+    ]
   },
   {
     "motif_name": "PULSE_GENERATOR",
     "category": "signal_processing",
+    "tags": ["combinational", "filter", "feed-forward", "pulse"],
+    "memory_kind": "success",
+    "confidence_score": 1.0,
     "purpose": "在面臨持續的輸入訊號時，只產生短暫的輸出爆發（脈衝），隨後系統會自動關閉並適應。",
+    "purpose_en": "Generates a brief output burst (pulse) in response to a sustained input signal, followed by automatic adaptation.",
+    "is_cyclic": false,
     "logic_depth": 2,
     "estimated_repressor_cost": 1,
+    "cost_description": "Usually implemented via an incoherent feed-forward loop (I1-FFL).",
     "decomposition_strategy": "在轉錄層次上，最穩定的實作是使用非一致性前饋迴路 (I1-FFL)。輸入訊號 A 同時啟動目標輸出 Z 以及抑制蛋白 Y，而 Y 負責關閉 Z。脈衝的產生依賴於 Y 轉錄與累積的『物理時間差』。",
+    "boolean_template": "Y = In; Out = In AND NOT(Y)",
+    "truth_table": [
+      {"In": 0, "Y": 0, "Out": 0},
+      {"In_rising": 1, "Y": 0, "Out": 1},
+      {"In_stable": 1, "Y": 1, "Out": 0}
+    ],
+    "verilog_template": "module pulse_generator(input In, output Out);\n  wire delay_repressor;\n  not g1(delay_repressor, In);\n  and g2(Out, In, delay_repressor);\nendmodule",
     "trade_offs": "資源消耗極低（只需額外 1 個抑制蛋白）。但缺點是脈衝的『高度（振幅）』與『寬度（持續時間）』高度耦合，在傳統轉錄系統中難以將兩者獨立拆分調整。",
-    "known_risks": "若抑制蛋白 Y 的生成速率過快，或者基礎漏電（Leakage）過高，會導致輸出 Z 根本來不及累積，連短暫的脈衝都會被直接掐死。"
+    "known_risks": "若抑制蛋白 Y 的生成速率過慢，可能脈衝遲遲無法關閉；若 Y 的生成速率過快，或基礎漏電高，則輸出甚至來不及累積就直接被掐死。",
+    "application_scenarios": [
+      {
+        "scenario_name": "刺激瞬時響應觸發 / Transient Impulse Triggering",
+        "description": "適用於在接收到環境刺激（例如熱休克或化學訊號）時，只需要進行短暫的應答，避免持續反應對細胞活力造成負擔的控制器。",
+        "keywords": ["impulse", "transient trigger", "one-shot", "單次觸發", "瞬態應答"],
+        "user_intent_example": "Generate a short expression spike of a gene when inducer is introduced, but do not keep it active."
+      }
+    ]
   },
   {
     "motif_name": "BAND_PASS_FILTER",
     "category": "signal_processing",
+    "tags": ["combinational", "filter", "band-pass", "spatial-pattern"],
+    "memory_kind": "success",
+    "confidence_score": 1.0,
     "purpose": "濃度區間偵測器。只有當輸入訊號處於特定的『中等濃度區間』時才啟動輸出；濃度過低或過高皆會關閉輸出。",
+    "purpose_en": "Band-pass filter. Outputs ON only when input concentration falls into a specific middle-range band; OFF if too low or too high.",
+    "is_cyclic": false,
     "logic_depth": 2,
-    "estimated_repressor_cost": 1,
+    "estimated_repressor_cost": 2,
+    "cost_description": "Requires an activator pathway (low threshold) and a repressor pathway (high threshold).",
     "decomposition_strategy": "將『低閾值的活化途徑』與『高閾值的抑制途徑』平行疊加。低濃度時觸發活化；高濃度時抑制蛋白啟動，且其抑制效力必須覆蓋過活化效力。",
+    "boolean_template": "Out = (In > LowThreshold) AND NOT(In > HighThreshold)",
+    "truth_table": [
+      {"In_low": 0.1, "LowPath": 0, "HighPath": 0, "Out": 0},
+      {"In_mid": 0.5, "LowPath": 1, "HighPath": 0, "Out": 1},
+      {"In_high": 1.5, "LowPath": 1, "HighPath": 1, "Out": 0}
+    ],
+    "verilog_template": "module band_pass_filter(input In, output Out);\n  wire low_pass, high_pass_n;\n  assign low_pass = In;        // Low threshold activation pathway\n  not g1(high_pass_n, In);     // High threshold repression pathway\n  and g2(Out, low_pass, high_pass_n);\nendmodule",
     "trade_offs": "能讓細胞具備空間定位（例如在濃度梯度的特定位置亮起）或精準的劑量感知能力。但它對參數匹配的要求極度嚴苛。",
-    "known_risks": "這是一個極易失效的電路。如果高閾值（抑制器啟動所需的濃度）小於或等於低閾值（活化器啟動所需的濃度），這兩個曲線的交集就會消失，系統將永遠處於關閉狀態，完全失去帶通效應。"
+    "known_risks": "這是一個極易失效的電路。如果高閾值（抑制器啟動所需的濃度）小於或等於低閾值（活化器啟動所需的濃度），這兩個曲線的交集就會消失，系統將永遠處於關閉狀態，完全失去帶通效應。",
+    "application_scenarios": [
+      {
+        "scenario_name": "特定濃度區間感測與空間定位 / Concentration-Band Sensing & Spatial Patterning",
+        "description": "適用於多細胞系統的形態發生或空間定位。例如：細胞只有在特定濃度的嗎啡根或化學梯度帶中才會存活或發光；或作為安全用藥劑量監測器（太高毒性強、太低無效，只有在中等區間表示安全且起效）。",
+        "keywords": ["concentration window", "spatial patterning", "morphogen sensing", "區間感測", "空間圖案化"],
+        "user_intent_example": "Build a circuit that expresses a reporter gene only when the chemical concentration is between a low and a high limit."
+      }
+    ]
   }
 ]
