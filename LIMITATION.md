@@ -1,5 +1,4 @@
-# Project Limitations
-# 專案限制
+# Project Limitations/專案限制
 
 This document states what the current project can and cannot claim. It is meant to reduce ambiguity when presenting the work to synthetic biologists, supervisors, collaborators, or potential research contacts.
 
@@ -12,8 +11,7 @@ The short version is:
 > This project generates and evaluates computational candidate designs for regulatory logic circuits. It does not yet produce complete, buildable, experimentally validated genetic circuits.
 > 本專案生成並評估調節邏輯電路的計算候選設計。它目前尚無法產生完整、可構建且經過實驗驗證的基因電路。
 
-## 1. What This Project Can Do
-## 1. 本專案可以做的事情
+## 1. What This Project Can Do/本專案可以做的事情
 
 The current prototype can:
 
@@ -40,8 +38,7 @@ These capabilities are useful for research prototyping, workflow design, and ear
 
 這些能力對於研究原型開發、工作流設計以及早期候選方案篩選非常有用。
 
-## 2. What This Project Cannot Yet Do
-## 2. 本專案目前無法做的事情
+## 2. What This Project Cannot Yet Do/本專案目前無法做的事情
 
 The current prototype cannot:
 
@@ -73,7 +70,6 @@ These limitations are expected for the current stage of the project. The system 
 對於專案目前的階段，這些限制是符合預期的。該系統應被視為一個計算輔助設計的原型，而非自動化的生物設計平台。
 
 ## 3. Safe Claims
-## 3. 安全的宣稱（合適的描述方式）
 
 These are appropriate ways to describe the project:
 
@@ -95,7 +91,6 @@ These are appropriate ways to describe the project:
 > 僅在配置了真實的 Cello 指令與相容的 UCF/庫時，外部 Cello 映射才可用。
 
 ## 4. Claims to Avoid
-## 4. 應避免的宣稱（誇大的描述方式）
 
 These statements would overstate the current system:
 
@@ -119,8 +114,7 @@ These statements would overstate the current system:
 > The project has validated a biological logic gate without construction and measurement.
 > 該專案在沒有構建與測量的情況下驗證了生物邏輯閘。
 
-## 5. Evidence Needed for Stronger Claims
-## 5. 做出更強宣稱所需的證據
+## 5. Evidence Needed for Stronger Claims/做出更強宣稱所需的證據
 
 Stronger biological claims would require additional evidence and implementation work, such as:
 
@@ -143,8 +137,7 @@ Stronger biological claims would require additional evidence and implementation 
 - expert review for biosafety, host compatibility, and experimental feasibility.
   針對生物安全、宿主相容性與實驗可行性的專家審查。
 
-## 6. Relationship to Other Documents
-## 6. 與其他文件的關係
+## 6. Relationship to Other Documents/與其他文件的關係
 
 - [README.md](README.md): high-level project overview and entry point.
   [README.md](README.md)：高階專案概述與進入點。
@@ -155,8 +148,7 @@ Stronger biological claims would require additional evidence and implementation 
 - [ARCHITECTURE.md](ARCHITECTURE.md): current system architecture and agent responsibilities.
   [ARCHITECTURE.md](ARCHITECTURE.md)：當前系統架構與智能體職責。
 
-## 7. Recommended One-Sentence Description
-## 7. 推薦的一句話描述
+## 7. Recommended One-Sentence Description/推薦的一句話描述
 
 For presentations, emails, or early research conversations, the safest concise description is:
 
