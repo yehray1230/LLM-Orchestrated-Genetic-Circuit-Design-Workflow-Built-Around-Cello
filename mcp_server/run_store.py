@@ -25,7 +25,7 @@ class RunStore:
         self.base_dir.mkdir(parents=True, exist_ok=True)
         self._executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="mcp-design-run")
         self._futures: dict[str, Future] = {}
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
 
     def start(
         self,
@@ -49,14 +49,83 @@ class RunStore:
             "error": None,
             "error_type": None,
             "cancellation_requested": False,
+            "stage": "queued",
+            "progress": 0.0,
+            "event_count": 0,
         }
         self._write_metadata(run_dir, metadata)
+        self.append_event(selected_run_id, "run", "queued", 0.0, "Run queued.")
 
         future = self._executor.submit(self._run_task, selected_run_id, run_dir, task)
         with self._lock:
             self._futures[selected_run_id] = future
 
         return self.status(selected_run_id)
+
+    def append_event(
+        self,
+        run_id: str,
+        stage: str,
+        status: str,
+        progress: float,
+        message: str,
+        details: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        run_dir = self._run_dir(run_id)
+        if not run_dir.exists():
+            return _not_found(run_id)
+        with self._lock:
+            metadata = self._read_metadata(run_dir)
+            event_id = int(metadata.get("event_count") or 0) + 1
+            event = {
+                "event_id": event_id,
+                "run_id": run_id,
+                "stage": str(stage),
+                "status": str(status),
+                "progress": max(0.0, min(float(progress), 1.0)),
+                "message": str(message),
+                "details": to_jsonable(details or {}),
+                "timestamp": _now_iso(),
+            }
+            events_path = run_dir / "events.jsonl"
+            with events_path.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(event, ensure_ascii=False) + "\n")
+            metadata.update(
+                {
+                    "stage": event["stage"],
+                    "progress": event["progress"],
+                    "event_count": event_id,
+                    "updated_at": event["timestamp"],
+                }
+            )
+            self._write_metadata(run_dir, metadata)
+        return event
+
+    def events(self, run_id: str, after_event_id: int = 0, limit: int = 100) -> dict[str, Any]:
+        run_dir = self._run_dir(run_id)
+        if not run_dir.exists():
+            return _not_found(run_id)
+        selected_limit = max(1, min(int(limit), 500))
+        events_path = run_dir / "events.jsonl"
+        events: list[dict[str, Any]] = []
+        if events_path.exists():
+            for line in events_path.read_text(encoding="utf-8").splitlines():
+                try:
+                    event = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if int(event.get("event_id") or 0) > int(after_event_id):
+                    events.append(event)
+        metadata = self._read_metadata(run_dir)
+        return {
+            **_public_status(metadata),
+            "error": None,
+            "error_type": None,
+            "events": events[:selected_limit],
+            "count": min(len(events), selected_limit),
+            "has_more": len(events) > selected_limit,
+            "last_event_id": events[min(len(events), selected_limit) - 1]["event_id"] if events else int(after_event_id),
+        }
 
     def status(self, run_id: str) -> dict[str, Any]:
         run_dir = self._run_dir(run_id)
@@ -178,9 +247,11 @@ class RunStore:
         return json.loads(result_path.read_text(encoding="utf-8"))
 
     def _run_task(self, run_id: str, run_dir: Path, task: Callable[[], dict[str, Any]]) -> None:
-        metadata = self._read_metadata(run_dir)
-        metadata.update({"status": "running", "started_at": _now_iso(), "updated_at": _now_iso()})
-        self._write_metadata(run_dir, metadata)
+        with self._lock:
+            metadata = self._read_metadata(run_dir)
+            metadata.update({"status": "running", "started_at": _now_iso(), "updated_at": _now_iso()})
+            self._write_metadata(run_dir, metadata)
+        self.append_event(run_id, "run", "running", 0.02, "Run started.")
 
         try:
             result = task()
@@ -191,24 +262,33 @@ class RunStore:
             result["async_run_id"] = run_id
             result["async_run_dir"] = str(run_dir.resolve())
             write_json(run_dir / "result.json", result)
-            latest_metadata = self._read_metadata(run_dir)
-            cancellation_was_requested = bool(latest_metadata.get("cancellation_requested"))
-            metadata = latest_metadata
-            metadata.update(
-                {
-                    "status": status,
-                    "finished_at": _now_iso(),
-                    "updated_at": _now_iso(),
-                    "result_status": result.get("status"),
-                    "workflow_run_dir": result.get("run_dir"),
-                    "artifacts": result.get("artifacts", {}),
-                    "summary": _compact_summary(result.get("summary", {})),
-                    "error": result.get("error"),
-                    "error_type": result.get("error_type"),
-                }
+            with self._lock:
+                latest_metadata = self._read_metadata(run_dir)
+                cancellation_was_requested = bool(latest_metadata.get("cancellation_requested"))
+                metadata = latest_metadata
+                metadata.update(
+                    {
+                        "status": status,
+                        "finished_at": _now_iso(),
+                        "updated_at": _now_iso(),
+                        "result_status": result.get("status"),
+                        "workflow_run_dir": result.get("run_dir"),
+                        "artifacts": result.get("artifacts", {}),
+                        "summary": _compact_summary(result.get("summary", {})),
+                        "error": result.get("error"),
+                        "error_type": result.get("error_type"),
+                    }
+                )
+                if cancellation_was_requested and status in TERMINAL_STATUSES:
+                    metadata["message"] = "Cancellation was requested, but the run completed before it could stop."
+                self._write_metadata(run_dir, metadata)
+            self.append_event(
+                run_id,
+                "run",
+                status,
+                1.0,
+                "Run finished." if status == "completed" else f"Run finished with status {status}.",
             )
-            if cancellation_was_requested and status in TERMINAL_STATUSES:
-                metadata["message"] = "Cancellation was requested, but the run completed before it could stop."
         except Exception as exc:
             error_result = {
                 "status": "failed",
@@ -218,17 +298,19 @@ class RunStore:
                 "error_type": "workflow_error",
             }
             write_json(run_dir / "result.json", error_result)
-            metadata.update(
-                {
-                    "status": "failed",
-                    "finished_at": _now_iso(),
-                    "updated_at": _now_iso(),
-                    "error": str(exc),
-                    "error_type": "workflow_error",
-                }
-            )
-        finally:
-            self._write_metadata(run_dir, metadata)
+            with self._lock:
+                metadata = self._read_metadata(run_dir)
+                metadata.update(
+                    {
+                        "status": "failed",
+                        "finished_at": _now_iso(),
+                        "updated_at": _now_iso(),
+                        "error": str(exc),
+                        "error_type": "workflow_error",
+                    }
+                )
+                self._write_metadata(run_dir, metadata)
+            self.append_event(run_id, "run", "failed", 1.0, f"Run failed: {exc}")
 
     def _run_dir(self, run_id: str) -> Path:
         return self.base_dir / run_id
@@ -246,9 +328,10 @@ class RunStore:
 
     def _write_metadata(self, run_dir: Path, metadata: dict[str, Any]) -> None:
         metadata_path = run_dir / "metadata.json"
-        temp_path = run_dir / "metadata.json.tmp"
-        write_json(temp_path, metadata)
-        temp_path.replace(metadata_path)
+        temp_path = run_dir / f"metadata.{uuid.uuid4().hex}.tmp"
+        with self._lock:
+            write_json(temp_path, metadata)
+            temp_path.replace(metadata_path)
 
 
 def _public_status(metadata: dict[str, Any]) -> dict[str, Any]:
@@ -268,6 +351,9 @@ def _public_status(metadata: dict[str, Any]) -> dict[str, Any]:
         "error_type": metadata.get("error_type"),
         "cancellation_requested": metadata.get("cancellation_requested", False),
         "message": metadata.get("message"),
+        "stage": metadata.get("stage"),
+        "progress": metadata.get("progress", 0.0),
+        "event_count": metadata.get("event_count", 0),
     }
 
 
@@ -302,6 +388,9 @@ def _compact_summary(summary: Any) -> dict[str, Any]:
         "latest_critic_feedback": summary.get("latest_critic_feedback"),
         "score": best_topology.get("score"),
         "mapping_status": best_topology.get("mapping_status"),
+        "cello_mode": best_topology.get("cello_mode"),
+        "cello_claim_level": best_topology.get("cello_claim_level"),
+        "cello_warning": best_topology.get("cello_warning"),
         "ode_status": best_topology.get("ode_status"),
     }
 

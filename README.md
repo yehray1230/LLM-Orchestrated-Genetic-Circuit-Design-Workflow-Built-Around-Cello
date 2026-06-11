@@ -9,6 +9,13 @@ The current system should be read as a computational workflow for proposing and 
 
 目前的系統應被理解為提出和評估候選調節電路拓撲結構的計算工作流，而非一個完整的質體設計或濕實驗室驗證平台。
 
+## Project Status
+## 專案狀態
+
+This repository is an actively developed research prototype. It is suitable for local demonstrations, workflow experiments, and evaluation research, but its APIs, data models, and scoring behavior may still change. A practical release label for the current codebase is `0.x research preview`, not a stable production release.
+
+本儲存庫是持續開發中的研究原型，適合本機展示、工作流實驗與評估研究；API、資料模型和評分行為仍可能變更。目前較合適的發布標示是 `0.x research preview`，而非穩定的正式版本。
+
 ## Scope and Boundaries
 ## 範圍與邊界
 
@@ -59,6 +66,8 @@ Natural-language interfaces are useful for making genetic circuit design more ac
   Cello 相容性取決於所選的 UCF/庫以及正交元件的可用性。
 - ODE simulation can test a simplified resource-aware dynamical model, but model quality depends on parameter provenance and biological assumptions.
   ODE 模擬可以測試簡化的資源感知動力學模型，但模型品質取決於參數來源和生物學假設。
+- ODE explanations summarize trajectory readouts such as peak output, time to peak, burden proxies, steady-state status, and missing coverage warnings; these are interpretive screening aids, not calibrated experimental measurements.
+  ODE 解釋會彙整軌跡讀數，例如最大輸出、達峰時間、負載代理指標、穩態狀態與覆蓋缺口警示；這些是解讀性的篩選輔助，而非經校準的實驗量測。
 - Benchmark scores help compare candidates, but they do not establish buildability or experimental function by themselves.
   基準分數有助於比較候選方案，但它們本身並不能證明其可構建性或實驗功能。
 
@@ -75,12 +84,12 @@ The main Reflexion workflow is implemented in [workflows/reflexion_controller.py
    `BuilderAgent` 提出邏輯策略、真值表結構與設計約束。
 3. `TranslatorAgent` converts the proposal into Cello-compatible combinational Verilog.
    `TranslatorAgent` 將提案轉換為與 Cello 相容的組合邏輯 Verilog。
-4. `CelloWrapper` either runs an external Cello command or returns mock unmapped topology data when Cello is not configured.
-   `CelloWrapper` 可以運行外部 Cello 指令，或者在未配置 Cello 時返回模擬的未映射拓撲數據。
+4. `CelloWrapper` either runs an external Cello command or returns mock unmapped topology data when Cello is not configured. Topologies carry explicit `cello_mode`, `cello_claim_level`, and `cello_warning` metadata so mock output is not confused with real part mapping.
+   `CelloWrapper` 可以運行外部 Cello 指令，或者在未配置 Cello 時返回模擬的未映射拓撲數據。拓撲會帶有明確的 `cello_mode`、`cello_claim_level` 與 `cello_warning` 後設資料，以避免將 mock 輸出誤解為真實元件映射。
 5. `DataMinerAgent` attaches biokinetic parameters from local retrieval or defaults.
    `DataMinerAgent` 從本地檢索或預設值附加生物動力學參數。
-6. `BatchODESimulator` runs resource-aware mRNA/protein ODE simulation and optional Monte Carlo perturbation.
-   `BatchODESimulator` 運行資源感知的 mRNA/蛋白質 ODE 模擬以及可選的蒙特卡羅微擾。
+6. `BatchODESimulator` runs resource-aware mRNA/protein ODE simulation and optional Monte Carlo perturbation. The UI and MCP explanation layer can extract ODE readouts and limitations from the stored trace.
+   `BatchODESimulator` 運行資源感知的 mRNA/蛋白質 ODE 模擬以及可選的蒙特卡羅微擾。UI 與 MCP 解釋層可以從保存的軌跡中萃取 ODE 讀數與限制。
 7. `benchmark_suite.evaluate_candidate()` calculates weighted component scores.
    `benchmark_suite.evaluate_candidate()` 計算加權的子項分數。
 8. `CriticAgent` approves, rejects, or routes the design back to Builder or Translator for repair.
@@ -188,6 +197,10 @@ Therefore, ODE results should be read as a simplified screening signal. Stronger
 
 因此，ODE 結果應被視為簡化的篩選訊號。若要做出更強的生物學宣稱，將需要校準的參數、真實的 Cello/UCF 分配、序列級設計檢查，以及對 ON/OFF 比率、生長效應、負載、雜訊和穩定性的實驗表徵。
 
+The current interface and MCP adapter include an ODE explanation layer that reports selected trajectory readouts (`peak_output_protein`, `time_to_peak`, `final_output_protein`), coarse burden readouts (`max_total_mrna`, `max_total_protein`, RNAP/ribosome occupancy), uncertainty metadata, coverage warnings, model limitations, and suggested next checks. These explanations are intended to make the simulation easier to audit; they do not expand the model's biological scope.
+
+目前的介面與 MCP adapter 包含 ODE 解釋層，會回報選定的軌跡讀數（`peak_output_protein`、`time_to_peak`、`final_output_protein`）、粗略負載讀數（`max_total_mrna`、`max_total_protein`、RNAP/核糖體佔用率）、不確定性後設資料、覆蓋缺口警示、模型限制與建議的下一步檢查。這些解釋旨在讓模擬更容易審查；它們並不擴張模型的生物學適用範圍。
+
 For a more detailed discussion of model scope, assumptions, and missing biological mechanisms, see [MODEL_ASSUMPTIONS.md](MODEL_ASSUMPTIONS.md).
 
 如需對模型範圍、假設和缺失的生物學機制進行更詳細的討論，請參見 [MODEL_ASSUMPTIONS.md](MODEL_ASSUMPTIONS.md)。
@@ -204,36 +217,59 @@ For a more detailed discussion of model scope, assumptions, and missing biologic
 | [tools/cello_wrapper.py](tools/cello_wrapper.py) | External Cello command integration plus explicit mock-mode fallback. <br> 外部 Cello 指令整合以及明確的模擬模式回退。 |
 | [tools/ode_simulator.py](tools/ode_simulator.py) | Resource-aware ODE simulator with optional Monte Carlo perturbation and kinetic scoring. <br> 資源感知 ODE 模擬器，包含可選的蒙特卡羅微擾和動力學評分。 |
 | [benchmark_suite/](benchmark_suite) | Functional, kinetic, static plausibility, metabolic burden, temporal, and Cello-constraint evaluators. <br> 功能性、動力學、靜態合理性、代謝負載、時序與 Cello 約束評估器。 |
-| [mcp_server/](mcp_server) | Local MCP service for storing and serving run artifacts. <br> 用於儲存和提供運行產物的本地 MCP 服務。 |
+| [mcp_server/](mcp_server) | Local MCP service for storing and serving run artifacts, including selectable score, decision-trace, Cello-provenance, and ODE explanation outputs. <br> 用於儲存和提供運行產物的本地 MCP 服務，包含可選擇的分數、決策紀錄、Cello 來源與 ODE 解釋輸出。 |
 | [tests/](tests) | Unit tests for workflow behavior, topology graphs, ODE charts, MCP server behavior, and external-tool paths. <br> 工作流行為、拓撲圖、ODE 圖表、MCP 伺服器行為與外部工具路徑的單元測試。 |
 
-## Installation
-## 安裝
+## Quick Start
+## 快速開始
 
 Requires Python 3.11.
 
 需要 Python 3.11。
 
 ```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
 pip install -r requirements.txt
-pip install -r requirements-dev.txt
 ```
 
-Run the Streamlit app:
+Run the Streamlit app, then enter a LiteLLM-compatible model name and API key in the sidebar. The key is kept in the Streamlit session and should not be committed to the repository.
 
-運行 Streamlit 應用程式：
+運行 Streamlit 應用程式，然後在側邊欄輸入與 LiteLLM 相容的模型名稱和 API key。金鑰保留在 Streamlit session 中，不應提交到儲存庫。
 
 ```powershell
 streamlit run app.py
 ```
 
-Run tests:
+The default Cello path is a mock workflow. Real Cello mapping requires an external Cello command and compatible UCF configuration; see [Optional Cello Integration](#optional-cello-integration).
 
-運行測試：
+預設的 Cello 路徑是模擬工作流。真實 Cello mapping 需要外部 Cello 指令和相容的 UCF 設定；請參閱[可選的 Cello 整合](#可選的-cello-整合)。
+
+### Development and Tests
+### 開發與測試
+
+Install development dependencies and run the full test suite:
+
+安裝開發依賴並運行完整測試：
 
 ```powershell
-pytest
+pip install -r requirements-dev.txt
+python -m pytest
 ```
+
+The local MCP adapter has one additional optional runtime dependency:
+
+本機 MCP adapter 另有一個可選的執行依賴：
+
+```powershell
+pip install mcp
+python -m mcp_server.server
+```
+
+See [mcp_server/README.md](mcp_server/README.md) for MCP tools, environment-variable configuration, and focused test commands.
+
+MCP 工具、環境變數設定與專用測試指令請參閱 [mcp_server/README.md](mcp_server/README.md)。
 
 ## Optional Cello Integration
 ## 可選的 Cello 整合
@@ -304,3 +340,39 @@ Please identify what the project can currently support, what it cannot yet claim
   [MODEL_ASSUMPTIONS.md](MODEL_ASSUMPTIONS.md)：ODE 模型範圍、假設與生物學限制。
 - [LIMITATION.md](LIMITATION.md): explicit project capabilities, non-goals, and safe claim boundaries.
   [LIMITATION.md](LIMITATION.md)：明確的專案能力、非目標與安全宣稱邊界。
+# Current Implementation Update (2026-06-06)
+# 目前實作更新（2026-06-06）
+
+The project now includes a typed biological-design layer in addition to the agent workflow and benchmark pipeline:
+
+除了代理工作流程與 benchmark pipeline，專案目前也包含具型別的生物設計層：
+
+- `DesignIR` represents parts, regulatory interactions, ordered constructs, provenance, assignments, validation status, and immutable revisions.
+- `DesignIR` 表示元件、調控關係、有序 construct、來源、元件映射、驗證狀態與不可變版本。
+- External Cello runs preserve complete artifact directories and manifests for success, failure, and timeout cases.
+- 外部 Cello 執行會保存完整 artifact 目錄與 manifest，涵蓋成功、失敗與逾時情況。
+- Supported Cello v2 JSON artifacts can be parsed into `part_assignments`.
+- 支援的 Cello v2 JSON artifact 可解析為 `part_assignments`。
+- A fixed demonstration library, `demo-cello-library@1.0.0`, supports UI, parser, replacement, and test workflows.
+- 固定版本示範元件庫 `demo-cello-library@1.0.0` 支援 UI、parser、替換與測試流程。
+- Replacement validation creates immutable revisions rather than modifying the source design.
+- 元件替換驗證會建立不可變版本，不修改來源設計。
+- `DesignDiff` compares candidate parts, constructs, maturity status, and metrics.
+- `DesignDiff` 比較候選元件、construct、成熟度狀態與指標。
+- The UI exports BOM CSV, GenBank, and SBOL3 Turtle.
+- UI 可匯出 BOM CSV、GenBank 與 SBOL3 Turtle。
+
+Export behavior is conservative. GenBank requires complete valid IUPAC DNA sequences for all parts in exported constructs. SBOL3 can represent sequence-less conceptual components but reports warnings. No exporter invents missing sequence data.
+
+匯出行為採保守原則。GenBank 要求匯出 construct 中所有元件都有完整且有效的 IUPAC DNA 序列；SBOL3 可以表示沒有序列的概念性元件，但會回報警告。所有 exporter 都不會自行補入缺失序列。
+
+Relevant implementation paths:
+
+- [schemas/design_ir.py](schemas/design_ir.py)
+- [schemas/design_operations.py](schemas/design_operations.py)
+- [schemas/design_diff.py](schemas/design_diff.py)
+- [tools/cello_artifact_parser.py](tools/cello_artifact_parser.py)
+- [tools/part_library.py](tools/part_library.py)
+- [part_libraries/](part_libraries)
+- [exporters/](exporters)
+- [CHANGELOG.md](CHANGELOG.md)

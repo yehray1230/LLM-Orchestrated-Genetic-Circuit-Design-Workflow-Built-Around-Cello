@@ -165,6 +165,10 @@ Interpretation: this score is strongest when it is backed by both a truth-table 
 
 解讀：當該分數同時有真值表檢查和表達分離度證據支援時，說服力最強。僅有回退（Fallback）的分數應被視為微弱的證據。
 
+The UI and MCP adapter may also expose explanation artifacts such as score explanations, decision traces, Cello provenance warnings, and ODE trajectory readouts. These explanations help audit why a score was assigned, but they do not change the benchmark weights or convert heuristic scores into experimental validation.
+
+UI 與 MCP adapter 也可能輸出分數解釋、決策紀錄、Cello 來源警示與 ODE 軌跡讀數等解釋性產物。這些解釋有助於審查分數為何如此，但不會改變基準權重，也不會將啟發式分數轉換為實驗驗證。
+
 ## 3. Kinetic and Robustness Scores
 ## 3. 動力學與魯棒性分數
 
@@ -804,3 +808,35 @@ Avoid describing the score as:
 
 > A proof that the generated construct is a complete, buildable, experimentally validated genetic circuit.
 > 生成的構建體是完整、可構建且經過實驗驗證的基因電路的證明。
+# Design Revision and Export Metrics Note (2026-06-06)
+# 設計版本與匯出指標說明（2026-06-06）
+
+The following new fields and operations are not additional benchmark components:
+
+以下新增欄位與操作不是新的 benchmark component：
+
+- sequence coverage (`missing`, `partial`, or `complete`);
+- sequence coverage（`missing`、`partial` 或 `complete`）；
+- replacement-validation pass/fail checks;
+- 元件替換驗證的 pass/fail；
+- DesignRevision number and lineage;
+- DesignRevision 版本號與 lineage；
+- DesignDiff part/construct changes;
+- DesignDiff 的元件／construct 差異；
+- BOM, GenBank, or SBOL3 export availability.
+- BOM、GenBank 或 SBOL3 是否可匯出。
+
+These fields describe design completeness, provenance, or representation. They do not change `weighted_total_score`.
+
+這些欄位描述設計完整度、來源或表示方式，不會改變 `weighted_total_score`。
+
+In particular:
+
+- A complete sequence does not increase functional, kinetic, robustness, orthogonality, or Cello-assignment scores automatically.
+- 完整序列不會自動提高 functional、kinetic、robustness、orthogonality 或 Cello-assignment 分數。
+- A successful export is not a score and should not be used as a buildability label.
+- 成功匯出不是分數，也不應作為 buildability 標籤。
+- A replacement revision should be re-evaluated before metric differences are interpreted.
+- 元件替換後的新版本應重新評估，才能解讀指標差異。
+- `DesignDiff` reports the metrics supplied to it; it does not rerun ODE simulation or benchmark evaluation.
+- `DesignDiff` 只回報傳入的指標，不會重新執行 ODE 或 benchmark。

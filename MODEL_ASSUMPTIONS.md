@@ -55,6 +55,10 @@ It does not represent a complete plasmid or full cellular physiology. In particu
 
 它並不代表完整的質體或完整的細胞生理學。特別是，它不指定或模擬質體骨架、複製起點、篩選標記、完整 DNA 序列、組裝策略、宿主生長或宿主全局代謝。
 
+The current ODE explanation layer reports what can be read from the stored trajectory, such as peak output, time to peak, final output, coarse burden proxies, resource occupancy, and whether the final segment appears near steady state. These are derived readouts from the existing trace, not additional biological mechanisms.
+
+目前的 ODE 解釋層會回報可從已保存軌跡讀出的內容，例如最大輸出、達峰時間、最終輸出、粗略負載代理指標、資源佔用率，以及最後一段軌跡是否看似接近穩態。這些是從既有軌跡衍生出的讀數，而不是額外的生物學機制。
+
 ## 3. State Variables
 ## 3. 狀態變數
 
@@ -279,6 +283,9 @@ Important output fields should be interpreted conservatively:
 | `resource_occupancy` | Coarse RNAP/ribosome burden signal. <br> 粗略的 RNAP/核糖體負載訊號。 |
 | `metrics_max_burden` | Aggregate mRNA/protein burden proxy. <br> 聚合 mRNA/蛋白質負載代理指標。 |
 | `parameter_provenance` | Evidence quality for the parameter values used. <br> 所用參數值的證據品質。 |
+| `ode_explanation.key_readouts` | Derived trajectory readouts such as peak output, time to peak, final output, fold-change proxy, and steady-state status. <br> 衍生的軌跡讀數，例如最大輸出、達峰時間、最終輸出、fold-change 代理指標與穩態狀態。 |
+| `ode_explanation.burden_readouts` | Coarse mRNA/protein and RNAP/ribosome burden readouts. <br> 粗略的 mRNA/蛋白質與 RNAP/核糖體負載讀數。 |
+| `ode_explanation.coverage_warnings` | Warnings about missing explicit input scenarios, OFF-state traces, ON/OFF ratios, or Monte Carlo perturbation. <br> 關於缺少明確輸入情境、OFF-state 軌跡、ON/OFF 比率或蒙特卡羅微擾的警示。 |
 
 These fields are most useful for comparing candidates generated in the same workflow. They should not be treated as standalone experimental predictions.
 
@@ -355,3 +362,22 @@ It should not be described as:
 
 > A quantitative predictor of complete, buildable, experimentally validated genetic circuits.
 > 完整、可構建且經過實驗驗證 of 基因電路的定量預測器。
+# Relationship Between DesignIR and the ODE Model (2026-06-06)
+# DesignIR 與 ODE 模型的關係（2026-06-06）
+
+The new part, revision, comparison, and export layers do not expand the biological scope of the ODE model.
+
+新增的元件、版本、比較與匯出層不會擴張 ODE 模型的生物學範圍。
+
+- `DesignIR` provides a richer representation of candidate parts and constructs.
+- `DesignIR` 提供較完整的候選元件與 construct 表示。
+- Part replacement changes stored assignment and sequence metadata, but the current ODE simulator does not automatically derive calibrated kinetic parameters from those sequences.
+- 元件替換會改變保存的 assignment 與 sequence metadata，但目前 ODE simulator 不會自動從序列推導經校準的動力學參數。
+- `DesignDiff` can display score differences, but those scores remain based on the existing benchmark and simulation assumptions.
+- `DesignDiff` 可以顯示分數差異，但這些分數仍基於既有 benchmark 與模擬假設。
+- BOM, GenBank, and SBOL3 are representations of current data; they do not add biological mechanisms or improve parameter calibration.
+- BOM、GenBank 與 SBOL3 是目前資料的表示，不會增加生物機制或改善參數校準。
+
+Therefore, a sequence-backed export should not be interpreted as a sequence-aware ODE prediction. Stronger coupling would require part-specific response functions, promoter/RBS models, degradation parameters, copy-number context, and calibrated host data.
+
+因此，具有序列的匯出不應解讀為 sequence-aware ODE 預測。更強的耦合需要元件特定 response function、promoter/RBS 模型、降解參數、copy-number 情境與經校準的宿主資料。

@@ -429,6 +429,9 @@ def test_cello_wrapper_mock_mode_is_unchanged() -> None:
 
     topology = result.candidate_topologies[0]
     assert topology["source"] == "mock_cello_wrapper"
+    assert topology["cello_mode"] == "mock"
+    assert topology["cello_claim_level"] == "mock_only"
+    assert "workflow placeholder" in topology["cello_warning"]
     assert topology["mapping_status"] == "unmapped"
     assert topology["orthogonality_score"] == 1.0
     assert topology["cello_assignment_score"] == 0.0
@@ -449,6 +452,8 @@ def test_cello_wrapper_external_failure_becomes_mapping_failed_topology() -> Non
 
     assert result.last_error is None
     assert topology["mapping_status"] == "MAPPING_FAILED"
+    assert topology["cello_mode"] == "external"
+    assert topology["cello_claim_level"] == "external_mapping_failed"
     assert topology["error_type"] == "PART_ERROR"
     assert topology["cello_buildable"] is False
     assert topology["mapping_error_category"] == "UCF_INCOMPATIBLE"
@@ -464,10 +469,56 @@ def test_cello_wrapper_external_success_marks_topology_buildable() -> None:
     topology = result.candidate_topologies[0]
 
     assert topology["mapping_status"] == "mapped"
+    assert topology["cello_mode"] == "external"
+    assert topology["cello_claim_level"] == "externally_mapped"
     assert topology["cello_buildable"] is True
     assert topology["cello_assignment_score"] == 0.92
     assert topology["orthogonality_score"] == 1.0
     assert topology["toxicity"] == 0.08
+
+
+def test_cello_wrapper_persists_output_directory_manifest(tmp_path: Path) -> None:
+    state = DesignState()
+    state.verilog_codes = ["module c(input A, output Y); assign Y = A; endmodule"]
+    command = [
+        sys.executable,
+        "-c",
+        (
+            "import json, pathlib, sys; "
+            "out=pathlib.Path(sys.argv[1]); "
+            "(out/'nested').mkdir(parents=True, exist_ok=True); "
+            "(out/'nested'/'assignment.json').write_text("
+            "json.dumps({'gate':'Y','part':'TetR'}), encoding='utf-8'); "
+            "print('Gate Assignment Score: 90')"
+        ),
+        "{output_dir}",
+    ]
+
+    result = CelloWrapper(
+        cello_command=command,
+        artifact_dir=tmp_path / "cello_artifacts",
+        timeout_seconds=5,
+    ).run(state)
+    topology = result.candidate_topologies[0]
+    manifest_path = Path(topology["cello_artifact_manifest_path"])
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+    assert manifest_path.exists()
+    assert manifest["status"] == "mapped"
+    assert manifest["return_code"] == 0
+    assert {item["relative_path"] for item in manifest["files"]} >= {
+        "output/nested/assignment.json",
+        "stdout.log",
+        "stderr.log",
+        "candidate_0.v",
+    }
+    assignment_entry = next(
+        item for item in manifest["files"]
+        if item["relative_path"] == "output/nested/assignment.json"
+    )
+    assert assignment_entry["size_bytes"] > 0
+    assert len(assignment_entry["sha256"]) == 64
+    assert Path(assignment_entry["absolute_path"]).exists()
 
 
 def test_cello_wrapper_timeout_becomes_mapping_failed_topology() -> None:

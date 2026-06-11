@@ -11,16 +11,26 @@ from pathlib import Path
 from mcp_server.run_store import RunStore
 from mcp_server.service import (
     cancel_design_run,
+    compare_design_revisions,
     compare_design_runs,
     design_circuit_quick,
     diagnose_design_run,
     evaluate_verilog,
+    explain_design_run,
+    export_design,
+    get_design_ir,
     get_design_run_artifacts,
     get_design_run_result,
     get_design_run_status,
+    get_design_run_events,
+    get_design_run_progress,
+    list_compatible_replacements,
     list_design_runs,
     start_design_run,
+    submit_design_feedback,
     summarize_design_state,
+    replace_design_part,
+    validate_design_part_replacement,
 )
 
 
@@ -128,6 +138,28 @@ def test_run_store_background_task_persists_result(tmp_path: Path) -> None:
     metadata = json.loads((tmp_path / run_id / "metadata.json").read_text(encoding="utf-8"))
     assert metadata["request"]["api_key"] == "***"
     assert "secret" not in json.dumps(metadata)
+
+
+def test_run_store_persists_events_and_progress(tmp_path: Path) -> None:
+    store = RunStore(base_dir=tmp_path, max_workers=1)
+    started = store.start(
+        task=lambda: {"status": "completed", "summary": {"user_intent": "events"}},
+        request={"user_intent": "events"},
+    )
+    run_id = started["run_id"]
+    store.append_event(run_id, "translator", "running", 0.4, "Translating.")
+    _wait_for_completed(lambda: store.result(run_id))
+
+    events = get_design_run_events(run_id, run_store=store)
+    progress = get_design_run_progress(run_id, run_store=store)
+
+    assert events["count"] >= 3
+    assert [item["event_id"] for item in events["events"]] == sorted(
+        item["event_id"] for item in events["events"]
+    )
+    assert any(item["stage"] == "translator" for item in events["events"])
+    assert progress["progress"] == 1.0
+    assert progress["event_count"] == events["events"][-1]["event_id"]
 
 
 def test_run_store_lists_runs_newest_first_and_limits(tmp_path: Path) -> None:
@@ -428,6 +460,237 @@ def test_diagnose_design_run_flags_missing_topology(tmp_path: Path) -> None:
     assert any(finding["category"] == "topology" for finding in diagnosis["findings"])
 
 
+def test_explain_design_run_returns_selected_review_sections_and_artifacts(tmp_path: Path) -> None:
+    store = RunStore(base_dir=tmp_path / "async", max_workers=1)
+    workflow_dir = tmp_path / "workflow"
+    workflow_dir.mkdir()
+    started = store.start(
+        task=lambda: {
+            "status": "completed",
+            "run_dir": str(workflow_dir),
+            "summary": {
+                "user_intent": "A and not B",
+                "host_organism": "Escherichia coli",
+                "requires_human_input": False,
+                "current_node_id": "root_repair",
+                "tree_summary": [
+                    {
+                        "node_id": "root",
+                        "parent_id": None,
+                        "children_ids": ["root_repair"],
+                        "search_mode": "Exploration",
+                        "status": "Evaluated",
+                        "score": 0.48,
+                        "is_approved": False,
+                        "error_type": "LOGIC_ERROR",
+                        "critic_feedback": "Need clearer logic.",
+                    },
+                    {
+                        "node_id": "root_repair",
+                        "parent_id": "root",
+                        "children_ids": [],
+                        "search_mode": "Repair",
+                        "status": "Pass",
+                        "score": 0.74,
+                        "is_approved": True,
+                        "error_type": "NONE",
+                        "critic_feedback": "Repair improved the candidate.",
+                    },
+                ],
+                "best_topology": {
+                    "source": "mock_cello_wrapper",
+                    "cello_mode": "mock",
+                    "cello_claim_level": "mock_only",
+                    "cello_warning": "Mock output.",
+                    "score": 0.74,
+                    "mapping_status": "unmapped",
+                    "ode_status": "simulated",
+                    "ode_trace": {
+                        "time": [0, 10, 20],
+                        "output_protein": [1, 4, 8],
+                        "total_mrna": [0, 1, 2],
+                        "total_protein": [1, 5, 9],
+                        "rnap_occupancy": [0.1, 0.2, 0.3],
+                        "ribosome_occupancy": [0.2, 0.3, 0.4],
+                    },
+                    "functional_score": 0.91,
+                    "metabolic_burden_score": 0.52,
+                    "cello_assignment_score": 0.3,
+                    "gate_count": 5,
+                },
+            },
+            "artifacts": {"summary_json": str(workflow_dir / "summary.json")},
+        },
+        request={"user_intent": "A and not B"},
+    )
+    _wait_for_completed(lambda: store.result(started["run_id"]))
+
+    explanation = explain_design_run(
+        started["run_id"],
+        profile="review",
+        max_items_per_section=2,
+        run_store=store,
+    )
+
+    assert explanation["status"] == "completed"
+    assert explanation["summary"]["profile"] == "review"
+    assert "score_explanation" in explanation["explanation"]
+    assert "decision_trace" in explanation["explanation"]
+    assert explanation["explanation"]["score_explanation"]["top_strengths"][0]["component"] == "functional"
+    assert explanation["explanation"]["score_explanation"]["main_limitations"][0]["component"] == "cello_assignment"
+    assert explanation["explanation"]["headline"]["cello_claim_level"] == "mock_only"
+    assert any("Mock" in caveat for caveat in explanation["explanation"]["biological_caveats"])
+    assert explanation["explanation"]["ode_explanation"]["key_readouts"]["peak_output_protein"] == 8
+    assert "ode_explanation_json" in explanation["explanation_artifacts"]
+    assert [item["node_id"] for item in explanation["explanation"]["decision_trace"]] == ["root", "root_repair"]
+    assert Path(explanation["explanation_artifacts"]["score_explanation_json"]).exists()
+    assert Path(explanation["explanation_artifacts"]["design_rationale_md"]).exists()
+
+
+def test_explain_design_run_can_return_single_section_without_writing_artifacts(tmp_path: Path) -> None:
+    store = RunStore(base_dir=tmp_path, max_workers=1)
+    started = store.start(
+        task=lambda: {
+            "status": "completed",
+            "summary": {
+                "best_topology": {
+                    "score": 0.88,
+                    "mapping_status": "mapped",
+                    "ode_status": "completed",
+                    "robustness_score": 0.81,
+                }
+            },
+            "artifacts": {},
+        },
+        request={"user_intent": "brief"},
+    )
+    _wait_for_completed(lambda: store.result(started["run_id"]))
+
+    explanation = explain_design_run(
+        started["run_id"],
+        profile="brief",
+        sections=["score"],
+        write_artifacts=False,
+        run_store=store,
+    )
+
+    assert explanation["status"] == "completed"
+    assert explanation["explanation"]["sections"] == ["score"]
+    assert "score_explanation" in explanation["explanation"]
+    assert "decision_trace" not in explanation["explanation"]
+    assert explanation["explanation_artifacts"] == {}
+
+
+def test_explain_design_run_validates_options(tmp_path: Path) -> None:
+    store = RunStore(base_dir=tmp_path, max_workers=1)
+
+    assert explain_design_run("", run_store=store)["error_type"] == "validation_error"
+    assert explain_design_run("missing", profile="bad", run_store=store)["error_type"] == "validation_error"
+    assert explain_design_run("missing", sections=["bad"], run_store=store)["error_type"] == "validation_error"
+
+
+def test_design_ir_replacement_diff_and_export_tools(tmp_path: Path) -> None:
+    store = RunStore(base_dir=tmp_path / "async", max_workers=1)
+    workflow_dir = tmp_path / "workflow"
+    workflow_dir.mkdir()
+    state_path = workflow_dir / "state.json"
+    state_path.write_text(
+        json.dumps(
+            {
+                "user_intent": "Express GFP when A is present",
+                "host_organism": "Escherichia coli",
+                "best_topology": {
+                    "verilog": "module c(input A, output GFP); assign GFP = A; endmodule",
+                    "cello_mode": "mock",
+                    "mapping_status": "unmapped",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    started = store.start(
+        task=lambda: {
+            "status": "completed",
+            "run_dir": str(workflow_dir),
+            "summary": {"best_topology": {"score": 0.5}},
+            "artifacts": {"state_json": str(state_path)},
+        },
+        request={"user_intent": "design tools"},
+    )
+    run_id = started["run_id"]
+    _wait_for_completed(lambda: store.result(run_id))
+
+    initial = get_design_ir(run_id, run_store=store)
+    candidates = list_compatible_replacements(
+        run_id,
+        "output_cds_GFP",
+        run_store=store,
+    )
+    validation = validate_design_part_replacement(
+        run_id,
+        "output_cds_GFP",
+        "DEMO_GFP_CDS",
+        run_store=store,
+    )
+    replaced = replace_design_part(
+        run_id,
+        "output_cds_GFP",
+        "DEMO_GFP_CDS",
+        run_store=store,
+    )
+    compared = compare_design_revisions(
+        run_id,
+        initial["revision_id"],
+        replaced["summary"]["revision_id"],
+        run_store=store,
+    )
+    exported = export_design(
+        run_id,
+        replaced["summary"]["revision_id"],
+        formats=["bom", "sbol3"],
+        run_store=store,
+    )
+
+    assert initial["status"] == "completed"
+    assert any(item["id"] == "DEMO_GFP_CDS" for item in candidates["replacements"])
+    assert validation["validation"]["valid"] is True
+    assert replaced["summary"]["replaced"] is True
+    assert compared["diff"]["part_changes"]
+    assert exported["summary"]["ready_count"] == 2
+    assert Path(exported["artifacts"]["bom"]).exists()
+    assert Path(exported["artifacts"]["sbol3"]).exists()
+
+
+def test_submit_design_feedback_persists_guidance(tmp_path: Path) -> None:
+    store = RunStore(base_dir=tmp_path / "async", max_workers=1)
+    started = store.start(
+        task=lambda: {
+            "status": "needs_human_input",
+            "summary": {"requires_human_input": True},
+            "artifacts": {},
+        },
+        request={"user_intent": "paused"},
+    )
+    run_id = started["run_id"]
+    for _ in range(100):
+        result = store.result(run_id)
+        if result["status"] == "needs_human_input":
+            break
+        time.sleep(0.01)
+
+    feedback = submit_design_feedback(
+        run_id,
+        ["Prefer low burden parts"],
+        action="repair",
+        extra_budget=3,
+        run_store=store,
+    )
+
+    assert feedback["status"] == "completed"
+    assert feedback["summary"]["ready_to_resume"] is True
+    assert Path(feedback["artifacts"]["human_feedback_json"]).exists()
+
+
 def test_mcp_server_registers_expected_tools_without_real_mcp(monkeypatch) -> None:
     registered_tools = {}
 
@@ -466,11 +729,22 @@ def test_mcp_server_registers_expected_tools_without_real_mcp(monkeypatch) -> No
         "evaluate_cello_verilog",
         "start_design_run",
         "get_design_run_status",
+        "get_design_run_events",
+        "get_design_run_progress",
         "get_design_run_result",
         "list_design_runs",
         "cancel_design_run",
         "get_design_run_artifacts",
         "compare_design_runs",
         "diagnose_design_run",
+        "explain_design_run",
+        "submit_design_feedback",
+        "resume_design_run",
+        "get_design_ir",
+        "list_compatible_replacements",
+        "validate_design_part_replacement",
+        "replace_design_part",
+        "compare_design_revisions",
+        "export_design",
         "summarize_mcp_design_state",
     }

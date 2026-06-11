@@ -443,3 +443,75 @@ Human input is expected for biological interpretation, constraint selection, and
   [MODEL_ASSUMPTIONS.md](MODEL_ASSUMPTIONS.md)：ODE 模型範圍與生物學假設。
 - [LIMITATION.md](LIMITATION.md): capabilities, non-goals, and safe claim boundaries.
   [LIMITATION.md](LIMITATION.md)：能力、非目標與安全宣稱邊界。
+# Current Design-Data Architecture (2026-06-06)
+# 目前設計資料架構（2026-06-06）
+
+The implementation now separates workflow state from biological design representation.
+
+目前實作將工作流程狀態與生物設計表示分離。
+
+```text
+DesignState / SearchNode
+  -> candidate topology dictionary
+  -> topology_to_design_ir()
+  -> DesignIR
+       - BiologicalPart
+       - RegulatoryInteraction
+       - GeneticConstruct
+       - ProvenanceRecord
+       - PartAssignment
+       - DesignRevision
+  -> replacement validation / immutable revision
+  -> DesignDiff
+  -> BOM / GenBank / SBOL3 exporters
+```
+
+## DesignIR Boundary
+## DesignIR 邊界
+
+`DesignState` and `SearchNode` remain responsible for search, agent routing, scores, and candidate selection. `DesignIR` is the canonical reader/export representation for one candidate design.
+
+`DesignState` 與 `SearchNode` 仍負責搜尋、代理路由、評分與候選選擇；`DesignIR` 則是一個候選設計的標準檢視與匯出表示。
+
+UI and exporters should consume `DesignIR` rather than reparsing independent topology fields. This keeps the regulatory view, construct view, part inspector, revisions, comparison, and exports aligned to the same candidate.
+
+UI 與 exporter 應使用 `DesignIR`，而不是各自重新解析 topology 欄位，確保調控圖、construct、元件檢視、版本、比較與匯出代表同一個候選。
+
+## Cello Artifact Path
+## Cello Artifact 路徑
+
+`CelloWrapper` executes an external command in a temporary directory, then copies the complete execution directory into a persistent artifact root. Each manifest records:
+
+`CelloWrapper` 在暫存目錄執行外部命令，完成後將整個執行目錄複製到持久化 artifact root。每份 manifest 記錄：
+
+- run ID, candidate index, time, status, command, return code, and UCF path;
+- run ID、候選索引、時間、狀態、command、return code 與 UCF path；
+- input Verilog, output files, stdout, and stderr;
+- 輸入 Verilog、輸出檔案、stdout 與 stderr；
+- relative/absolute path, byte size, media type, and SHA-256 for every file.
+- 每個檔案的相對／絕對路徑、大小、media type 與 SHA-256。
+
+`CelloV2JsonParser` parses supported JSON assignment structures after a successful external run. Parser absence or unsupported files produce warnings and never fabricate assignments.
+
+外部執行成功後，`CelloV2JsonParser` 會解析支援的 JSON assignment 結構。找不到支援格式時只會產生警告，不會虛構 assignment。
+
+## Part and Revision Layer
+## 元件與版本層
+
+`PartLibrary` loads fixed JSON libraries and supports type/host/gate compatibility queries. The included `demo-cello-library@1.0.0` is demonstration-only.
+
+`PartLibrary` 載入固定 JSON 元件庫，並支援類型、宿主與 gate 相容性查詢。內建的 `demo-cello-library@1.0.0` 僅供展示。
+
+`replace_part_immutable()` validates a replacement, deep-copies the source `DesignIR`, updates assignment/provenance, and creates a child `DesignRevision`. It does not mutate the input design.
+
+`replace_part_immutable()` 先驗證替換，再 deep-copy 來源 `DesignIR`、更新 assignment/provenance，並建立子 `DesignRevision`；它不會修改輸入設計。
+
+## Export Layer
+## 匯出層
+
+- `bom_exporter.py`: ordered construct/part inventory with assignment and evidence fields.
+- `bom_exporter.py`：含元件順序、assignment 與證據欄位的清單。
+- `genbank_exporter.py`: one GenBank record per construct with feature coordinates and annotations; blocked for missing or invalid sequences.
+- `genbank_exporter.py`：每個 construct 一筆 GenBank record，含 feature 座標與 annotation；缺失或非法序列時阻擋。
+- `sbol3_exporter.py`: SBOL3 Turtle Components, Sequences, SubComponents, Ranges, Constraints, Interactions, Participations, and provenance activities.
+- `sbol3_exporter.py`：輸出 SBOL3 Turtle 的 Component、Sequence、SubComponent、Range、Constraint、Interaction、Participation 與 provenance activity。

@@ -4,9 +4,18 @@ from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import Any
 
+from schemas.state import DesignState, SearchNode
+
 
 SUMMARY_TOPOLOGY_KEYS = (
     "source",
+    "cello_mode",
+    "cello_claim_level",
+    "cello_warning",
+    "cello_artifact_dir",
+    "cello_artifact_manifest_path",
+    "part_assignments",
+    "design_revision",
     "score",
     "weighted_total_score",
     "mapping_status",
@@ -100,4 +109,28 @@ def summarize_state(state: Any) -> dict[str, Any]:
         "failed_attempts": to_jsonable(state.failed_attempts),
         "tree_summary": to_jsonable(tree_summary),
     }
+
+
+def design_state_from_dict(payload: dict[str, Any]) -> DesignState:
+    state_fields = DesignState.__dataclass_fields__
+    state_kwargs = {
+        key: value
+        for key, value in payload.items()
+        if key in state_fields and key != "tree_nodes"
+    }
+    state = DesignState(**state_kwargs)
+    raw_nodes = payload.get("tree_nodes", {})
+    if isinstance(raw_nodes, dict):
+        node_fields = SearchNode.__dataclass_fields__
+        for node_id, raw_node in raw_nodes.items():
+            if not isinstance(raw_node, dict):
+                continue
+            node_kwargs = {
+                key: value
+                for key, value in raw_node.items()
+                if key in node_fields
+            }
+            node_kwargs.setdefault("node_id", str(node_id))
+            state.tree_nodes[str(node_id)] = SearchNode(**node_kwargs)
+    return state
 

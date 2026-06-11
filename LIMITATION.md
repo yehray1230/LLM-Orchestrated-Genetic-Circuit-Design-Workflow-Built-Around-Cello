@@ -31,10 +31,12 @@ The current prototype can:
   運行簡化的資源感知 ODE 模擬以進行早期動態篩選。
 - Estimate coarse signals such as dynamic margin, resource occupancy, robustness under perturbation, and gate-complexity burden.
   估算粗略的訊號，如動態邊際、資源佔用、微擾下的魯棒性以及邏輯閘複雜度造成的負載。
+- Summarize selected ODE trajectory readouts, burden proxies, steady-state status, uncertainty metadata, coverage gaps, and suggested next checks when a stored trace is available.
+  在保存的軌跡可用時，彙整選定的 ODE 軌跡讀數、負載代理指標、穩態狀態、不確定性後設資料、覆蓋缺口與建議的下一步檢查。
 - Surface failure modes such as logic mismatch, weak simulated robustness, excessive complexity, or likely Cello/part-assignment problems.
   顯現失敗模式，如邏輯不匹配、模擬的魯棒性微弱、過度複雜，或可能存在的 Cello/元件分配問題。
-- Support optional external Cello execution when a real Cello command and compatible UCF/library are configured.
-  在配置了真實的 Cello 指令與相容的 UCF/庫時，支援可選的外部 Cello 執行。
+- Support optional external Cello execution when a real Cello command and compatible UCF/library are configured, while explicitly labeling mock, failed, and externally mapped Cello outputs.
+  在配置了真實的 Cello 指令與相容的 UCF/庫時，支援可選的外部 Cello 執行，同時明確標示 mock、失敗與外部映射完成的 Cello 輸出。
 
 These capabilities are useful for research prototyping, workflow design, and early candidate triage.
 
@@ -94,6 +96,9 @@ These are appropriate ways to describe the project:
 > External Cello mapping is only available when a real Cello command and compatible UCF/library are configured.
 > 僅在配置了真實的 Cello 指令與相容的 UCF/庫時，外部 Cello 映射才可用。
 
+> Mock Cello output may be used for workflow testing, but should be labeled as mock-only and not described as real part assignment.
+> Mock Cello 輸出可用於工作流測試，但應標示為 mock-only，且不應描述為真實元件分配。
+
 ## 4. Claims to Avoid
 ## 4. 應避免的宣稱（誇大的描述方式）
 
@@ -115,6 +120,9 @@ These statements would overstate the current system:
 
 > The ODE simulation predicts real cellular expression quantitatively.
 > ODE 模擬定量預測真實的細胞表達。
+
+> ODE readouts such as peak output or time to peak are calibrated experimental measurements.
+> ODE 讀數（例如最大輸出或達峰時間）是經校準的實驗量測。
 
 > The project has validated a biological logic gate without construction and measurement.
 > 該專案在沒有構建與測量的情況下驗證了生物邏輯閘。
@@ -164,3 +172,44 @@ For presentations, emails, or early research conversations, the safest concise d
 
 > This is a multi-agent computational design-assistance prototype that translates natural-language regulatory logic intent into candidate genetic-circuit representations, then ranks and critiques those candidates using simplified simulation and heuristic evaluation.
 > 這是一個多智能體計算輔助設計原型，可將自然語言調節邏輯意圖翻譯為候選基因電路表徵，然後使用簡化模擬和啟發式評估對這些候選方案進行排序與評論。
+# Current Design and Export Boundaries (2026-06-06)
+# 目前設計與匯出邊界（2026-06-06）
+
+The project now produces richer design artifacts, but the following distinctions remain mandatory:
+
+專案目前可以產生更完整的設計 artifacts，但仍必須維持以下區分：
+
+- A conceptual `DesignIR` part is not a characterized biological part.
+- 概念性 `DesignIR` 元件不等同於經實驗表徵的生物元件。
+- A parsed Cello assignment is evidence that a supported artifact associated a logic node with a part identifier; it is not independent experimental validation.
+- 解析出的 Cello assignment 代表支援的 artifact 將 logic node 與 part identifier 關聯，不代表獨立實驗驗證。
+- `demo-cello-library@1.0.0` is for demonstration and testing. Its sequences are illustrative.
+- `demo-cello-library@1.0.0` 僅供展示與測試，其序列為 illustrative。
+- Replacement validation checks implemented structural constraints only. It does not check cloning junctions, restriction sites, codon usage, expression balance, toxicity, or biosafety.
+- 元件替換驗證只檢查已實作的結構限制，不檢查 cloning junction、restriction site、codon usage、表現平衡、毒性或生物安全。
+- An immutable revision records a computational change history; it does not prove that the revision is better experimentally.
+- 不可變版本記錄計算上的變更歷史，不證明新版本在實驗上更好。
+- `DesignDiff` reports differences in available fields and scores. It is not an expert recommendation or causal analysis.
+- `DesignDiff` 回報可用欄位與分數差異，不是專家建議或因果分析。
+- BOM is an inventory artifact, not a purchase order, assembly protocol, or proof of availability.
+- BOM 是清單 artifact，不是採購單、組裝 protocol 或可取得性證明。
+- GenBank export represents the sequences currently stored in DesignIR. It does not add backbone, origin, marker, cloning scars, or missing host context.
+- GenBank 匯出表示 DesignIR 目前保存的序列，不會補入 backbone、origin、marker、cloning scar 或缺失的宿主情境。
+- SBOL3 export is a machine-readable representation. A syntactically structured SBOL document does not imply biological validity.
+- SBOL3 匯出是機器可讀表示；具結構的 SBOL 文件不代表生物學有效。
+
+Safe wording:
+
+安全描述：
+
+> The system can produce traceable computational design representations and standard exchange artifacts for review.
+>
+> 系統可以產生可追溯的計算設計表示與標準交換 artifacts，供後續審查。
+
+Avoid:
+
+應避免：
+
+> The exported GenBank or SBOL file is an assembly-ready validated plasmid.
+>
+> 匯出的 GenBank 或 SBOL 檔案是可直接組裝且已驗證的質體。

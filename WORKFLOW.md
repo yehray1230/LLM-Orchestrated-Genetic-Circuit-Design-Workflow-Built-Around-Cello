@@ -497,3 +497,43 @@ The appropriate interpretation is:
   [MODEL_ASSUMPTIONS.md](MODEL_ASSUMPTIONS.md)：ODE 假設與未建模的生物機制。
 - [LIMITATION.md](LIMITATION.md): safe claims, non-goals, and evidence needed for stronger claims.
   [LIMITATION.md](LIMITATION.md)：安全宣稱、非目標以及做出更強宣稱所需的證據。
+# Current Design Review and Export Workflow (2026-06-06)
+# 目前設計檢視與匯出流程（2026-06-06）
+
+After candidate generation and evaluation, the current UI performs the following additional steps:
+
+候選生成與評估後，目前 UI 會執行以下額外步驟：
+
+1. Convert the selected topology into `DesignIR`.
+   將選定 topology 轉換為 `DesignIR`。
+2. Present Logic, Regulatory, DNA Construct, and Parts views.
+   顯示 Logic、Regulatory、DNA Construct 與 Parts 視圖。
+3. If external Cello artifacts contain a supported JSON assignment structure, apply parsed assignments and available sequences to matching DesignIR nodes.
+   若外部 Cello artifact 含支援的 JSON assignment 結構，將解析出的 assignment 與可用序列套用至對應 DesignIR node。
+4. Validate proposed replacement parts against type, host, gate role, sequence, and evidence constraints.
+   依類型、宿主、gate role、序列與證據限制驗證替換元件。
+5. Create a new immutable revision when the user applies a valid replacement.
+   使用者套用有效替換時建立新的不可變版本。
+6. Compare any two candidates with `DesignDiff`.
+   使用 `DesignDiff` 比較任兩個候選。
+7. Export the selected candidate or current immutable revision.
+   匯出選定候選或目前的不可變版本。
+
+## Export Decision Rules
+## 匯出判定規則
+
+| Format | Incomplete design | Sequence requirement | Intended use |
+| --- | --- | --- | --- |
+| BOM CSV | Allowed | None | Audit, inventory, review, and handoff |
+| GenBank | Blocked when construct sequences are incomplete | Every construct part must have valid IUPAC DNA | Sequence-aware downstream tools |
+| SBOL3 Turtle | Allowed with warnings | Optional | Structured exchange of conceptual or sequence-backed designs |
+
+| 格式 | 不完整設計 | 序列要求 | 主要用途 |
+| --- | --- | --- | --- |
+| BOM CSV | 允許 | 無 | 稽核、清單、審查與交接 |
+| GenBank | construct 序列不完整時阻擋 | 每個 construct 元件都必須有有效 IUPAC DNA | 需要序列的下游工具 |
+| SBOL3 Turtle | 允許，但會警告 | 可選 | 交換概念性或具有序列的設計 |
+
+The Export tab prefers an immutable revised design stored in the current session; otherwise it exports the DesignIR generated from the selected topology.
+
+Export 分頁會優先匯出目前 session 中的不可變修訂設計；若沒有修訂，則匯出由選定 topology 產生的 DesignIR。
