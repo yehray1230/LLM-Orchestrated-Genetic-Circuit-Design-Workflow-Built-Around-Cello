@@ -1,5 +1,4 @@
-# Model Assumptions
-# 模型假設
+# Model Assumptions/模型假設
 
 This document explains the assumptions behind the current resource-aware ODE simulation model. It is intended to make the model's scope clear for synthetic biologists, reviewers, and future contributors.
 
@@ -9,8 +8,7 @@ The simulator is designed for early computational triage. It helps compare candi
 
 模擬器旨在進行早期的計算篩選。它有助於比較候選調節電路的拓撲結構、檢測明顯的動態失效，並為 Reflexion 迴圈提供訊號。它並非旨在作為一個完整的宿主細胞模型，或對活體內（in vivo）表達進行定量預測。
 
-## 1. Modeling Purpose
-## 1. 建模目的
+## 1. Modeling Purpose/建模目的
 
 The model is used to answer limited design-screening questions:
 
@@ -31,8 +29,7 @@ The model should not be used to claim that a candidate will work experimentally.
 
 該模型不應被用來宣稱候選方案在實驗上一定可行。它僅為在相似假設下生成的候選方案提供用於排序的相對證據。
 
-## 2. System Boundary
-## 2. 系統邊界
+## 2. System Boundary/系統邊界
 
 The current model represents a regulatory-circuit topology at a coarse level. It includes:
 
@@ -59,8 +56,7 @@ The current ODE explanation layer reports what can be read from the stored traje
 
 目前的 ODE 解釋層會回報可從已保存軌跡讀出的內容，例如最大輸出、達峰時間、最終輸出、粗略負載代理指標、資源佔用率，以及最後一段軌跡是否看似接近穩態。這些是從既有軌跡衍生出的讀數，而不是額外的生物學機制。
 
-## 3. State Variables
-## 3. 狀態變數
+## 3. State Variables/狀態變數
 
 For `n` inferred genes or gates, the ODE state is:
 
@@ -94,8 +90,7 @@ This is a proxy used for screening, not a measured cellular burden model.
 
 這是一個用於篩選的代理指標，而非經測量的細胞負載模型。
 
-## 4. Gene Count and Topology Approximation
-## 4. 基因數量與拓撲近似
+## 4. Gene Count and Topology Approximation/基因數量與拓撲近似
 
 The simulator infers `gene_count` from the topology. If `gate_count` is available, it uses that value. Otherwise, it estimates count from Verilog primitives and `assign` statements.
 
@@ -105,8 +100,7 @@ This means the ODE model treats a logic-level topology as a simplified chain of 
 
 這意味著 ODE 模型將邏輯層級的拓撲結構視為表達單位的簡化鏈。它不從序列或元件層級設計中推導出完整的生物學實現。
 
-## 5. Regulatory Assumptions
-## 5. 調節假設
+## 5. Regulatory Assumptions/調節假設
 
 The current regulation model is Hill-like repression. The first species is treated as unregulated, and downstream species can be repressed by upstream protein levels:
 
@@ -122,8 +116,7 @@ This is a coarse topology-level approximation. It does not model promoter-specif
 
 這是一個粗略的拓撲級近似。它不模擬啟動子特異性結合動力學、多個算子位點、激活物機制、協同結合變體、誘導物動力學或詳細的轉錄因子生物物理學。
 
-## 6. Resource Assumptions
-## 6. 資源假設
+## 6. Resource Assumptions/資源假設
 
 The model treats RNAP and ribosomes as shared resource pools. Transcription depends on available RNAP, and translation depends on available ribosomes:
 
@@ -163,8 +156,7 @@ This resource model is useful for detecting candidates that may demand too much 
 
 此資源模型有助於檢測可能需求過多轉錄或翻譯能力的候選方案。它不模擬完整的細胞生長、能量代謝、胺基酸可用性、應激反應或負載-生長反饋。
 
-## 7. Parameter Assumptions
-## 7. 參數假設
+## 7. Parameter Assumptions/參數假設
 
 Biokinetic parameters are attached by `DataMinerAgent`. If a vector retriever provides relevant local records, those can override defaults. Otherwise, the system uses conservative default parameters.
 
@@ -201,8 +193,7 @@ Default parameters are useful for keeping the workflow executable, but they limi
 
 預設參數對於保持工作流的可執行性非常有用，但它們限制了生物學上的解讀。參數來源（Provenance）至關重要：基於宿主特異性、文獻支持或實驗校準參數的模擬，應被視為比僅基於預設參數的模擬更具說服力。
 
-## 8. Numerical Integration Assumptions
-## 8. 數值積分假設
+## 8. Numerical Integration Assumptions/數值積分假設
 
 The simulator first tries SciPy stiff ODE solvers:
 
@@ -219,8 +210,7 @@ A successful integration means the model equations were solved numerically under
 
 成功的積分代表模型方程在提供的假設下得到了數值解。它並不意味著候選方案在實驗上是可構建的，或在生物學上是有效的。
 
-## 9. Noise and Monte Carlo Assumptions
-## 9. 雜訊與蒙特卡羅假設
+## 9. Noise and Monte Carlo Assumptions/雜訊與蒙特卡羅假設
 
 Monte Carlo perturbation is used as a sensitivity screen. It perturbs selected kinetic parameters by sampling around their current values:
 
@@ -266,8 +256,7 @@ This is a simple robustness heuristic. It is not a measured noise model and does
 
 這是一個簡單的魯棒性啟發式指標。它不是一個測量得出的雜訊模型，也不代表實驗觀察到的細胞間變異性。
 
-## 10. Output Interpretation
-## 10. 輸出結果的解讀
+## 10. Output Interpretation/輸出結果的解讀
 
 Important output fields should be interpreted conservatively:
 
@@ -291,8 +280,7 @@ These fields are most useful for comparing candidates generated in the same work
 
 這些欄位最有用於比較在相同工作流中生成的候選方案。它們不應被視為獨立的實驗預測。
 
-## 11. Mechanisms Not Currently Modeled
-## 11. 目前未建模的機制
+## 11. Mechanisms Not Currently Modeled/目前未建模的機制
 
 The current model does not include:
 
@@ -325,8 +313,7 @@ These omissions are intentional for the current prototype. The model is kept sma
 
 對於目前的原型，這些省略是刻意為之的。模型保持足夠小的規模，以便在迭代搜尋迴圈中運行。
 
-## 12. Evidence Needed for Stronger Biological Claims
-## 12. 做出更強生物學宣稱所需的證據
+## 12. Evidence Needed for Stronger Biological Claims/做出更強生物學宣稱所需的證據
 
 To move from computational candidate ranking toward stronger biological claims, future versions should add:
 
