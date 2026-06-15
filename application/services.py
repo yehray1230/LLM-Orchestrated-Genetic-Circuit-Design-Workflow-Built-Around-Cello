@@ -45,6 +45,7 @@ from schemas.backbone_registry import (
     create_backbone_entry,
     registry_key,
 )
+from benchmark_suite.readiness_evaluator import evaluate_readiness
 from schemas.design_diff import compare_designs
 from schemas.design_migrations import (
     design_ir_v2_to_v1_payload,
@@ -453,6 +454,9 @@ class AssemblyPlanningService:
             raise ValueError(
                 f"Unknown registered backbone: {backbone_id}@{backbone_version}"
             )
+        design = self.assemblies.designs.get_v2(design_id)
+        if design is None:
+            raise KeyError(design_id)
         assembly = self.assemblies.assemble(
             design_id,
             plasmid_id=plasmid_id,
@@ -464,10 +468,15 @@ class AssemblyPlanningService:
             assembly_method="direct_insertion",
         )
         if not assembly.ok:
+            readiness = evaluate_readiness(
+                design,
+                assembly_report=assembly.report,
+            )
             return {
                 "ok": False,
                 "assembly": assembly.to_dict(),
                 "plan": None,
+                "readiness": readiness.to_dict(),
             }
         plan = create_assembly_plan(
             assembly,
@@ -480,10 +489,16 @@ class AssemblyPlanningService:
             golden_gate_enzyme=golden_gate_enzyme,
             golden_gate_overhangs=golden_gate_overhangs,
         )
+        readiness = evaluate_readiness(
+            design,
+            assembly_report=assembly.report,
+            assembly_plan=plan,
+        )
         return {
             "ok": not plan.blockers,
             "assembly": assembly.to_dict(),
             "plan": plan.to_dict(),
+            "readiness": readiness.to_dict(),
         }
 
 

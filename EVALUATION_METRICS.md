@@ -1,5 +1,42 @@
 # Evaluation Metrics
 
+## Readiness evaluation boundary
+
+The existing `weighted_total_score` remains unchanged for historical
+benchmark compatibility. New responses also expose the identical value as
+`computational_design_score` to make its scope explicit.
+
+Assembly and experimental readiness are evaluated separately by
+`readiness-evaluator@1.0.0`. It reports:
+
+- `logic_score`
+- `dynamic_score`
+- `part_evidence_score`
+- `sequence_quality_score`
+- `assembly_plan_score`
+- `experimental_readiness_score`
+
+Unavailable domains are `null`, not zero. Hard blockers are not converted
+into score penalties. Any essential-feature disruption, checksum mismatch,
+missing sequence, insufficient part evidence, internal Type IIS site,
+non-unique Gibson overlap, or invalid Golden Gate overhang forces
+`readiness_status = "blocked"` regardless of computational score.
+
+The readiness stages are:
+
+```text
+conceptual
+sequence_complete
+assembly_planned
+primer_ready
+sequence_optimized
+host_optimized
+expert_review_required
+```
+
+This readiness result is not calibrated experimental evidence and does not
+replace expert review.
+
 ## v1.8 Versioned Research Evaluation
 
 The API evaluation default is `research-v1.8@1.8.0`. Existing workflow code

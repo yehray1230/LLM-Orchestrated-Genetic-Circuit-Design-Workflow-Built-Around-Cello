@@ -47,6 +47,10 @@ GET  /api/v2/backbones/{backbone_id}/versions/{version}
 POST /api/v2/designs/{design_id}/plasmid-assemblies
 POST /api/v2/designs/{design_id}/assembly-plans
 
+Assembly-plan responses contain `assembly`, `plan`, and `readiness`. The
+readiness object uses schema version `1.0.0`; hard blockers are independent
+from the legacy benchmark score.
+
 POST /api/v1/runs
 GET  /api/v1/runs
 GET  /api/v1/runs/{run_id}

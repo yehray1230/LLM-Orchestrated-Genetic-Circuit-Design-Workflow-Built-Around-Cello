@@ -568,6 +568,20 @@ These plans are computational construction proposals. Primer design,
 oligonucleotide ordering, reaction conditions, and experimental review are
 still required.
 
+Assembly-plan responses also include a versioned readiness evaluation.
+Readiness is intentionally separate from the existing benchmark score:
+
+- `computational_design_score` is an alias of the unchanged
+  `weighted_total_score`;
+- blockers force `readiness_status = blocked` rather than merely reducing a
+  score;
+- logic, dynamics, part evidence, sequence quality, assembly planning, and
+  experimental readiness are reported as separate domains;
+- unavailable future-stage scores remain `null`.
+
+This separation prevents strong simulated behavior from masking an
+unbuildable sequence or assembly plan.
+
 Relevant implementation paths:
 
 - [schemas/design_ir.py](schemas/design_ir.py)

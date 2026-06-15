@@ -394,3 +394,7 @@ def test_assembly_plan_api_returns_fragment_and_junction_report(
     assert plan["method"] == "gibson"
     assert len(plan["fragments"]) == 2
     assert len(plan["digests"]) == 9
+    readiness = response.json()["data"]["readiness"]
+    assert readiness["readiness_status"] == "assembly_planned"
+    assert readiness["domain_scores"]["assembly_plan_score"] == 1.0
+    assert readiness["domain_scores"]["experimental_readiness_score"] is None

@@ -29,6 +29,15 @@
   digestion/ligation validation.
 - Added restriction-cloning enzyme-pair selection and
   `POST /api/v2/designs/{design_id}/assembly-plans`.
+- Added `readiness-evaluator@1.0.0` with separate logic, dynamics, part
+  evidence, sequence quality, assembly-plan, and experimental-readiness
+  domains.
+- Added stage-aware readiness states and hard blocker handling. Blockers can
+  no longer be hidden by a high computational score.
+- Preserved `weighted_total_score` and all existing scoring profile versions;
+  `computational_design_score` is an explicit compatibility alias.
+- Future-stage scores remain null until primer, sequence-optimization, or
+  host-optimization evidence is available.
 
 ## 2026-06-14 - v2.0 Biological Realism Upgrades
 

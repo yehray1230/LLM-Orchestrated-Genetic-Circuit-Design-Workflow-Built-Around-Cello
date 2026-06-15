@@ -132,6 +132,7 @@ def evaluate_candidate(
     return {
         "score": score,
         "weighted_total_score": score,
+        "computational_design_score": score,
         "grade": _grade(score),
         "metabolic_burden_score": metabolic_result.metabolic_burden_score,
         "gate_count": metabolic_result.gate_count,
