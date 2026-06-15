@@ -537,9 +537,10 @@ version and a zero-based half-open insertion window. The assembler:
 - records readiness progression from `conceptual` through
   `assembly_check_passed`.
 
-This is a sequence-complete computational assembly preview. Gibson overlap
-arms, primers, restriction-fragment planning, codon optimization, and expert
-experimental review remain outside this first version.
+This endpoint is the sequence-complete foundation. Method-specific planning,
+primer design, and downloadable experimental handoff files are provided by
+the later endpoints below. Codon optimization and expert experimental review
+remain outside this version.
 
 ### Sequence-level assembly planning
 
@@ -564,9 +565,8 @@ and tool-version schema.
   validates overhang uniqueness and directionality, records retained fusion
   scars, and validates digestion/ligation products with pydna.
 
-These plans are computational construction proposals. Primer design,
-oligonucleotide ordering, reaction conditions, and experimental review are
-still required.
+These plans are computational construction proposals. Reaction conditions
+and experimental review are still required.
 
 Assembly-plan responses also include a versioned readiness evaluation.
 Readiness is intentionally separate from the existing benchmark score:
@@ -581,6 +581,31 @@ Readiness is intentionally separate from the existing benchmark score:
 
 This separation prevents strong simulated behavior from masking an
 unbuildable sequence or assembly plan.
+
+### Primer design and assembly deliverables
+
+The third assembly stage is available through the API and the single-page HTML
+workspace at `/web/assembly`:
+
+```text
+POST /api/v2/designs/{design_id}/assembly-deliverables
+GET  /api/v2/assembly-deliverables/{deliverable_id}
+GET  /api/v2/assembly-deliverables/{deliverable_id}/artifacts/{artifact_key}
+```
+
+The workspace supports trusted GenBank backbone upload and registration,
+assembly-method selection, sequence-level validation, primer design, report
+review, and artifact download. `primer3-py` designs PCR primer pairs and
+reports annealing length, Tm, GC percentage, hairpin, homodimer, and
+heterodimer warnings. Short fragments are explicitly marked for direct
+synthesis instead of forcing unreliable PCR primers.
+
+Each successful package includes assembled GenBank, fragment/primer CSV,
+complete JSON, and a Markdown assembly report. A plasmid-map PNG is also
+generated when the optional dependencies in `requirements-optional.txt` are
+installed. Primer completion advances the separate readiness state to
+`primer_ready`; warnings remain visible and do not become biological
+guarantees.
 
 Relevant implementation paths:
 

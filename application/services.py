@@ -5,6 +5,7 @@ from functools import lru_cache
 from pathlib import Path
 import re
 from typing import Any
+from uuid import uuid4
 
 from application.research import ResearchService
 from benchmark_suite.benchmark_controller import evaluate_candidate
@@ -20,6 +21,7 @@ from benchmark_suite.scoring_profiles import list_scoring_profiles
 from exporters.bom_exporter import export_bom_csv
 from exporters.export_result import ExportResult
 from exporters.genbank_exporter import export_genbank
+from exporters.assembly_deliverables import write_assembly_deliverables
 from exporters.plasmid_tools import PlasmidAssemblyResult, assemble_plasmid_v2
 from exporters.sbol3_exporter import export_sbol3_turtle
 from importers.genbank_importer import genbank_to_import_draft
@@ -65,6 +67,7 @@ from schemas.simulation import (
     simulation_spec_from_design_ir_v2,
 )
 from tools.assembly_planner import create_assembly_plan
+from tools.primer_designer import design_assembly_primers
 from tools.ode_simulator import BatchODESimulator
 
 
@@ -502,6 +505,79 @@ class AssemblyPlanningService:
         }
 
 
+class AssemblyDeliverableService:
+    def __init__(
+        self,
+        planning: AssemblyPlanningService,
+        repository: JsonRepository,
+        output_dir: Path,
+    ):
+        self.planning = planning
+        self.repository = repository
+        self.output_dir = output_dir
+
+    def create(self, design_id: str, **request: Any) -> dict[str, Any]:
+        primer_options = {
+            key: request.pop(key)
+            for key in list(request)
+            if key.startswith("primer_")
+        }
+        planned = self.planning.plan(design_id, **request)
+        if not planned["ok"] or not planned["plan"]:
+            return planned
+        primers = design_assembly_primers(
+            planned["plan"],
+            **primer_options,
+        ).to_dict()
+        design = self.planning.assemblies.designs.get_v2(design_id)
+        assert design is not None
+        readiness = evaluate_readiness(
+            design,
+            assembly_report=planned["assembly"]["report"],
+            assembly_plan=planned["plan"],
+            primer_result=primers,
+        )
+        deliverable_id = f"assembly_delivery_{uuid4().hex[:12]}"
+        payload = {
+            "deliverable_id": deliverable_id,
+            "ok": primers["status"] == "ready",
+            "assembly": planned["assembly"],
+            "plan": planned["plan"],
+            "primers": primers,
+            "readiness": readiness.to_dict(),
+        }
+        artifacts = write_assembly_deliverables(
+            self.output_dir / deliverable_id,
+            payload,
+        )
+        payload["artifacts"] = artifacts
+        self.repository.save(deliverable_id, payload)
+        return payload
+
+    def get(self, deliverable_id: str) -> dict[str, Any] | None:
+        return self.repository.get(deliverable_id)
+
+    def artifact(
+        self,
+        deliverable_id: str,
+        artifact_key: str,
+    ) -> tuple[Path, str] | None:
+        payload = self.get(deliverable_id)
+        artifacts = payload.get("artifacts") if payload else None
+        metadata = (
+            artifacts.get(artifact_key)
+            if isinstance(artifacts, dict)
+            else None
+        )
+        if not isinstance(metadata, dict):
+            return None
+        base = (self.output_dir / deliverable_id).resolve()
+        path = (base / str(metadata.get("filename") or "")).resolve()
+        if base not in path.parents or not path.is_file():
+            return None
+        return path, str(metadata.get("media_type") or "application/octet-stream")
+
+
 class RunService:
     def __init__(self, run_store: RunStore):
         self.run_store = run_store
@@ -598,6 +674,7 @@ class ApplicationServices:
     backbones: BackboneRegistryService
     plasmid_assemblies: PlasmidAssemblyService
     assembly_plans: AssemblyPlanningService
+    assembly_deliverables: AssemblyDeliverableService
     runs: RunService
 
     @property
@@ -612,6 +689,7 @@ def create_application_services(
     draft_repository = JsonRepository(selected / "drafts")
     benchmark_repository = JsonRepository(selected / "benchmark_runs")
     backbone_repository = JsonRepository(selected / "backbones")
+    deliverable_repository = JsonRepository(selected / "assembly_deliverables")
     design_repository = create_design_repository(selected / "research.db")
     designs = DesignService(design_repository)
     _migrate_legacy_design_repository(selected / "designs", designs)
@@ -619,6 +697,7 @@ def create_application_services(
     simulation_service = SimulationService()
     backbones = BackboneRegistryService(backbone_repository)
     plasmid_assemblies = PlasmidAssemblyService(designs, backbones)
+    assembly_plans = AssemblyPlanningService(plasmid_assemblies, backbones)
     research_run_store = RunStore(
         base_dir=selected / "research_runs",
         max_workers=2,
@@ -641,9 +720,11 @@ def create_application_services(
         exports=ExportService(designs),
         backbones=backbones,
         plasmid_assemblies=plasmid_assemblies,
-        assembly_plans=AssemblyPlanningService(
-            plasmid_assemblies,
-            backbones,
+        assembly_plans=assembly_plans,
+        assembly_deliverables=AssemblyDeliverableService(
+            assembly_plans,
+            deliverable_repository,
+            selected / "assembly_delivery_files",
         ),
         runs=RunService(run_store),
     )

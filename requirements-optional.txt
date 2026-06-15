@@ -1,0 +1,2 @@
+# Optional plasmid-map rendering for assembly deliverables.
+dna-features-viewer>=3.1

@@ -123,3 +123,24 @@ class AssemblyPlanRequest(BaseModel):
                 "insertion_start must be less than or equal to insertion_end."
             )
         return self
+
+
+class AssemblyDeliverableRequest(AssemblyPlanRequest):
+    primer_min_size: int = Field(default=18, ge=15, le=35)
+    primer_opt_size: int = Field(default=20, ge=15, le=35)
+    primer_max_size: int = Field(default=28, ge=15, le=40)
+    primer_min_tm: float = Field(default=57.0, ge=40.0, le=80.0)
+    primer_opt_tm: float = Field(default=60.0, ge=40.0, le=80.0)
+    primer_max_tm: float = Field(default=63.0, ge=40.0, le=80.0)
+    primer_min_gc: float = Field(default=35.0, ge=0.0, le=100.0)
+    primer_max_gc: float = Field(default=65.0, ge=0.0, le=100.0)
+
+    @model_validator(mode="after")
+    def validate_primer_ranges(self) -> "AssemblyDeliverableRequest":
+        if not self.primer_min_size <= self.primer_opt_size <= self.primer_max_size:
+            raise ValueError("Primer sizes must satisfy min <= opt <= max.")
+        if not self.primer_min_tm <= self.primer_opt_tm <= self.primer_max_tm:
+            raise ValueError("Primer Tm values must satisfy min <= opt <= max.")
+        if self.primer_min_gc > self.primer_max_gc:
+            raise ValueError("Primer GC values must satisfy min <= max.")
+        return self

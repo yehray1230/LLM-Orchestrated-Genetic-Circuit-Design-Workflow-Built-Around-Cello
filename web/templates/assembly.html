@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}Assembly Delivery{% endblock %}
+{% block content %}
+<header class="page-header">
+  <span class="eyebrow">Experimental deliverables v1</span>
+  <h1>質體組裝與實驗交付物</h1>
+  <p class="muted">依序註冊可信 backbone、建立 sequence-level plan、設計 primer，最後下載 GenBank、CSV、JSON 與報告。</p>
+</header>
+
+<nav class="workspace-steps">
+  <span class="active">1 Backbone</span><span>2 Assembly</span><span>3 Validation</span><span>4 Report</span><span>5 Download</span>
+</nav>
+
+<section class="card section-space">
+  <span class="step-number">01</span>
+  <h2>上傳與註冊 backbone</h2>
+  <p class="muted">同一 backbone ID 與版本不可被不同序列覆寫。必要區域請以 JSON 陣列提供，座標採 0-based、end-exclusive。</p>
+  <form action="/web/assembly/backbones" method="post" enctype="multipart/form-data">
+    <div class="form-grid">
+      <label>GenBank file<input type="file" name="file" accept=".gb,.gbk,.genbank" required></label>
+      <label>Backbone ID<input name="backbone_id" placeholder="pUC-derived" required></label>
+      <label>Version<input name="version" value="1.0.0" required></label>
+      <label>Name<input name="name" placeholder="Trusted cloning backbone" required></label>
+      <label>Source URI<input name="source_uri" placeholder="https://... or repository accession"></label>
+      <label>Host organisms<input name="host_organisms" value="Escherichia coli" required></label>
+      <label>Origin of replication<input name="origin_of_replication" placeholder="ColE1" required></label>
+      <label>Selection marker<input name="selection_marker" placeholder="ampicillin" required></label>
+      <label>Copy-number class<select name="copy_number_class"><option>unknown</option><option>low</option><option>medium</option><option>high</option></select></label>
+      <label>Insertion region ID<input name="insertion_region_id" value="mcs" required></label>
+      <label>Insertion region name<input name="insertion_region_name" value="Multiple cloning site" required></label>
+      <label>Insertion start<input type="number" name="insertion_start" min="0" required></label>
+      <label>Insertion end<input type="number" name="insertion_end" min="1" required></label>
+    </div>
+    <label>Essential regions JSON
+      <textarea name="essential_regions_json">[]</textarea>
+    </label>
+    <button class="button" type="submit">Register backbone version</button>
+  </form>
+</section>
+
+<section class="card section-space">
+  <span class="step-number">02</span>
+  <h2>建立組裝與 primer 計畫</h2>
+  {% if not designs or not backbones %}
+  <div class="warning-box">需要至少一個 DesignIR v2 設計與一個已註冊 backbone。</div>
+  {% endif %}
+  <form action="/web/assembly/deliverables" method="post">
+    <div class="form-grid">
+      <label>Design
+        <select name="design_id" required>
+          {% for design in designs %}<option value="{{ design.design_id }}">{{ design.name }} ({{ design.design_id }})</option>{% endfor %}
+        </select>
+      </label>
+      <label>Plasmid ID<input name="plasmid_id" placeholder="plasmid_1" required></label>
+      <label>Backbone
+        <select name="backbone_id" required>
+          {% for item in backbones %}<option value="{{ item.backbone_id }}">{{ item.name }} ({{ item.backbone_id }})</option>{% endfor %}
+        </select>
+      </label>
+      <label>Backbone version<input name="backbone_version" value="1.0.0" required></label>
+      <label>Insertion region ID<input name="insertion_region_id" value="mcs" required></label>
+      <label>Insertion start<input type="number" name="insertion_start" min="0" required></label>
+      <label>Insertion end<input type="number" name="insertion_end" min="0" required></label>
+      <label>Assembly method
+        <select name="method"><option value="gibson">Gibson</option><option value="golden_gate">Golden Gate</option><option value="restriction_cloning">Restriction cloning</option></select>
+      </label>
+      <label>Restriction enzymes<input name="restriction_enzymes" value="EcoRI,BsaI,BsmBI"></label>
+      <label>Gibson overlap length<input type="number" name="gibson_overlap_length" value="25" min="15" max="80"></label>
+      <label>Golden Gate enzyme<select name="golden_gate_enzyme"><option>BsaI</option><option>BsmBI</option></select></label>
+      <label>Golden Gate overhangs<input name="golden_gate_overhangs" placeholder="AATG,GCTT"></label>
+    </div>
+    <button class="button" type="submit" {% if not designs or not backbones %}disabled{% endif %}>Validate and generate deliverables</button>
+  </form>
+</section>
+
+{% if deliverable %}
+<section id="report" class="section-space">
+  <header class="split-header">
+    <div>
+      <span class="eyebrow">Generated package</span>
+      <h2>{{ deliverable.deliverable_id }}</h2>
+      <p class="muted">{{ deliverable.plan.method }} · {{ deliverable.plan.target_length }} bp · {{ deliverable.readiness.readiness_status }}</p>
+    </div>
+    <span class="status-badge {{ 'status-ready' if deliverable.ok else 'status-warning' }}">{{ 'ready' if deliverable.ok else 'review required' }}</span>
+  </header>
+
+  <div class="grid grid-3">
+    <article class="card"><span class="muted">Assembly plan</span><div class="metric compact">{{ deliverable.plan.status }}</div></article>
+    <article class="card"><span class="muted">Primer design</span><div class="metric compact">{{ deliverable.primers.status }}</div></article>
+    <article class="card"><span class="muted">Readiness</span><div class="metric compact">{{ deliverable.readiness.readiness_status }}</div></article>
+  </div>
+
+  {% if deliverable.artifacts.plasmid_map %}
+  <article class="card section-space">
+    <h3>Plasmid map</h3>
+    <img class="plasmid-map" src="/web/assembly/deliverables/{{ deliverable.deliverable_id }}/artifacts/plasmid_map" alt="Assembled plasmid feature map">
+  </article>
+  {% endif %}
+
+  <article class="card section-space">
+    <h3>Fragment and primer table</h3>
+    <div class="table-scroll"><table>
+      <tr><th>Fragment</th><th>Preparation</th><th>Primer</th><th>Sequence (5'→3')</th><th>Tm</th><th>GC</th><th>Hairpin</th><th>Homodimer</th></tr>
+      {% for fragment in deliverable.primers.fragment_primer_sets %}
+        {% if fragment.forward_primer %}
+          {% for primer in [fragment.forward_primer, fragment.reverse_primer] %}
+          <tr>
+            <td>{{ fragment.fragment_name }}<br><span class="muted">{{ fragment.template_length }} → {{ fragment.product_length }} bp</span></td>
+            <td>{{ fragment.preparation }}</td><td>{{ primer.direction }}</td><td><code class="sequence">{{ primer.sequence }}</code></td>
+            <td>{{ primer.tm }} °C</td><td>{{ primer.gc_percent }}%</td><td>{{ primer.hairpin_tm }} °C</td><td>{{ primer.homodimer_tm }} °C</td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr><td>{{ fragment.fragment_name }}</td><td>{{ fragment.preparation }}</td><td colspan="6" class="muted">Primer pair not required</td></tr>
+        {% endif %}
+      {% endfor %}
+    </table></div>
+  </article>
+
+  <article class="card section-space">
+    <h3>Validation findings</h3>
+    {% for issue in deliverable.plan.issues %}
+      <div class="{{ 'error-box' if issue.severity == 'error' else 'warning-box' }}"><strong>{{ issue.code }}</strong> · {{ issue.message }}</div>
+    {% endfor %}
+    {% for fragment in deliverable.primers.fragment_primer_sets %}
+      {% for issue in fragment.warnings %}<div class="warning-box"><strong>{{ issue.code }}</strong> · {{ issue.message }}</div>{% endfor %}
+      {% for primer in [fragment.forward_primer, fragment.reverse_primer] if primer %}
+        {% for issue in primer.warnings %}<div class="warning-box"><strong>{{ primer.name }} / {{ issue.code }}</strong> · {{ issue.message }}</div>{% endfor %}
+      {% endfor %}
+    {% endfor %}
+    {% if not deliverable.plan.issues and not deliverable.primers.warnings %}<p class="muted">No global blockers were reported.</p>{% endif %}
+  </article>
+
+  <article class="card section-space">
+    <span class="step-number">05</span>
+    <h3>Download deliverables</h3>
+    <div class="download-grid">
+      {% for key, artifact in deliverable.artifacts.items() %}
+      <a class="download-card" href="/web/assembly/deliverables/{{ deliverable.deliverable_id }}/artifacts/{{ key }}"><strong>{{ key|upper }}</strong><span>{{ artifact.filename }}</span></a>
+      {% endfor %}
+    </div>
+    <p class="muted section-space">此輸出為計算規劃結果；進入實驗前仍需人工審查序列、試劑條件與實驗 protocol。</p>
+  </article>
+</section>
+{% endif %}
+{% endblock %}

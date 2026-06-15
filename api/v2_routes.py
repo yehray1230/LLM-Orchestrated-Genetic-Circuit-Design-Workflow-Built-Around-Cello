@@ -9,6 +9,7 @@ from fastapi.responses import FileResponse
 
 from api.dependencies import get_services
 from api.v2_schemas import (
+    AssemblyDeliverableRequest,
     AssemblyPlanRequest,
     BackboneRegistrationRequest,
     PlasmidAssemblyRequest,
@@ -129,6 +130,55 @@ def create_plasmid_assembly_plan(
     if not result["ok"]:
         raise HTTPException(status_code=409, detail=result)
     return envelope(result)
+
+
+@router.post("/designs/{design_id}/assembly-deliverables")
+def create_assembly_deliverables(
+    design_id: str,
+    request: AssemblyDeliverableRequest,
+    services: ApplicationServices = Depends(get_services),
+) -> dict[str, Any]:
+    try:
+        result = services.assembly_deliverables.create(
+            design_id,
+            **request.model_dump(),
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Design not found.") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not result["ok"]:
+        raise HTTPException(status_code=409, detail=result)
+    return envelope(result)
+
+
+@router.get("/assembly-deliverables/{deliverable_id}")
+def get_assembly_deliverables(
+    deliverable_id: str,
+    services: ApplicationServices = Depends(get_services),
+) -> dict[str, Any]:
+    result = services.assembly_deliverables.get(deliverable_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Assembly deliverable not found.")
+    return envelope(result)
+
+
+@router.get(
+    "/assembly-deliverables/{deliverable_id}/artifacts/{artifact_key}"
+)
+def get_assembly_deliverable_artifact(
+    deliverable_id: str,
+    artifact_key: str,
+    services: ApplicationServices = Depends(get_services),
+) -> FileResponse:
+    artifact = services.assembly_deliverables.artifact(
+        deliverable_id,
+        artifact_key,
+    )
+    if artifact is None:
+        raise HTTPException(status_code=404, detail="Assembly artifact not found.")
+    path, media_type = artifact
+    return FileResponse(path, filename=path.name, media_type=media_type)
 
 
 @router.post("/research/runs", status_code=status.HTTP_202_ACCEPTED)

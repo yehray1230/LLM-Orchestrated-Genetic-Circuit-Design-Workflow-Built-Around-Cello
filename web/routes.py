@@ -15,6 +15,7 @@ from fastapi import (
     UploadFile,
 )
 from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse
 from fastapi.templating import Jinja2Templates
 
 from api.dependencies import get_services
@@ -67,6 +68,138 @@ def designs_page(
         "designs.html",
         designs=services.designs.list(),
     )
+
+
+@router.get("/web/assembly", response_class=HTMLResponse)
+def assembly_workspace(
+    request: Request,
+    deliverable_id: str = "",
+    services: ApplicationServices = Depends(get_services),
+) -> HTMLResponse:
+    deliverable = (
+        services.assembly_deliverables.get(deliverable_id)
+        if deliverable_id
+        else None
+    )
+    return _assembly_template(request, services, deliverable=deliverable)
+
+
+@router.post("/web/assembly/backbones")
+async def upload_assembly_backbone(
+    file: Annotated[UploadFile, File()],
+    backbone_id: Annotated[str, Form()],
+    version: Annotated[str, Form()],
+    name: Annotated[str, Form()],
+    source_uri: Annotated[str, Form()] = "",
+    host_organisms: Annotated[str, Form()] = "Escherichia coli",
+    origin_of_replication: Annotated[str, Form()] = "unknown",
+    selection_marker: Annotated[str, Form()] = "unknown",
+    copy_number_class: Annotated[str, Form()] = "unknown",
+    insertion_region_id: Annotated[str, Form()] = "mcs",
+    insertion_region_name: Annotated[str, Form()] = "Insertion region",
+    insertion_start: Annotated[int, Form()] = 0,
+    insertion_end: Annotated[int, Form()] = 1,
+    essential_regions_json: Annotated[str, Form()] = "[]",
+    services: ApplicationServices = Depends(get_services),
+) -> RedirectResponse:
+    content = await file.read()
+    if len(content) > 5_000_000:
+        raise HTTPException(status_code=413, detail="Upload exceeds 5 MB.")
+    try:
+        essential_regions = json.loads(essential_regions_json or "[]")
+        if not isinstance(essential_regions, list):
+            raise ValueError("Essential regions must be a JSON array.")
+        entry = services.backbones.register(
+            {
+                "backbone_id": backbone_id,
+                "version": version,
+                "name": name,
+                "source_type": "user_upload",
+                "source_uri": source_uri.strip()
+                or f"upload://{file.filename or 'backbone.gb'}",
+                "genbank": content.decode("utf-8-sig"),
+                "host_organisms": _comma_list(host_organisms),
+                "origin_of_replication": origin_of_replication,
+                "selection_marker": selection_marker,
+                "copy_number_class": copy_number_class,
+                "insertion_regions": [
+                    {
+                        "region_id": insertion_region_id,
+                        "name": insertion_region_name,
+                        "start": insertion_start,
+                        "end": insertion_end,
+                        "description": "Registered from the HTML assembly workspace.",
+                    }
+                ],
+                "essential_regions": essential_regions,
+            }
+        )
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return RedirectResponse(
+        f"/web/assembly?backbone={entry.backbone_id}@{entry.version}",
+        status_code=303,
+    )
+
+
+@router.post("/web/assembly/deliverables")
+def create_assembly_delivery(
+    design_id: Annotated[str, Form()],
+    plasmid_id: Annotated[str, Form()],
+    backbone_id: Annotated[str, Form()],
+    backbone_version: Annotated[str, Form()],
+    insertion_region_id: Annotated[str, Form()],
+    insertion_start: Annotated[int, Form()],
+    insertion_end: Annotated[int, Form()],
+    method: Annotated[str, Form()] = "gibson",
+    restriction_enzymes: Annotated[str, Form()] = "EcoRI,BsaI,BsmBI",
+    gibson_overlap_length: Annotated[int, Form()] = 25,
+    golden_gate_enzyme: Annotated[str, Form()] = "BsaI",
+    golden_gate_overhangs: Annotated[str, Form()] = "",
+    services: ApplicationServices = Depends(get_services),
+) -> RedirectResponse:
+    overhangs = _comma_list(golden_gate_overhangs)
+    try:
+        result = services.assembly_deliverables.create(
+            design_id,
+            plasmid_id=plasmid_id,
+            backbone_id=backbone_id,
+            backbone_version=backbone_version,
+            insertion_region_id=insertion_region_id,
+            insertion_start=insertion_start,
+            insertion_end=insertion_end,
+            method=method,
+            restriction_enzymes=_comma_list(restriction_enzymes),
+            gibson_overlap_length=gibson_overlap_length,
+            golden_gate_enzyme=golden_gate_enzyme,
+            golden_gate_overhangs=overhangs or None,
+        )
+    except (KeyError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not result.get("deliverable_id"):
+        raise HTTPException(status_code=409, detail=result)
+    return RedirectResponse(
+        f"/web/assembly?deliverable_id={result['deliverable_id']}#report",
+        status_code=303,
+    )
+
+
+@router.get(
+    "/web/assembly/deliverables/{deliverable_id}/artifacts/{artifact_key}"
+)
+def download_assembly_delivery(
+    deliverable_id: str,
+    artifact_key: str,
+    services: ApplicationServices = Depends(get_services),
+) -> FileResponse:
+    artifact = services.assembly_deliverables.artifact(
+        deliverable_id,
+        artifact_key,
+    )
+    if artifact is None:
+        raise HTTPException(status_code=404, detail="Assembly artifact not found.")
+    path, media_type = artifact
+    return FileResponse(path, filename=path.name, media_type=media_type)
 
 
 @router.get("/web/benchmarks", response_class=HTMLResponse)
@@ -499,6 +632,21 @@ def _template(
         request=request,
         name=name,
         context={"active_path": request.url.path, **context},
+    )
+
+
+def _assembly_template(
+    request: Request,
+    services: ApplicationServices,
+    *,
+    deliverable: dict[str, object] | None = None,
+) -> HTMLResponse:
+    return _template(
+        request,
+        "assembly.html",
+        designs=services.designs.list_v2(),
+        backbones=[item.to_dict() for item in services.backbones.list()],
+        deliverable=deliverable,
     )
 
 
