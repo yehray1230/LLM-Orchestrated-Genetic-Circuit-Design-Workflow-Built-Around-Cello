@@ -28,3 +28,61 @@ class ResearchComparisonRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     research_run_ids: list[str] = Field(min_length=2, max_length=20)
+
+
+class PlasmidAssemblyRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    plasmid_id: str = Field(min_length=1, max_length=128)
+    backbone_id: str = Field(min_length=1, max_length=128)
+    backbone_version: str = Field(min_length=1, max_length=64)
+    insertion_region_id: str = Field(min_length=1, max_length=128)
+    insertion_start: int = Field(ge=0)
+    insertion_end: int = Field(ge=0)
+    assembly_method: str = Field(
+        default="direct_insertion",
+        pattern=r"^(direct_insertion|gibson|restriction_cloning)$",
+    )
+
+    @model_validator(mode="after")
+    def validate_window(self) -> "PlasmidAssemblyRequest":
+        if self.insertion_start > self.insertion_end:
+            raise ValueError(
+                "insertion_start must be less than or equal to insertion_end."
+            )
+        return self
+
+
+class BackboneRegionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    region_id: str = Field(min_length=1, max_length=128)
+    name: str = Field(min_length=1, max_length=256)
+    start: int = Field(ge=0)
+    end: int = Field(gt=0)
+    description: str = Field(default="", max_length=1000)
+
+    @model_validator(mode="after")
+    def validate_window(self) -> "BackboneRegionRequest":
+        if self.start >= self.end:
+            raise ValueError("Region start must be less than region end.")
+        return self
+
+
+class BackboneRegistrationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    backbone_id: str = Field(min_length=1, max_length=128)
+    version: str = Field(min_length=1, max_length=64)
+    name: str = Field(min_length=1, max_length=256)
+    source_type: str = Field(min_length=1, max_length=64)
+    source_uri: str = Field(min_length=1, max_length=2000)
+    genbank: str = Field(min_length=1, max_length=5_000_000)
+    sequence_checksum: str | None = Field(default=None, max_length=128)
+    host_organisms: list[str] = Field(min_length=1, max_length=50)
+    origin_of_replication: str = Field(min_length=1, max_length=256)
+    selection_marker: str = Field(min_length=1, max_length=256)
+    copy_number_class: str = Field(min_length=1, max_length=32)
+    insertion_regions: list[BackboneRegionRequest] = Field(min_length=1)
+    essential_regions: list[BackboneRegionRequest] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)

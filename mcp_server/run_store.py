@@ -298,12 +298,12 @@ class RunStore:
                     metadata["message"] = "Cancellation was requested, but the run completed before it could stop."
                 self._finalize_manifest(run_dir, metadata, status, result)
                 self._write_metadata(run_dir, metadata)
-            self.append_event(
+            self._append_terminal_event(
                 run_id,
-                "run",
                 status,
-                1.0,
-                "Run finished." if status == "completed" else f"Run finished with status {status}.",
+                "Run finished."
+                if status == "completed"
+                else f"Run finished with status {status}.",
             )
         except Exception as exc:
             error_result = {
@@ -332,7 +332,24 @@ class RunStore:
                     error_result,
                 )
                 self._write_metadata(run_dir, metadata)
-            self.append_event(run_id, "run", "failed", 1.0, f"Run failed: {exc}")
+            self._append_terminal_event(
+                run_id,
+                "failed",
+                f"Run failed: {exc}",
+            )
+
+    def _append_terminal_event(
+        self,
+        run_id: str,
+        status: str,
+        message: str,
+    ) -> None:
+        try:
+            self.append_event(run_id, "run", status, 1.0, message)
+        except (OSError, RuntimeError):
+            # The result and terminal metadata are authoritative. A transient
+            # event-log write failure must not rewrite a completed run as failed.
+            return
 
     def _run_dir(self, run_id: str) -> Path:
         return self.base_dir / run_id

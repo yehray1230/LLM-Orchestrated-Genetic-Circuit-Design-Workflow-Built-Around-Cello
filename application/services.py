@@ -20,6 +20,7 @@ from benchmark_suite.scoring_profiles import list_scoring_profiles
 from exporters.bom_exporter import export_bom_csv
 from exporters.export_result import ExportResult
 from exporters.genbank_exporter import export_genbank
+from exporters.plasmid_tools import PlasmidAssemblyResult, assemble_plasmid_v2
 from exporters.sbol3_exporter import export_sbol3_turtle
 from importers.genbank_importer import genbank_to_import_draft
 from mcp_server.run_store import RunStore
@@ -38,6 +39,12 @@ from repositories.json_repository import JsonRepository
 from repositories.factory import create_design_repository, repository_backend
 from repositories.protocols import RecordRepository, RevisionRepository
 from repositories.sqlite_repository import canonical_payload_hash
+from schemas.backbone_registry import (
+    BackboneRegistryEntry,
+    backbone_entry_from_dict,
+    create_backbone_entry,
+    registry_key,
+)
 from schemas.design_diff import compare_designs
 from schemas.design_migrations import (
     design_ir_v2_to_v1_payload,
@@ -343,6 +350,78 @@ class ExportService:
         return exporter(design)
 
 
+class BackboneRegistryService:
+    def __init__(self, repository: JsonRepository):
+        self.repository = repository
+
+    def register(self, payload: dict[str, Any]) -> BackboneRegistryEntry:
+        entry = create_backbone_entry(payload)
+        existing = self.get(entry.backbone_id, entry.version)
+        if existing:
+            if existing.sequence_checksum != entry.sequence_checksum:
+                raise ValueError(
+                    "Backbone version already exists with a different checksum."
+                )
+            return existing
+        self.repository.save(entry.registry_key, entry.to_dict())
+        return entry
+
+    def get(
+        self,
+        backbone_id: str,
+        version: str,
+    ) -> BackboneRegistryEntry | None:
+        payload = self.repository.get(registry_key(backbone_id, version))
+        return backbone_entry_from_dict(payload) if payload else None
+
+    def list(self) -> list[BackboneRegistryEntry]:
+        return [
+            backbone_entry_from_dict(payload)
+            for payload in self.repository.list()
+        ]
+
+
+class PlasmidAssemblyService:
+    def __init__(
+        self,
+        designs: DesignService,
+        backbones: BackboneRegistryService,
+    ):
+        self.designs = designs
+        self.backbones = backbones
+
+    def assemble(
+        self,
+        design_id: str,
+        *,
+        plasmid_id: str,
+        backbone_id: str,
+        backbone_version: str,
+        insertion_region_id: str,
+        insertion_start: int,
+        insertion_end: int,
+        assembly_method: str = "direct_insertion",
+    ) -> PlasmidAssemblyResult:
+        design = self.designs.get_v2(design_id)
+        if design is None:
+            raise KeyError(design_id)
+        backbone = self.backbones.get(backbone_id, backbone_version)
+        if backbone is None:
+            raise ValueError(
+                f"Unknown registered backbone: {backbone_id}@{backbone_version}"
+            )
+        return assemble_plasmid_v2(
+            design,
+            plasmid_id=plasmid_id,
+            backbone_genbank=backbone.genbank,
+            insertion_start=insertion_start,
+            insertion_end=insertion_end,
+            assembly_method=assembly_method,
+            backbone_entry=backbone,
+            insertion_region_id=insertion_region_id,
+        )
+
+
 class RunService:
     def __init__(self, run_store: RunStore):
         self.run_store = run_store
@@ -436,6 +515,8 @@ class ApplicationServices:
     simulations: SimulationService
     research: ResearchService
     exports: ExportService
+    backbones: BackboneRegistryService
+    plasmid_assemblies: PlasmidAssemblyService
     runs: RunService
 
     @property
@@ -449,11 +530,13 @@ def create_application_services(
     selected = Path(base_dir) if base_dir else DEFAULT_API_DATA_DIR
     draft_repository = JsonRepository(selected / "drafts")
     benchmark_repository = JsonRepository(selected / "benchmark_runs")
+    backbone_repository = JsonRepository(selected / "backbones")
     design_repository = create_design_repository(selected / "research.db")
     designs = DesignService(design_repository)
     _migrate_legacy_design_repository(selected / "designs", designs)
     run_store = RunStore(base_dir=selected / "runs")
     simulation_service = SimulationService()
+    backbones = BackboneRegistryService(backbone_repository)
     research_run_store = RunStore(
         base_dir=selected / "research_runs",
         max_workers=2,
@@ -474,6 +557,8 @@ def create_application_services(
             report_dir=selected / "research_reports",
         ),
         exports=ExportService(designs),
+        backbones=backbones,
+        plasmid_assemblies=PlasmidAssemblyService(designs, backbones),
         runs=RunService(run_store),
     )
 

@@ -353,6 +353,49 @@ def test_compare_design_runs_ranks_completed_runs(tmp_path: Path) -> None:
     assert compared["ranked_runs"][0]["run_id"] == high["run_id"]
 
 
+def test_terminal_event_failure_does_not_rewrite_completed_run(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    store = RunStore(base_dir=tmp_path, max_workers=1)
+    original_append_event = store.append_event
+
+    def append_event(
+        run_id,
+        stage,
+        status,
+        progress,
+        message,
+        details=None,
+    ):
+        if status == "completed":
+            raise OSError("simulated terminal event write failure")
+        return original_append_event(
+            run_id,
+            stage,
+            status,
+            progress,
+            message,
+            details,
+        )
+
+    monkeypatch.setattr(store, "append_event", append_event)
+    started = store.start(
+        task=lambda: {
+            "status": "completed",
+            "summary": {"best_topology": {"score": 0.8}},
+            "artifacts": {},
+        },
+        request={"user_intent": "terminal event resilience"},
+    )
+    store._futures[started["run_id"]].result(timeout=10)
+
+    result = store.result(started["run_id"])
+
+    assert result["status"] == "completed"
+    assert result["summary"]["best_topology"]["score"] == 0.8
+
+
 def test_compare_design_runs_reports_unavailable_runs(tmp_path: Path) -> None:
     store = RunStore(base_dir=tmp_path, max_workers=1)
     release = threading.Event()

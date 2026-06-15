@@ -507,6 +507,40 @@ Export behavior is conservative. GenBank requires complete valid IUPAC DNA seque
 
 匯出行為採保守原則。GenBank 要求匯出 construct 中所有元件都有完整且有效的 IUPAC DNA 序列；SBOL3 可以表示沒有序列的概念性元件，但會回報警告。所有 exporter 都不會自行補入缺失序列。
 
+### External plasmid assembly preview
+
+The v2 API includes a first sequence-complete plasmid assembly path backed by
+Biopython and pydna:
+
+```text
+POST /api/v2/designs/{design_id}/plasmid-assemblies
+```
+
+Backbones must first be registered through `POST /api/v2/backbones` with a
+version, trusted source URI, sequence checksum, host metadata, origin,
+selection marker, copy-number class, legal insertion regions, and protected
+essential regions. Assembly requests reference the registered backbone
+version and a zero-based half-open insertion window. The assembler:
+
+- rejects unregistered or checksum-drifted backbone versions;
+- blocks insertion outside the selected legal region or across an essential
+  region;
+- blocks conceptual, illustrative, unknown, or otherwise insufficient part
+  evidence;
+- preserves and remaps non-overlapping backbone features;
+- removes backbone features replaced by the insertion window and reports them;
+- applies forward or reverse-complement part orientation;
+- writes part and construct provenance into GenBank features;
+- validates the final circular molecule with pydna;
+- reports CDS framing, host annotation, common restriction sites, tool
+  versions, and a sequence checksum.
+- records readiness progression from `conceptual` through
+  `assembly_check_passed`.
+
+This is a sequence-complete computational assembly preview. Gibson overlap
+arms, primers, restriction-fragment planning, codon optimization, and expert
+experimental review remain outside this first version.
+
 Relevant implementation paths:
 
 - [schemas/design_ir.py](schemas/design_ir.py)

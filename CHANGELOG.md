@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-06-15
+
+- Added a Biopython-backed DesignIR v2 plasmid assembler for real GenBank
+  backbone records and explicit insertion windows.
+- Added pydna circular-molecule validation and sequence checksums.
+- Added reverse-complement part orientation, backbone feature remapping,
+  restriction-site reporting, and machine-readable assembly reports.
+- Added `POST /api/v2/designs/{design_id}/plasmid-assemblies`.
+- Added an immutable, versioned backbone registry with trusted-source,
+  checksum, host, origin, marker, copy-number, insertion-region, and
+  essential-region metadata.
+- Assembly now requires a registered backbone version and blocks illegal
+  insertion windows, essential-region disruption, and insufficient part
+  evidence.
+- Added assembly readiness progression from conceptual design to
+  `assembly_check_passed`.
+- The new path does not yet design Gibson overlaps, primers, restriction
+  fragments, or codon-optimized coding sequences.
+
 ## 2026-06-14 - v2.0 Biological Realism Upgrades
 
 - Upgraded the resource-aware ODE simulator to model protein maturation and folding delay via a three-state system ($mRNA_i$, $P_{\text{immature}, i}$, and $P_{\text{mature}, i}$).

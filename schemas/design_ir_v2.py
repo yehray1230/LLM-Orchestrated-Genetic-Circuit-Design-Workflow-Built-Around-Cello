@@ -13,6 +13,16 @@ EVIDENCE_STATUSES = {
     "defaulted",
     "unknown",
 }
+PART_EVIDENCE_LEVELS = {
+    "unknown",
+    "conceptual",
+    "illustrative",
+    "inferred",
+    "database_derived",
+    "literature_supported",
+    "experimentally_characterized",
+    "user_verified",
+}
 
 
 @dataclass
@@ -69,6 +79,7 @@ class BiologicalPartV2:
     role: str
     sequence: str | None = None
     source: str = "conceptual"
+    evidence_level: str = "unknown"
     host_compatibility: list[str] = field(default_factory=list)
     provenance_ids: list[str] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -181,6 +192,12 @@ class DesignIRV2:
         part_ids = {part.id for part in self.parts}
         construct_ids = {construct.id for construct in self.constructs}
         provenance_ids = {item.id for item in self.provenance}
+        for part in self.parts:
+            if part.evidence_level not in PART_EVIDENCE_LEVELS:
+                errors.append(
+                    f"Part {part.id} has invalid evidence level "
+                    f"{part.evidence_level}."
+                )
         for construct in self.constructs:
             for instance in construct.part_instances:
                 if instance.part_id not in part_ids:

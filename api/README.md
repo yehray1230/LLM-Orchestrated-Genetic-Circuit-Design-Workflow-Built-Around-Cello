@@ -41,6 +41,10 @@ GET  /api/v1/benchmarks/runs
 GET  /api/v1/benchmarks/runs/{benchmark_run_id}
 POST /api/v1/benchmarks/comparisons
 GET  /api/v1/designs/{design_id}/exports/{format}
+POST /api/v2/backbones
+GET  /api/v2/backbones
+GET  /api/v2/backbones/{backbone_id}/versions/{version}
+POST /api/v2/designs/{design_id}/plasmid-assemblies
 
 POST /api/v1/runs
 GET  /api/v1/runs

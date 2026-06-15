@@ -15,6 +15,7 @@ from schemas.design_ir_v2 import (
     DesignRevisionV2,
     DesignSpecification,
     FieldProvenance,
+    PART_EVIDENCE_LEVELS,
     PlasmidV2,
     ProvenanceRecordV2,
     RegulatoryInteractionV2,
@@ -81,6 +82,7 @@ def migrate_design_ir_v1_to_v2(payload: dict[str, Any]) -> MigrationResult:
             role=str(item.get("role") or ""),
             sequence=_optional_string(item.get("sequence")),
             source=str(item.get("source") or "conceptual"),
+            evidence_level=_part_evidence_level(item),
             host_compatibility=list(item.get("host_compatibility") or []),
             provenance_ids=list(item.get("provenance_ids") or []),
             metadata={
@@ -94,6 +96,8 @@ def migrate_design_ir_v1_to_v2(payload: dict[str, Any]) -> MigrationResult:
                     "role",
                     "sequence",
                     "source",
+                    "evidence_level",
+                    "sequence_status",
                     "host_compatibility",
                     "provenance_ids",
                 }
@@ -395,3 +399,16 @@ def _optional_float(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _part_evidence_level(item: dict[str, Any]) -> str:
+    candidates = (
+        item.get("evidence_level"),
+        item.get("sequence_status"),
+        item.get("confidence"),
+    )
+    for value in candidates:
+        normalized = str(value or "").strip().lower()
+        if normalized in PART_EVIDENCE_LEVELS:
+            return normalized
+    return "unknown"
