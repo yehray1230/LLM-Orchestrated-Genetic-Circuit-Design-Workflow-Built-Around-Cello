@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Compare{% endblock %}
+{% block content %}
+<header class="page-header">
+  <h1>設計比較</h1>
+  <p class="muted">比較結構、驗證狀態與可用欄位，不宣稱實驗優劣。</p>
+</header>
+<article class="card">
+  <form method="get" action="/web/compare">
+    <div class="grid grid-2">
+      <label>Design A
+        <select name="left" required><option value="">選擇設計</option>{% for design in designs %}<option value="{{ design.design_id }}" {{ "selected" if left == design.design_id else "" }}>{{ design.name }}</option>{% endfor %}</select>
+      </label>
+      <label>Design B
+        <select name="right" required><option value="">選擇設計</option>{% for design in designs %}<option value="{{ design.design_id }}" {{ "selected" if right == design.design_id else "" }}>{{ design.name }}</option>{% endfor %}</select>
+      </label>
+    </div>
+    <button class="button" type="submit">比較</button>
+  </form>
+</article>
+{% if error %}<div class="error-box" style="margin-top:18px">{{ error }}</div>{% endif %}
+{% if comparison %}
+<section class="grid grid-3" style="margin-top:18px">
+  <article class="card"><span class="muted">Part changes</span><div class="metric">{{ comparison.part_changes|length }}</div></article>
+  <article class="card"><span class="muted">Construct changes</span><div class="metric">{{ comparison.construct_changes|length }}</div></article>
+  <article class="card"><span class="muted">Validation changes</span><div class="metric">{{ comparison.validation_changes|length }}</div></article>
+</section>
+<article class="card" style="margin-top:18px"><h2>摘要</h2><p>{{ comparison.summary }}</p><pre>{{ comparison | tojson(indent=2) }}</pre></article>
+{% endif %}
+{% endblock %}

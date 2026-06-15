@@ -61,6 +61,9 @@ def _topology_summary(topology: dict | None) -> dict:
         "missed_edge_cases",
         "scoring_model",
         "verilog_index",
+        "simulation_model_version",
+        "simulation_spec",
+        "simulation_result",
     ]
     return {key: topology[key] for key in summary_keys if key in topology}
 

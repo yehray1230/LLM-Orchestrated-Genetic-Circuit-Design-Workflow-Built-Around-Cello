@@ -1,4 +1,29 @@
 # Evaluation Metrics
+
+## v1.8 Versioned Research Evaluation
+
+The API evaluation default is `research-v1.8@1.8.0`. Existing workflow code
+continues to use `legacy-weighted@1.0.0` unless it explicitly selects another
+profile.
+
+```text
+0.20 logic_function
+0.15 dynamic_behavior
+0.15 robustness
+0.10 resource_burden
+0.15 buildability
+0.15 evidence_quality
+0.10 data_completeness
+```
+
+Each result includes `scoring_profile`, `scoring_version`, and
+`scoring_configuration_hash`. Comparisons across versions carry a warning
+because the scores are not assumed to be calibrated equivalents.
+
+Benchmark dataset manifests are content-addressed and versioned. The bundled
+`research_smoke_v1` dataset contains synthetic infrastructure fixtures, not
+wet-lab validated circuits. JSON, CSV, and Markdown reports preserve dataset
+and scoring hashes, case results, dimension summaries, and expectation checks.
 # 評估指標
 
 This document explains how the current benchmark system scores candidate genetic-circuit designs. The metrics are intended for computational triage: they rank and compare candidate designs inside the Reflexion loop so weak candidates can be repaired, rejected, or deprioritized.

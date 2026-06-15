@@ -18,7 +18,7 @@ except Exception:  # pragma: no cover
     pd = None
 
 from schemas.design_diff import compare_designs
-from schemas.design_ir import BiologicalPart, DesignIR, topology_to_design_ir
+from schemas.design_ir import DesignIR, topology_to_design_ir
 from schemas.design_operations import replace_part_immutable, validate_replacement
 from schemas.state import DesignState, SearchNode
 from mcp_server.ode_explainer import explain_ode_topology
@@ -26,6 +26,12 @@ from tools.part_library import PartLibrary
 from exporters.bom_exporter import export_bom_csv
 from exporters.genbank_exporter import export_genbank
 from exporters.sbol3_exporter import export_sbol3_turtle
+from exporters.plasmid_assembler import export_plasmid_genbank
+from ui.external_import import (
+    ensure_external_import_state,
+    render_external_import_sidebar,
+    render_external_import_workspace,
+)
 
 
 MODE_COLORS = {
@@ -165,6 +171,7 @@ def main() -> None:
 
     _render_status_strip(state)
     _render_human_loop_panel(state)
+    render_external_import_workspace(st, _generated_designs_for_comparison(state))
 
     work_col, inspector_col = st.columns([1.45, 1], gap="large")
     with work_col:
@@ -174,6 +181,19 @@ def main() -> None:
 
     with inspector_col:
         _render_inspector(state)
+
+
+def _generated_designs_for_comparison(state: DesignState) -> list[DesignIR]:
+    designs = []
+    for index, topology in enumerate(state.candidate_topologies, start=1):
+        designs.append(
+            topology_to_design_ir(
+                topology,
+                host_organism=state.host_organism,
+                design_id=f"generated_{index}",
+            )
+        )
+    return designs
 
 
 def _inject_styles() -> None:
@@ -531,6 +551,7 @@ def _ensure_session_state() -> None:
         st.session_state.run_message = None
     if "show_tutorial" not in st.session_state:
         st.session_state.show_tutorial = False
+    ensure_external_import_state(st.session_state)
 
 
 def _render_tutorial() -> None:
@@ -608,6 +629,7 @@ def _render_sidebar(state: DesignState) -> None:
         options["enable_cache"] = st.toggle("快取", value=options["enable_cache"])
 
         _render_byok_controls()
+        render_external_import_sidebar(st)
 
         st.subheader("執行")
         if st.button("執行示範迭代", type="primary", use_container_width=True):
@@ -1504,8 +1526,16 @@ def _render_design_exports(design: DesignIR) -> None:
         f"Exporting {design.design_id}, revision {design.revision.revision_id}. "
         "BOM and SBOL can describe incomplete designs; GenBank requires complete construct sequences."
     )
+
+    # 選擇骨架選項
+    backbone_choice = st.selectbox(
+        "Select Plasmid Backbone for assembly / 選擇載體骨架進行質體重組",
+        ["None (Linear Constructs)", "pUC19 (High copy, AmpR)", "p15A (Medium copy, KanR)"],
+        index=0,
+        key=f"backbone_select_{design.design_id}_{design.revision.revision_id}"
+    )
+
     bom = export_bom_csv(design)
-    genbank = export_genbank(design)
     sbol = export_sbol3_turtle(design)
 
     st.download_button(
@@ -1519,19 +1549,39 @@ def _render_design_exports(design: DesignIR) -> None:
     for warning in bom.warnings:
         st.warning(warning)
 
-    if genbank.ok:
-        st.download_button(
-            "Download GenBank",
-            data=genbank.content,
-            file_name=genbank.filename,
-            mime=genbank.media_type,
-            key=f"genbank_download_{design.design_id}_{design.revision.revision_id}",
-            use_container_width=True,
-        )
+    if backbone_choice == "None (Linear Constructs)":
+        genbank = export_genbank(design)
+        if genbank.ok:
+            st.download_button(
+                "Download GenBank",
+                data=genbank.content,
+                file_name=genbank.filename,
+                mime=genbank.media_type,
+                key=f"genbank_download_{design.design_id}_{design.revision.revision_id}",
+                use_container_width=True,
+            )
+        else:
+            st.error("GenBank export is blocked because construct sequences are incomplete.")
+            for error in genbank.errors:
+                st.caption(error)
     else:
-        st.error("GenBank export is blocked because construct sequences are incomplete.")
-        for error in genbank.errors:
-            st.caption(error)
+        # 進行質體拼接導出
+        plasmid = export_plasmid_genbank(design, backbone_choice)
+        if plasmid.ok:
+            st.download_button(
+                "Download Plasmid GenBank",
+                data=plasmid.content,
+                file_name=plasmid.filename,
+                mime=plasmid.media_type,
+                key=f"plasmid_download_{design.design_id}_{design.revision.revision_id}",
+                use_container_width=True,
+            )
+            for warning in plasmid.warnings:
+                st.warning(warning)
+        else:
+            st.error("Plasmid GenBank export is blocked.")
+            for error in plasmid.errors:
+                st.caption(error)
 
     st.download_button(
         "Download SBOL3 Turtle",

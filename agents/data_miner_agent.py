@@ -41,6 +41,29 @@ PARAMETER_ALIASES = {
 }
 
 
+CHASSIS_SPECIFIC_DEFAULTS = {
+    "Escherichia coli": {
+        "rnap_total": 5000.0,
+        "ribosome_total": 25000.0,
+        "translation_rate": 0.045,
+        "growth_rate_dilution": 0.0004,
+    },
+    "Saccharomyces cerevisiae": {
+        "rnap_total": 3000.0,
+        "ribosome_total": 120000.0,
+        "translation_rate": 0.012,
+        "growth_rate_dilution": 0.0001,
+    }
+}
+
+def _normalize_chassis(chassis: str) -> str:
+    ch = str(chassis).lower().strip()
+    if "yeast" in ch or "cerevisiae" in ch:
+        return "Saccharomyces cerevisiae"
+    if "coli" in ch:
+        return "Escherichia coli"
+    return "Escherichia coli"
+
 class DataMinerAgent(AgentProtocol):
     def __init__(self, vector_retriever: Any | None = None, defaults: dict[str, dict[str, Any]] | None = None):
         self.vector_retriever = vector_retriever
@@ -53,6 +76,16 @@ class DataMinerAgent(AgentProtocol):
 
         for topology in topologies:
             parameters = self._default_parameters()
+            chassis_raw = topology.get("chassis") or state.host_organism
+            chassis_normalized = _normalize_chassis(chassis_raw)
+            if chassis_normalized in CHASSIS_SPECIFIC_DEFAULTS:
+                spec_vals = CHASSIS_SPECIFIC_DEFAULTS[chassis_normalized]
+                for p_key, p_val in spec_vals.items():
+                    if p_key in parameters:
+                        parameters[p_key]["value"] = p_val
+                        if chassis_normalized != "Escherichia coli":
+                            parameters[p_key]["source"] = "chassis_specific_default"
+                            parameters[p_key]["confidence"] = 0.65
             parameters.update(self._parameters_from_records(context))
             gene_count = self._infer_gene_count(topology)
             source_summary = _parameter_source_summary(parameters)

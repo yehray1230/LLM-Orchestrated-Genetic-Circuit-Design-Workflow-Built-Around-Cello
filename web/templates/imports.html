@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}External Imports{% endblock %}
+{% block content %}
+<header class="page-header">
+  <h1>外部設計導入</h1>
+  <p class="muted">先建立可審查草稿，再確認成正式 DesignIR。</p>
+</header>
+<section class="grid grid-2">
+  <article class="card">
+    <h2>引導式輸入</h2>
+    <form method="post" action="/web/imports/guided">
+      <label>設計名稱<input name="name" required></label>
+      <div class="grid grid-2">
+        <label>來源類型<select name="source_type"><option>literature</option><option>repository</option><option>manual</option></select></label>
+        <label>宿主<input name="host_organism" value="unknown"></label>
+      </div>
+      <label>DOI 或 URL<input name="source_uri"></label>
+      <label>引用資訊<textarea name="citation"></textarea></label>
+      <div class="grid grid-2">
+        <label>輸入（逗號分隔）<input name="inputs"></label>
+        <label>輸出（逗號分隔）<input name="outputs"></label>
+      </div>
+      <label>Boolean expression 或邏輯描述<textarea name="logic_expression"></textarea></label>
+      <label>驗證狀態<select name="validation_status"><option>unknown</option><option>experimentally_validated</option><option>partially_validated</option><option>computational_only</option><option>not_reported</option></select></label>
+      <label>驗證說明<textarea name="validation_notes"></textarea></label>
+      <div class="grid grid-2">
+        <label>證據狀態<select name="evidence_status"><option>explicit</option><option>derived</option><option>inferred</option><option>assumed</option><option>unknown</option></select></label>
+        <label>論文位置<input name="locator" placeholder="Figure 2 / Methods p.4"></label>
+      </div>
+      <button class="button" type="submit">建立草稿</button>
+    </form>
+  </article>
+  <article class="card">
+    <h2>檔案上傳</h2>
+    <p class="muted">支援專案 JSON 與 GenBank，最大 5 MB。</p>
+    <form method="post" action="/web/imports/upload" enctype="multipart/form-data">
+      <label>選擇檔案<input type="file" name="file" accept=".json,.gb,.gbk,.genbank" required></label>
+      <button class="button secondary" type="submit">解析為草稿</button>
+    </form>
+  </article>
+</section>
+{% endblock %}

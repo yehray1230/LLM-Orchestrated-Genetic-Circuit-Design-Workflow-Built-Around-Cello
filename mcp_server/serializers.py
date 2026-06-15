@@ -39,6 +39,9 @@ SUMMARY_TOPOLOGY_KEYS = (
     "semantic_faithfulness_score",
     "missed_edge_cases",
     "benchmark_report",
+    "simulation_model_version",
+    "simulation_spec",
+    "simulation_result",
 )
 
 

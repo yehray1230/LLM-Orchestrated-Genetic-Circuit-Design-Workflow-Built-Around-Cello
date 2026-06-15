@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}New Design{% endblock %}
+{% block content %}
+<header class="page-header">
+  <h1>建立新設計</h1>
+  <p class="muted">提交後會建立背景任務。模型金鑰只從伺服器環境變數取得。</p>
+</header>
+<article class="card">
+  <form method="post" action="/web/runs">
+    <label>自然語言需求
+      <textarea name="user_intent" required placeholder="例如：只有 A 存在且 B 不存在時表達 GFP。"></textarea>
+    </label>
+    <div class="grid grid-2">
+      <label>宿主
+        <input name="host_organism" value="Escherichia coli" required>
+      </label>
+      <label>計算預算
+        <input type="number" name="compute_budget" min="1" max="100" value="6">
+      </label>
+    </div>
+    <label>模型名稱（選填）
+      <input name="model_name" placeholder="留空時使用伺服器預設模型">
+    </label>
+    <div class="inline">
+      <label><input type="checkbox" name="enable_rag" checked> 啟用 RAG</label>
+      <label><input type="checkbox" name="enable_ode" checked> 啟用 ODE</label>
+    </div>
+    <button class="button" type="submit">啟動背景設計</button>
+  </form>
+</article>
+{% endblock %}

@@ -58,13 +58,23 @@ The current ODE explanation layer reports what can be read from the stored traje
 
 ## 3. State Variables/狀態變數
 
-For `n` inferred genes or gates, the ODE state is:
+For `n` inferred genes or gates, the ODE state is a $3n$-dimensional vector:
 
-對於 `n` 個推導出的基因或邏輯閘，ODE 狀態為：
+對於 `n` 個推導出的基因或邏輯閘，ODE 狀態為一個 $3n$ 維向量：
 
 ```text
-y = [mRNA_1 ... mRNA_n, protein_1 ... protein_n]
+y = [mRNA_1 ... mRNA_n, P_immature_1 ... P_immature_n, P_mature_1 ... P_mature_n]
 ```
+
+Where:
+- `mRNA_i` is the mRNA concentration of gene `i` (nM)
+- `P_immature_i` is the immature/unfolded protein concentration of gene `i` (nM)
+- `P_mature_i` is the mature/folded active protein concentration of gene `i` (nM)
+
+其中：
+- `mRNA_i` 為基因 `i` 的 mRNA 濃度 (nM)
+- `P_immature_i` 為基因 `i` 的未成熟/未折疊蛋白質濃度 (nM)
+- `P_mature_i` 為基因 `i` 的已成熟/已折疊活性蛋白質濃度 (nM)
 
 The simulator also records resource-related values over time:
 
@@ -78,12 +88,12 @@ ribosome_occupancy
 burden_nM
 ```
 
-`burden_nM` is a coarse aggregate:
+`burden_nM` is a coarse aggregate of all synthetic species:
 
-`burden_nM` 是一個粗略的聚合值：
+`burden_nM` 是一個包含所有合成物種的粗略聚合值：
 
 ```text
-burden_nM = sum(mRNA) + sum(protein)
+burden_nM = sum(mRNA) + sum(P_immature) + sum(P_mature)
 ```
 
 This is a proxy used for screening, not a measured cellular burden model.
@@ -133,15 +143,33 @@ ODE 動力學為：
 
 ```text
 d_mRNA_i/dt =
-  transcription_rate * regulation_i * rnap_factor
-  - mrna_degradation_rate * mRNA_i
+  transcription_rate * copy_number * regulation_i * rnap_factor
+  - (mrna_degradation_rate + mu) * mRNA_i
 ```
 
 ```text
-d_protein_i/dt =
+d_P_immature_i/dt =
   translation_rate * mRNA_i * ribosome_factor
-  - protein_degradation_rate * protein_i
+  - (protein_degradation_rate + maturation_rate + mu) * P_immature_i
 ```
+
+```text
+d_P_mature_i/dt =
+  maturation_rate * P_immature_i
+  - (protein_degradation_rate + mu) * P_mature_i
+```
+
+Where:
+- `copy_number` ($C$) scales the plasmid-borne promoter resource demand and transcription rates.
+- `mu` ($\mu(t)$) is the dynamic growth rate dilution coupled to free ribosome availability:
+  $$\mu(t) = \mu_{\text{max}} \cdot \frac{R_{\text{free}}}{R_{\text{total}}}$$
+- `maturation_rate` ($k_{\text{mat}}$) represents the first-order protein folding and maturation delay rate.
+
+其中：
+- `copy_number` ($C$) 縮放質體所攜帶的啟動子資源需求與轉錄速率。
+- `mu` ($\mu(t)$) 為動態的生長稀釋率，耦合至游離核糖體比例：
+  $$\mu(t) = \mu_{\text{max}} \cdot \frac{R_{\text{free}}}{R_{\text{total}}}$$
+- `maturation_rate` ($k_{\text{mat}}$) 代表一階蛋白質折疊與成熟延遲速率。
 
 Resource occupancy is used as a warning signal for coarse burden:
 
@@ -152,9 +180,9 @@ rnap_occupancy = 1.0 - rnap_free / rnap_total
 ribosome_occupancy = 1.0 - ribosome_free / ribosome_total
 ```
 
-This resource model is useful for detecting candidates that may demand too much transcriptional or translational capacity. It does not model full cell growth, energy metabolism, amino-acid availability, stress responses, or burden-growth feedback.
+This resource model is useful for detecting candidates that may demand too much transcriptional or translational capacity, and now couples growth dilution dynamically to ribosome occupancy. It does not model full cell division cycle, energy metabolism, amino-acid availability, stress responses, or detailed metabolic feedback.
 
-此資源模型有助於檢測可能需求過多轉錄或翻譯能力的候選方案。它不模擬完整的細胞生長、能量代謝、胺基酸可用性、應激反應或負載-生長反饋。
+此資源模型有助於檢測可能需求過多轉錄或翻譯能力的候選方案，且現在將生長稀釋率與核糖體佔用率進行了動態耦合。它並不模擬完整的細胞分裂週期、能量代謝、胺基酸可用性、應激反應或詳細的代謝反饋。
 
 ## 7. Parameter Assumptions/參數假設
 
@@ -166,19 +194,48 @@ Current default parameters include:
 
 目前的預設參數包括：
 
-- `rnap_total`
-- `ribosome_total`
-- `km_rnap`
-- `km_ribosome`
-- `transcription_rate`
-- `translation_rate`
-- `mrna_degradation_rate`
-- `protein_degradation_rate`
-- `kd`
-- `hill_coefficient`
-- `leak_fraction`
-- `burden_soft_limit`
-- `toxicity_threshold`
+- `rnap_total` (total RNAP concentration / 總 RNAP 濃度, nM)
+- `ribosome_total` (total ribosome concentration / 總核糖體濃度, nM)
+- `km_rnap` (Michaelis constant for RNAP / RNAP 的米氏常數, nM)
+- `km_ribosome` (Michaelis constant for ribosome / 核糖體的米氏常數, nM)
+- `transcription_rate` (transcription rate / 轉錄速率, nM/s)
+- `translation_rate` (translation rate / 翻譯速率, 1/s)
+- `mrna_degradation_rate` (mRNA degradation rate / mRNA 降解速率, 1/s)
+- `protein_degradation_rate` (protein degradation rate / 蛋白質降解速率, 1/s)
+- `maturation_rate` (protein maturation rate / 蛋白質成熟速率, 1/s)
+- `growth_rate_dilution` (maximum growth rate dilution / 最大生長稀釋速率, 1/s)
+- `kd` (dissociation constant / 解離常數, nM)
+- `hill_coefficient` (Hill coefficient / 希爾係數, dimensionless)
+- `leak_fraction` (promoter leak fraction / 啟動子洩漏比例, dimensionless)
+- `burden_soft_limit` (burden penalty threshold / 負載懲罰閾值, nM)
+- `toxicity_threshold` (toxicity threshold / 毒性閾值, nM)
+- `copy_number` (plasmid copy number / 質體複製數, default: 1.0)
+
+Chassis-Specific Defaults:
+DataMinerAgent supports host-specific overrides for two major chassis models:
+- **Escherichia coli** (default):
+  - `rnap_total`: 5000.0 nM
+  - `ribosome_total`: 25000.0 nM
+  - `translation_rate`: 0.045 1/s
+  - `growth_rate_dilution`: 0.0004 1/s
+- **Saccharomyces cerevisiae** (yeast):
+  - `rnap_total`: 3000.0 nM
+  - `ribosome_total`: 120000.0 nM
+  - `translation_rate`: 0.012 1/s
+  - `growth_rate_dilution`: 0.0001 1/s
+
+宿主特異性預設值：
+DataMinerAgent 支援針對兩種主要宿主模型的特異性參數覆蓋：
+- **大腸桿菌 (Escherichia coli)**（預設）：
+  - `rnap_total`: 5000.0 nM
+  - `ribosome_total`: 25000.0 nM
+  - `translation_rate`: 0.045 1/s
+  - `growth_rate_dilution`: 0.0004 1/s
+- **釀酒酵母 (Saccharomyces cerevisiae)**（酵母）：
+  - `rnap_total`: 3000.0 nM
+  - `ribosome_total`: 120000.0 nM
+  - `translation_rate`: 0.012 1/s
+  - `growth_rate_dilution`: 0.0001 1/s
 
 The current unit system is:
 
@@ -288,22 +345,22 @@ The current model does not include:
 
 - complete plasmid sequence or backbone architecture;
   完整的質體序列或骨架架構；
-- origin of replication, selectable marker, copy-number dynamics, or assembly scars;
-  複製起點、篩選標記、複製數動力學或組裝疤痕；
+- origin of replication, selectable marker, dynamic copy-number variance (e.g. noise, segregational instability), or assembly scars (plasmid copy number scaling is modeled statically);
+  複製起點、篩選標記、動態複製數變異如雜訊或分配不均、以及組裝疤痕（質體複製數縮放目前為靜態建模）；
 - promoter-, RBS-, terminator-, or coding-sequence-level design constraints;
   啟動子、RBS、終止子或編碼序列級別的設計約束；
-- host growth, dilution by growth, cell-cycle effects, or global metabolic regulation;
-  宿主生長、生長產生的稀釋、細胞週期效應或全局代謝調節；
-- burden-growth coupling or stress-response feedback;
-  負載-生長耦合或應激反應反饋；
+- host cell division cycle, cell-cycle effects, or global metabolic regulation (dilution by host growth is modeled via ribosome-growth coupling);
+  宿主細胞分裂週期、細胞週期效應或全局代謝調節（宿主生長稀釋目前已透過核糖體-生長耦合進行建模）；
+- stress-response feedback (ribosome-growth dilution coupling is modeled, but complex cellular stress responses are not);
+  應激反應反饋（核糖體-生長稀釋耦合已建模，但複雜的細胞應激反應尚未建模）；
 - DNA supercoiling or local sequence context;
   DNA 超螺旋或本地序列上下文；
 - RNA folding, RNA stability motifs, or transcript processing;
   RNA 折疊、RNA 穩定性基序或轉錄本處理；
 - codon usage, translation initiation context, or ribosome traffic;
   密碼子使用偏好、翻譯起始上下文或核糖體交通（Ribosome traffic）；
-- protein folding, maturation, degradation tags, or active/inactive maturation states;
-  蛋白質折疊、成熟、降解標籤或活性/非活性成熟狀態；
+- detailed protein folding pathways, chaperones, degradation tags, or active/inactive maturation states (modeled via a simplified first-order maturation rate delay);
+  詳細的蛋白質折疊路徑、分子伴侶、降解標籤或活性/非活性成熟狀態（目前透過簡化的一階成熟速率延遲進行建模）；
 - inducer transport, ligand binding, or environmental dynamics;
   誘導物轉運、配體結合或環境動力學；
 - experimentally calibrated toxicity and noise distributions.
@@ -325,10 +382,10 @@ To move from computational candidate ranking toward stronger biological claims, 
   針對啟動子、RBS、編碼區、終止子與克隆約束的序列級檢查；
 - host-specific parameter calibration from literature or experiments;
   來自文獻或實驗的宿主特異性參數校準；
-- plasmid copy-number and growth-dilution dynamics;
-  質體複製數與生長稀釋動力學；
-- burden-growth feedback and toxicity calibration;
-  負載-生長反饋與毒性校準；
+- experimentally calibrated plasmid copy-number and growth-dilution dynamics;
+  經實驗校準的質體複製數與生長稀釋動力學；
+- experimental burden-growth feedback and toxicity calibration;
+  實驗性負載-生長反饋與毒性校準；
 - experimentally measured ON/OFF ratios, response times, noise, burden, and growth effects;
   經實驗測量的 ON/OFF 比率、響應時間、雜訊、負載與生長效應；
 - comparison against known measured genetic circuits;

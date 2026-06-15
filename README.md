@@ -269,6 +269,147 @@ python -m mcp_server.server
 
 See [mcp_server/README.md](mcp_server/README.md) for MCP tools, environment-variable configuration, and focused test commands.
 
+## External Design Import v1
+
+The Streamlit sidebar includes an **External Design Import v1** workspace for
+bringing literature or repository designs into the same canonical `DesignIR`
+representation used by generated candidates.
+
+Supported entry paths:
+
+- guided entry for source, host, inputs, outputs, logic, validation status, and
+  optional biological parts;
+- project JSON draft upload and download;
+- basic GenBank flat-file parsing for explicitly annotated promoter, RBS, CDS,
+  terminator, and regulatory features.
+
+Every imported draft is reviewed before conversion to `DesignIR`. The review
+reports data completeness, evidence quality, applicable evaluation sections,
+missing fields, and validation warnings. Unknown and not-reported values remain
+explicit; they are not silently replaced with assumed biological facts.
+
+Confirmed external designs can be compared with each other or with current
+workflow-generated candidates using `DesignDiff`.
+
+GenBank import does not infer circuit inputs, outputs, Boolean logic,
+experimental validation, backbone completeness, or assembly readiness. These
+fields require user confirmation or additional evidence.
+
+## FastAPI Foundation v1.25
+
+The Streamlit interface and FastAPI adapter now share the same application
+services and local JSON repositories. The Streamlit layout remains unchanged,
+but confirmed external designs persist across processes under
+`outputs/api_data`.
+
+Start the API:
+
+```powershell
+uvicorn api.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+Then open `http://127.0.0.1:8000/docs`.
+
+The versioned `/api/v1` contract currently covers:
+
+- external draft validation and JSON/GenBank import;
+- draft confirmation into `DesignIR`;
+- design listing and retrieval;
+- design comparison and benchmark evaluation;
+- BOM, GenBank, and SBOL3 export.
+
+See [api/README.md](api/README.md) for the endpoint list, response envelope,
+persistence configuration, and current scope boundaries.
+
+## Web Application Foundation v1.5
+
+The FastAPI process also serves a lower-density, multi-page HTML interface:
+
+```text
+http://127.0.0.1:8000/web
+```
+
+Pages include Dashboard, New Design, Runs, External Imports, Design Library,
+Design Detail, and Compare. Streamlit remains available for the denser
+research-oriented inspection interface.
+
+Design workflows run in the background:
+
+```text
+POST /api/v1/runs -> 202 Accepted + run_id
+GET  /api/v1/runs/{run_id}
+GET  /api/v1/runs/{run_id}/events
+```
+
+Human feedback and resume operations are available for runs that pause for
+input. Run metadata, events, results, and external design records persist under
+`outputs/api_data`.
+
+The web and API layers do not accept API keys. Configure LiteLLM/OpenAI
+credentials in the server environment so browser clients cannot accidentally
+persist or expose them.
+
+## Data Foundation v1.6
+
+Confirmed designs are persisted as DesignIR v2 records in
+`outputs/api_data/research.db`. Existing API, HTML, comparison, and export
+consumers continue to receive the compatible v1 representation.
+
+DesignIR v2 separates logical specification, biological context, biological
+parts, regulatory interactions, ordered constructs, plasmid properties,
+field-level provenance, assumptions, validation, extensions, and revision
+metadata.
+
+The SQLite repository creates immutable revisions when design content changes.
+Saving the same content again is idempotent. Existing
+`outputs/api_data/designs/*.json` records are imported once when application
+services start.
+
+```text
+GET /api/v1/designs/{design_id}/ir-v2
+GET /api/v1/designs/{design_id}/revisions
+```
+
+Preview a legacy JSON migration with:
+
+```powershell
+python -m scripts.migrate_designs_v1_to_v2 `
+  outputs/api_data/designs outputs/api_data/research.db --dry-run
+```
+
+Background runs now write `run_manifest.json` beside their metadata. It records
+the redacted request, model and workflow versions, request/result hashes, and
+generated artifact hashes.
+
+## Research Evaluation v1.8
+
+The evaluation layer now exposes explicit, versioned scoring profiles:
+
+- `legacy-weighted@1.0.0` preserves the existing agent workflow score.
+- `research-v1.8@1.8.0` adds seven explainable dimensions: logic function,
+  dynamic behavior, robustness, resource burden, buildability, evidence
+  quality, and data completeness.
+
+Every evaluation includes the profile ID, semantic version, configuration
+hash, dimension scores, weights, and applicability metadata. Scores from
+different versions should not be treated as directly calibrated equivalents.
+
+The bundled `research_smoke_v1@1.0.0` dataset contains synthetic positive and
+negative fixtures. It validates evaluation infrastructure and score direction;
+it is explicitly not a wet-lab validation dataset.
+
+```text
+GET  /api/v1/evaluation/profiles
+GET  /api/v1/benchmarks/datasets
+POST /api/v1/benchmarks/runs
+GET  /api/v1/benchmarks/runs/{benchmark_run_id}
+POST /api/v1/benchmarks/comparisons
+```
+
+The HTML workspace is available at `/web/benchmarks`. Benchmark runs persist
+under `outputs/api_data/benchmark_runs`, with JSON, CSV, and Markdown reports
+under `outputs/api_data/benchmark_reports`.
+
 MCP 工具、環境變數設定與專用測試指令請參閱 [mcp_server/README.md](mcp_server/README.md)。
 
 ## Optional Cello Integration
@@ -376,3 +517,40 @@ Relevant implementation paths:
 - [part_libraries/](part_libraries)
 - [exporters/](exporters)
 - [CHANGELOG.md](CHANGELOG.md)
+
+## Simulation Foundation v1.9
+
+The resource-aware ODE core now exposes content-addressed `SimulationSpec`
+and `SimulationResult` contracts. They record the model version, chassis,
+copy number, truth-table scenarios, solver and Monte Carlo settings,
+configuration hash, parameter-set hash, scenario-set hash, and result hash.
+
+DesignIR v2 can be projected into a simulation specification, run manifests
+retain simulation identifiers, and the API exposes:
+
+- `GET /api/v1/simulation/models`
+- `POST /api/v1/simulations`
+- `GET /api/v1/designs/{design_id}/simulation-spec`
+
+`research-v2-preview@1.9.0` links multidimensional scoring to the v1.9
+simulation contract without changing the existing v1.8 API default.
+Simulation outputs remain computational screening estimates and require
+chassis-specific calibration and wet-lab validation.
+
+## Research Workspace v2.0
+
+v2.0 turns the existing data, evaluation, and simulation foundations into an
+end-to-end research workspace:
+
+- `/api/v2/research/runs` queues reproducible simulation and evaluation jobs.
+- `/web/research` provides a lower-density, step-oriented HTML workspace.
+- Research results export JSON, dimension CSV, Markdown, and a run manifest.
+- Run comparison checks simulation and scoring versions before ranking.
+- Design pages separate overview, constructs, plasmids, evidence, assumptions,
+  and simulation readiness.
+- `GENETIC_CIRCUIT_DATABASE_URL` enables PostgreSQL while SQLite remains the
+  default local repository.
+
+The v1 API remains available for existing clients. v2 research runs use the
+v1.9 ODE model contract and `research-v2-preview@1.9.0` scoring profile until
+future model or scoring versions are explicitly released.

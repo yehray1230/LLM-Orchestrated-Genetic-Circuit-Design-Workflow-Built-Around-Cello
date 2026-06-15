@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from schemas.simulation import SIMULATION_MODEL_VERSION, stable_seed
+
 import numpy as np
 
 from benchmark_suite.base_evaluator import EvaluationResult
@@ -131,13 +133,13 @@ def score_kinetic(candidate: dict[str, Any]) -> EvaluationResult:
 
 
 def _stable_seed(candidate: dict[str, Any], monte_carlo_runs: int, noise_level: float) -> int:
-    seed_text = repr(
-        (
-            candidate.get("verilog", candidate.get("verilog_code", "")),
-            candidate.get("gate_count"),
-            candidate.get("biokinetic_parameters"),
-            monte_carlo_runs,
-            round(float(noise_level), 6),
-        )
+    return stable_seed(
+        {
+            "model_version": SIMULATION_MODEL_VERSION,
+            "verilog": candidate.get("verilog", candidate.get("verilog_code", "")),
+            "gate_count": candidate.get("gate_count"),
+            "biokinetic_parameters": candidate.get("biokinetic_parameters"),
+            "monte_carlo_runs": monte_carlo_runs,
+            "noise_level": round(float(noise_level), 6),
+        }
     )
-    return abs(hash(seed_text)) % (2**32)

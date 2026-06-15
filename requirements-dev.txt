@@ -5,3 +5,4 @@ responses
 mypy
 pydantic
 ruff
+httpx>=0.27

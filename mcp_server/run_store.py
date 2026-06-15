@@ -11,6 +11,11 @@ from typing import Any, Callable
 
 from mcp_server.artifact_writer import DEFAULT_OUTPUT_DIR, write_json
 from mcp_server.serializers import to_jsonable
+from schemas.run_manifest import (
+    create_run_manifest,
+    finalize_run_manifest,
+    run_manifest_from_dict,
+)
 
 
 TERMINAL_STATUSES = {"completed", "needs_human_input", "error", "failed", "cancelled"}
@@ -36,6 +41,9 @@ class RunStore:
         selected_run_id = run_id or f"run_{uuid.uuid4().hex[:12]}"
         run_dir = self.base_dir / selected_run_id
         run_dir.mkdir(parents=True, exist_ok=False)
+        run_manifest_path = run_dir / "run_manifest.json"
+        run_manifest = create_run_manifest(selected_run_id, request)
+        write_json(run_manifest_path, run_manifest)
         metadata = {
             "run_id": selected_run_id,
             "status": "queued",
@@ -46,6 +54,7 @@ class RunStore:
             "request": _redact_request(request),
             "run_dir": str(run_dir.resolve()),
             "result_path": str((run_dir / "result.json").resolve()),
+            "run_manifest_path": str(run_manifest_path.resolve()),
             "error": None,
             "error_type": None,
             "cancellation_requested": False,
@@ -193,6 +202,12 @@ class RunStore:
                     "cancellation_requested": True,
                 }
             )
+            self._finalize_manifest(
+                run_dir,
+                metadata,
+                "cancelled",
+                result,
+            )
         else:
             metadata.update(
                 {
@@ -281,6 +296,7 @@ class RunStore:
                 )
                 if cancellation_was_requested and status in TERMINAL_STATUSES:
                     metadata["message"] = "Cancellation was requested, but the run completed before it could stop."
+                self._finalize_manifest(run_dir, metadata, status, result)
                 self._write_metadata(run_dir, metadata)
             self.append_event(
                 run_id,
@@ -309,6 +325,12 @@ class RunStore:
                         "error_type": "workflow_error",
                     }
                 )
+                self._finalize_manifest(
+                    run_dir,
+                    metadata,
+                    "failed",
+                    error_result,
+                )
                 self._write_metadata(run_dir, metadata)
             self.append_event(run_id, "run", "failed", 1.0, f"Run failed: {exc}")
 
@@ -333,6 +355,31 @@ class RunStore:
             write_json(temp_path, metadata)
             temp_path.replace(metadata_path)
 
+    def _finalize_manifest(
+        self,
+        run_dir: Path,
+        metadata: dict[str, Any],
+        status: str,
+        result: dict[str, Any],
+    ) -> None:
+        manifest_path = run_dir / "run_manifest.json"
+        if not manifest_path.exists():
+            return
+        manifest_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest = finalize_run_manifest(
+            run_manifest_from_dict(manifest_payload),
+            status=status,
+            result=result,
+            started_at=metadata.get("started_at"),
+            finished_at=metadata.get("finished_at"),
+        )
+        write_json(manifest_path, manifest)
+        artifacts = metadata.get("artifacts")
+        if not isinstance(artifacts, dict):
+            artifacts = {}
+        artifacts["run_manifest_json"] = str(manifest_path.resolve())
+        metadata["artifacts"] = artifacts
+
 
 def _public_status(metadata: dict[str, Any]) -> dict[str, Any]:
     return {
@@ -345,6 +392,7 @@ def _public_status(metadata: dict[str, Any]) -> dict[str, Any]:
         "run_dir": metadata.get("run_dir"),
         "workflow_run_dir": metadata.get("workflow_run_dir"),
         "result_path": metadata.get("result_path"),
+        "run_manifest_path": metadata.get("run_manifest_path"),
         "summary": metadata.get("summary", {}),
         "artifacts": metadata.get("artifacts", {}),
         "error": metadata.get("error"),

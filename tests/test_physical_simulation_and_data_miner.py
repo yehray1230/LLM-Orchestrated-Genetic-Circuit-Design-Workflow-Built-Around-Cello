@@ -311,3 +311,95 @@ def test_workflow_remains_compatible_without_data_miner() -> None:
     assert state.failed_attempts[0]["error_type"] == "PART_ERROR"
     assert "orthogonality_score" in state.failed_attempts[0]
     assert "cello_buildable" in state.failed_attempts[0]
+
+def test_class_1_biological_upgrades_maturation_and_dynamic_growth() -> None:
+    from tools.ode_simulator import ResourceAwareSimulation, WarmStartResourceSolver
+    import numpy as np
+
+    signals = {"A": "input", "Y": "output"}
+    deps = {"Y": ("buf", ["A"])}
+    params = {
+        "rnap_total": 5000.0,
+        "ribosome_total": 20000.0,
+        "km_rnap": 1000.0,
+        "km_ribosome": 5000.0,
+        "transcription_rate": 0.5,
+        "translation_rate": 0.2,
+        "mrna_degradation_rate": 0.005,
+        "protein_degradation_rate": 0.001,
+        "growth_rate_dilution": 0.0004,
+        "maturation_rate": 0.001,
+        "kd": 10.0,
+        "hill_coefficient": 2.0,
+        "leak_fraction": 0.01,
+        "input_A": 200.0,
+    }
+    solver = WarmStartResourceSolver(rnap_free=5000.0, ribosome_free=20000.0)
+    sim = ResourceAwareSimulation(signals=signals, deps=deps, params=params, solver=solver)
+
+    assert len(sim.dynamic_signals) == 1
+
+    # 3-state vector: [mRNA_Y, protein_immature_Y, protein_mature_Y]
+    y0 = np.array([0.0, 0.0, 0.0])
+    dy = sim.rhs(0.0, y0)
+    assert len(dy) == 3
+    assert dy[0] > 0.0
+    assert dy[1] == 0.0
+    assert dy[2] == 0.0
+
+    # With mRNA=10, immature=50, mature=0
+    # dy[2] (mature) should be k_mat * immature - (degr + mu) * mature
+    # Since mature=0, dy[2] should be 0.001 * 50 = 0.05
+    y1 = np.array([10.0, 50.0, 0.0])
+    dy1 = sim.rhs(0.0, y1)
+    assert dy1[2] == 0.05
+
+
+def test_phase_2_upgrades_copy_number_and_chassis_spec() -> None:
+    from tools.ode_simulator import ResourceAwareSimulation, WarmStartResourceSolver
+    from agents.data_miner_agent import DataMinerAgent
+    import numpy as np
+
+    # 1. Test chassis-specific parameters in DataMinerAgent
+    state = _state_with_topologies([{"gate_count": 2, "chassis": "Saccharomyces cerevisiae"}])
+    state.host_organism = "Saccharomyces cerevisiae"
+    result = DataMinerAgent().run(state)
+    parameters = result.tree_nodes["root"].candidate_topologies[0]["biokinetic_parameters"]["parameters"]
+
+    assert parameters["rnap_total"]["value"] == 3000.0
+    assert parameters["ribosome_total"]["value"] == 120000.0
+    assert parameters["translation_rate"]["value"] == 0.012
+    assert parameters["rnap_total"]["source"] == "chassis_specific_default"
+
+    # 2. Test copy number scaling in ODE equations
+    signals = {"A": "input", "Y": "output"}
+    deps = {"Y": ("buf", ["A"])}
+
+    params1 = {
+        "rnap_total": 5000.0,
+        "ribosome_total": 20000.0,
+        "km_rnap": 1000.0,
+        "km_ribosome": 5000.0,
+        "transcription_rate": 0.5,
+        "translation_rate": 0.2,
+        "mrna_degradation_rate": 0.005,
+        "protein_degradation_rate": 0.001,
+        "growth_rate_dilution": 0.0004,
+        "maturation_rate": 0.001,
+        "kd": 10.0,
+        "hill_coefficient": 2.0,
+        "leak_fraction": 0.01,
+        "input_A": 200.0,
+        "copy_number": 1.0,
+    }
+    solver1 = WarmStartResourceSolver(rnap_free=5000.0, ribosome_free=20000.0)
+    sim1 = ResourceAwareSimulation(signals=signals, deps=deps, params=params1, solver=solver1)
+    dy1 = sim1.rhs(0.0, np.array([0.0, 0.0, 0.0]))
+
+    params10 = params1.copy()
+    params10["copy_number"] = 10.0
+    solver10 = WarmStartResourceSolver(rnap_free=5000.0, ribosome_free=20000.0)
+    sim10 = ResourceAwareSimulation(signals=signals, deps=deps, params=params10, solver=solver10)
+    dy10 = sim10.rhs(0.0, np.array([0.0, 0.0, 0.0]))
+
+    assert dy10[0] > dy1[0]

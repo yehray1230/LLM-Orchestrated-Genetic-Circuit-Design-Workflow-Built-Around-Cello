@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Run {{ run.run_id }}{% endblock %}
+{% block content %}
+{% if not terminal %}<div data-auto-refresh="true"></div>{% endif %}
+<header class="page-header">
+  <h1>{{ run.run_id }}</h1>
+  <p class="muted">背景設計任務的精簡狀態與事件時間線。</p>
+</header>
+<section class="grid grid-3">
+  <article class="card"><span class="muted">Status</span><div class="metric">{{ run.status }}</div></article>
+  <article class="card"><span class="muted">Stage</span><div class="metric">{{ run.stage or "-" }}</div></article>
+  <article class="card"><span class="muted">Progress</span><div class="metric">{{ "%.0f"|format((run.progress or 0) * 100) }}%</div></article>
+</section>
+<div class="progress" style="margin:18px 0"><span style="width:{{ (run.progress or 0) * 100 }}%"></span></div>
+{% if run.error %}<div class="error-box">{{ run.error }}</div>{% endif %}
+{% if run.status == "needs_human_input" %}
+<section class="grid grid-2" style="margin-top:18px">
+  <article class="card">
+    <h2>提交人工限制</h2>
+    <form method="post" action="/web/runs/{{ run.run_id }}/feedback">
+      <label>限制條件（每行一項）
+        <textarea name="constraints" required></textarea>
+      </label>
+      <label>處理方式
+        <select name="action"><option value="repair">Repair</option><option value="exploitation">Exploitation</option><option value="fallback">Fallback</option></select>
+      </label>
+      <label>追加預算<input type="number" name="extra_budget" min="1" max="100" value="2"></label>
+      <button class="button" type="submit">保存回饋</button>
+    </form>
+  </article>
+  <article class="card">
+    <h2>繼續執行</h2>
+    <p class="muted">先提交回饋，再建立新的 child run。</p>
+    <form method="post" action="/web/runs/{{ run.run_id }}/resume">
+      <label>模型名稱（選填）<input name="model_name"></label>
+      <button class="button" type="submit">Resume</button>
+    </form>
+  </article>
+</section>
+{% endif %}
+<section class="grid grid-2" style="margin-top:18px">
+  <article class="card">
+    <h2>事件時間線</h2>
+    {% if events %}
+    <table>
+      <tr><th>#</th><th>Stage</th><th>Status</th><th>Message</th></tr>
+      {% for event in events %}
+      <tr><td>{{ event.event_id }}</td><td>{{ event.stage }}</td><td>{{ event.status }}</td><td>{{ event.message }}</td></tr>
+      {% endfor %}
+    </table>
+    {% else %}<p class="muted">尚無事件。</p>{% endif %}
+  </article>
+  <article class="card">
+    <h2>結果摘要</h2>
+    {% if result %}
+      <pre>{{ result | tojson(indent=2) }}</pre>
+    {% else %}
+      <p class="muted">任務完成後顯示結果。</p>
+    {% endif %}
+  </article>
+</section>
+{% endblock %}

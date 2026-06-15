@@ -23,6 +23,8 @@ class BuilderProposal(BaseModel):
     logic_blueprint: str
     verilog_draft: str
     translator_directives: list[str] = Field(default_factory=list)
+    copy_number: int | None = None
+    chassis: str | None = None
 
 
 class BuilderOutput(BaseModel):
@@ -55,6 +57,8 @@ Design constraints:
 - `depth_optimization` must minimize logic depth and signal propagation delay.
 - `robustness_strategy` must prioritize biological part compatibility, toxicity avoidance, and dynamic robustness while remaining Cello-compatible.
 - Each strategy must include a truth table or logic matrix and a raw Verilog draft.
+- Include "copy_number" (integer, e.g., 5 for low-copy like pSC101, 15 for medium-copy like p15A, 50 for high-copy like ColE1) based on user metabolic load requirements.
+- Include "chassis" (string, e.g. "Escherichia coli" or "Saccharomyces cerevisiae") reflecting the target host.
 - Avoid sequential logic, delay syntax, clocks, memory elements, or Verilog constructs Cello cannot map.
 - If you use motifs such as pulse-like behavior or feed-forward logic, describe them in a way the Translator can preserve as structural combinational logic.
 - Include translator directives when a design requires structural instantiation rather than a simplified Boolean expression.
@@ -74,7 +78,9 @@ Required schema:
     ],
     "logic_blueprint": "Y = A AND NOT B",
     "verilog_draft": "module genetic_circuit(input A, input B, output Y); wire not_b; not(not_b, B); and(Y, A, not_b); endmodule",
-    "translator_directives": ["MINIMIZE_GATE_COUNT"]
+    "translator_directives": ["MINIMIZE_GATE_COUNT"],
+    "copy_number": 15,
+    "chassis": "Escherichia coli"
   }},
   "depth_optimization": {{
     "strategy_name": "Depth Optimization",

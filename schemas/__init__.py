@@ -16,6 +16,37 @@ from schemas.design_operations import (
     replace_part_immutable,
     validate_replacement,
 )
+from schemas.import_draft import (
+    DraftInteraction,
+    DraftPart,
+    FieldEvidence,
+    ImportDraft,
+    ImportValidation,
+    import_draft_from_json,
+    import_draft_to_design_ir,
+    validate_import_draft,
+)
+from schemas.design_ir_v2 import (
+    DESIGN_IR_V2_SCHEMA_VERSION,
+    AttributedValue,
+    BiologicalContext,
+    BiologicalPartV2,
+    ConstructPart,
+    ConstructV2,
+    DesignAssumption,
+    DesignIRV2,
+    DesignSpecification,
+    FieldProvenance,
+    PlasmidV2,
+    design_ir_v2_from_dict,
+)
+from schemas.design_migrations import (
+    MigrationResult,
+    design_ir_v2_to_v1_payload,
+    migrate_design_ir_v1_to_v2,
+    migrate_design_payload_to_v2,
+)
+from schemas.run_manifest import RunManifest
 
 __all__ = [
     "BiologicalPart",
@@ -34,4 +65,29 @@ __all__ = [
     "ReplacementValidation",
     "replace_part_immutable",
     "validate_replacement",
+    "DraftInteraction",
+    "DraftPart",
+    "FieldEvidence",
+    "ImportDraft",
+    "ImportValidation",
+    "import_draft_from_json",
+    "import_draft_to_design_ir",
+    "validate_import_draft",
+    "DESIGN_IR_V2_SCHEMA_VERSION",
+    "AttributedValue",
+    "BiologicalContext",
+    "BiologicalPartV2",
+    "ConstructPart",
+    "ConstructV2",
+    "DesignAssumption",
+    "DesignIRV2",
+    "DesignSpecification",
+    "FieldProvenance",
+    "PlasmidV2",
+    "design_ir_v2_from_dict",
+    "MigrationResult",
+    "design_ir_v2_to_v1_payload",
+    "migrate_design_ir_v1_to_v2",
+    "migrate_design_payload_to_v2",
+    "RunManifest",
 ]

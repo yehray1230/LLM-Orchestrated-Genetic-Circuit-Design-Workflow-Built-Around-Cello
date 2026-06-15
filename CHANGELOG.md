@@ -1,5 +1,83 @@
 # Changelog
 
+## 2026-06-14 - v2.0 Biological Realism Upgrades
+
+- Upgraded the resource-aware ODE simulator to model protein maturation and folding delay via a three-state system ($mRNA_i$, $P_{\text{immature}, i}$, and $P_{\text{mature}, i}$).
+- Coupled dilution from host cellular growth dynamically to available ribosomes ($\mu(t) = \mu_{\text{max}} \cdot R_{\text{free}}/R_{\text{total}}$), introducing negative feedback on circuit protein accumulation.
+- Integrated plasmid copy number scaling to modulate promoter transcription rates and transcriptional resources demand statically.
+- Configured chassis-specific biokinetic defaults for *Escherichia coli* and *Saccharomyces cerevisiae* (yeast) to automatically adapt simulation to the selected host.
+- Enhanced `BuilderProposal` schemas, prompts, and `CelloWrapper` mapping paths to support and propagate optional `copy_number` and `chassis` specifications.
+- Added extensive test coverage for delay-induced oscillation, maturation decay, copy-number scaling, and host-specific behavior under regression controls.
+
+## 2026-06-14 - v1.8 Research Evaluation
+
+- Added versioned scoring profiles with stable configuration hashes.
+- Added an evidence-aware multidimensional research profile covering logic,
+  dynamics, robustness, burden, buildability, evidence, and completeness.
+- Preserved the legacy weighted score for existing workflow compatibility.
+- Added versioned benchmark dataset manifests with content hashes,
+  provenance, expected outcomes, and positive/negative cases.
+- Added reproducible benchmark execution, expectation checks, persisted run
+  history, and cross-run ranking.
+- Added JSON, CSV, and Markdown benchmark reports with explicit research claim
+  boundaries.
+- Added evaluation profile, dataset, benchmark run, and comparison API
+  endpoints plus a server-rendered Benchmark workspace.
+
+## 2026-06-14 - v1.6 Data Foundation
+
+- Added DesignIR v2 with separated specification, biological context,
+  constructs, plasmids, field provenance, and explicit assumptions.
+- Added validated v1-to-v2 payload migration and a v2-to-v1 compatibility
+  projection for existing API, UI, comparison, and export consumers.
+- Replaced confirmed-design JSON persistence with a transactional SQLite
+  repository while retaining JSON import/export and draft storage.
+- Added database schema initialization, content hashes, immutable design
+  revisions, migration audit records, and legacy JSON ingestion.
+- Added a dry-run capable batch migration command.
+- Added reproducible run manifests with redacted requests, model/workflow
+  metadata, result hashes, and artifact SHA-256 digests.
+- Added read-only DesignIR v2 and revision-history endpoints.
+
+## 2026-06-14 - v1.5 Web Application Foundation
+
+- Added persistent background workflow runs to the shared application service.
+- Added run create/list/status/events/result/artifacts/cancel/feedback/resume
+  endpoints under `/api/v1`.
+- Added validated run identifiers before filesystem-backed run-store access.
+- Added a server-rendered Jinja2 interface with Dashboard, New Design, Runs,
+  External Imports, Design Library, Design Detail, and Compare pages.
+- Added low-density run progress and event views with local polling.
+- Kept Streamlit available as the detailed research interface.
+- API and HTML forms do not accept provider API keys; server environment
+  variables remain the credential boundary.
+
+## 2026-06-14 - v1.25 API Foundation
+
+- Added shared application services for imports, designs, comparisons,
+  benchmark evaluation, and exports.
+- Added atomic local JSON repositories with validated record IDs.
+- Added versioned FastAPI endpoints under `/api/v1` and OpenAPI documentation.
+- Added persistent external-design drafts and confirmed `DesignIR` records.
+- Updated the Streamlit external-import workflow to use the same application
+  services as the API without changing the page layout.
+- Added API contract, persistence, path traversal, comparison, evaluation, and
+  export tests.
+- Long-running LLM workflows remain outside the synchronous API until a
+  persistent background-run contract is implemented.
+
+## 2026-06-13
+
+- Added external-design import v1 with guided literature entry, JSON draft
+  upload/download, and basic GenBank feature parsing.
+- Added field-level evidence records, import completeness, evidence quality,
+  validation warnings, and applicable evaluation sections.
+- Added review-before-import conversion from `ImportDraft` to `DesignIR`.
+- Added comparison between confirmed external designs and workflow-generated
+  candidates through the existing `DesignDiff` model.
+- GenBank import preserves reported sequence annotations but does not infer
+  Boolean logic, inputs, outputs, or experimental validation.
+
 ## 2026-06-07
 
 - Added persisted MCP run events, stage progress, cursor-based event queries, and progress summaries.
@@ -8,6 +86,15 @@
   immutable part replacement, revision diff, and BOM/GenBank/SBOL3 export tools.
 - Hardened concurrent run metadata writes with re-entrant locking and unique atomic temp files.
 # 變更紀錄
+
+## 2026-06-14 - v2.0 生物學合理性升級
+
+- 升級資源感知 ODE 模擬器，以三狀態系統 ($mRNA_i$、未成熟蛋白質 $P_{\text{immature}, i}$ 與成熟蛋白質 $P_{\text{mature}, i}$) 來建模蛋白質成熟和折疊延遲。
+- 將宿主細胞生長產生的稀釋率動態耦合至游離核糖體比例 ($\mu(t) = \mu_{\text{max}} \cdot R_{\text{free}}/R_{\text{total}}$)，為電路蛋白質積累引入負反饋。
+- 整合質體複製數縮放，以靜態方式調節質體所攜帶之啟動子資源需求與轉錄速率。
+- 為大腸桿菌 (*Escherichia coli*) 與釀酒酵母 (*Saccharomyces cerevisiae*) 配置宿主特異性生物動力學預設值，自動根據所選宿主調整模擬。
+- 增強 `BuilderProposal` schema、提示詞與 `CelloWrapper` 映射路徑，以支援並傳遞可選的 `copy_number` 與 `chassis` 規格。
+- 針對延遲誘導震盪、成熟衰變、複製數縮放以及宿主特異性行為新增廣泛的測試覆蓋，並置於回歸控制下。
 
 ## 2026-06-06 - Design Representation and Exchange Formats
 ## 2026-06-06 - 設計表示與交換格式
@@ -62,3 +149,15 @@
 
 - Added focused tests for DesignIR, Cello artifact persistence and parsing, part libraries, immutable replacement, DesignDiff, BOM, GenBank, and SBOL3.
 - 新增 DesignIR、Cello artifact 保存與解析、元件庫、不可變替換、DesignDiff、BOM、GenBank 與 SBOL3 的測試。
+# v2.0.0
+
+- Added `/api/v2` research-run, result, artifact, cancellation, and comparison
+  endpoints.
+- Added asynchronous simulation plus multidimensional evaluation using the
+  persistent `RunStore`.
+- Added JSON, CSV, Markdown, and run-manifest research outputs.
+- Added a paginated Jinja research workspace and expanded DesignIR v2 detail
+  views for constructs, plasmids, evidence, assumptions, and simulation.
+- Added version-aware research comparison.
+- Added optional PostgreSQL DesignIR and revision repository support through
+  `GENETIC_CIRCUIT_DATABASE_URL`; SQLite remains the default.

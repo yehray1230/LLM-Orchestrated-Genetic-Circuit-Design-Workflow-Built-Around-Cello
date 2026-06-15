@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Design Library{% endblock %}
+{% block content %}
+<header class="page-header">
+  <h1>設計資料庫</h1>
+  <p class="muted">已確認並持久化的外部或計算設計。</p>
+</header>
+<article class="card">
+  {% if designs %}
+  <table>
+    <tr><th>Name</th><th>Inputs</th><th>Outputs</th><th>Parts</th><th>Validation</th></tr>
+    {% for design in designs %}
+    <tr>
+      <td><a href="/web/designs/{{ design.design_id }}">{{ design.name }}</a><br><span class="muted">{{ design.design_id }}</span></td>
+      <td>{{ design.inputs|join(", ") }}</td>
+      <td>{{ design.outputs|join(", ") }}</td>
+      <td>{{ design.parts|length }}</td>
+      <td>{{ design.validation_status.experimental_validation or design.validation_status.logic }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">尚無已確認設計。從 External Imports 建立第一筆資料。</p>
+  {% endif %}
+</article>
+{% endblock %}

@@ -64,8 +64,8 @@ The current prototype cannot:
   證明宿主相容性、生物安全或法規符合性。
 - Select experimentally characterized parts reliably unless appropriate data are provided.
   除非提供適當的數據，否則無法可靠地選擇經實驗表徵的元件。
-- Account for all relevant biological mechanisms, such as host growth, copy number, burden-growth feedback, RNA folding, codon usage, protein maturation, and toxicity feedback.
-  考量所有相關的生物學機制，例如宿主生長、複製數、負載-生長反饋、RNA 折疊、密碼子使用偏好、蛋白質成熟以及毒性反饋。
+- Account for all relevant biological mechanisms, such as detailed/dynamic host growth, dynamic copy-number variation, experimental toxicity calibration, RNA folding, and codon usage. Note: simplified copy-number scaling, first-order protein maturation delay, and ribosome-coupled growth dilution are now modeled.
+  考量所有相關的生物學機制，例如詳細/動態的宿主生長、動態複製數變異、實驗毒性校準、RNA 折疊以及密碼子使用偏好。註：目前已建模簡化質體複製數縮放、一階蛋白質成熟延遲以及與游離核糖體耦合的生長稀釋。
 
 These limitations are expected for the current stage of the project. The system should be treated as a computational design-assistance prototype, not as an automated biological-design platform.
 

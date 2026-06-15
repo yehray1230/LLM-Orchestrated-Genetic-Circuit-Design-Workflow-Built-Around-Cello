@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Research Workspace{% endblock %}
+{% block content %}
+<header class="page-header split-header">
+  <div><span class="eyebrow">v2.0</span><h1>Research Workspace</h1>
+  <p class="muted">Configure, run, evaluate, compare, and export reproducible simulations.</p></div>
+  <a class="button secondary" href="/web/research/compare">Compare runs</a>
+</header>
+
+<section class="workspace-steps">
+  <span class="active">1 Design</span><span>2 Simulation</span>
+  <span>3 Evaluation</span><span>4 Compare</span><span>5 Report</span>
+</section>
+
+<section class="grid grid-2 section-space">
+  <article class="card">
+    <h2>Start research run</h2>
+    <form method="post" action="/web/research/runs">
+      <label>Stored design
+        <select name="design_id"><option value="">Direct topology</option>
+        {% for design in designs %}<option value="{{ design.design_id }}">{{ design.name }}</option>{% endfor %}</select>
+      </label>
+      <details>
+        <summary>Direct topology input</summary>
+        <label>Verilog<textarea name="verilog" placeholder="module c(input A, output Y); assign Y = A; endmodule"></textarea></label>
+        <label>Truth table JSON<textarea name="truth_table_json" placeholder='[{"A":0,"Y":0},{"A":1,"Y":1}]'></textarea></label>
+      </details>
+      <div class="form-grid">
+        <label>Copy number<input type="number" name="copy_number" value="1" min="0.1" step="0.1"></label>
+        <label>Simulation time (s)<input type="number" name="simulation_time" value="600" min="1"></label>
+        <label>Samples<input type="number" name="sample_count" value="80" min="2"></label>
+        <label>Monte Carlo runs<input type="number" name="monte_carlo_samples" value="1" min="1"></label>
+        <label>Noise fraction<input type="number" name="noise_fraction" value="0.15" min="0" step="0.01"></label>
+        <label>Random seed<input type="number" name="random_seed" placeholder="Automatic stable seed" min="0"></label>
+      </div>
+      <label>Evaluation profile<select name="profile_id">
+        {% for profile in profiles %}<option value="{{ profile.profile_id }}" {{ "selected" if profile.profile_id == "research-v2-preview" else "" }}>{{ profile.name }} @ {{ profile.version }}</option>{% endfor %}
+      </select></label>
+      <button class="button" type="submit">Queue research run</button>
+    </form>
+  </article>
+  <article class="card">
+    <h2>Model boundary</h2>
+    {% for model in models %}
+    <dl class="definition-list">
+      <dt>Model</dt><dd>{{ model.model_id }} @ {{ model.version }}</dd>
+      <dt>State</dt><dd>{{ model.state_model }}</dd>
+      <dt>Status</dt><dd><span class="badge">{{ model.status }}</span></dd>
+    </dl>
+    {% endfor %}
+    <div class="warning-box">Results are computational screening evidence. They do not establish wet-lab viability.</div>
+  </article>
+</section>
+
+<section class="card section-space">
+  <div class="split-header"><div><h2>Recent research runs</h2><p class="muted">Background tasks persist manifests and reports.</p></div></div>
+  <table><tr><th>Run</th><th>Status</th><th>Progress</th><th>Created</th></tr>
+  {% for run in runs %}<tr><td><a href="/web/research/runs/{{ run.run_id }}">{{ run.run_id }}</a></td><td><span class="badge">{{ run.status }}</span></td><td>{{ "%.0f"|format(run.progress * 100) }}%</td><td>{{ run.created_at }}</td></tr>
+  {% else %}<tr><td colspan="4" class="muted">No research runs yet.</td></tr>{% endfor %}</table>
+</section>
+{% endblock %}

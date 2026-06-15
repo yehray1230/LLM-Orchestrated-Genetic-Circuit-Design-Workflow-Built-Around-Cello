@@ -96,6 +96,16 @@ def _input_scenario(topology: dict[str, Any]) -> dict[str, Any]:
     scenario = topology.get("input_scenario")
     if isinstance(scenario, dict):
         return scenario
+    simulation_spec = topology.get("simulation_spec")
+    if isinstance(simulation_spec, dict):
+        scenarios = simulation_spec.get("scenarios")
+        return {
+            "scenario_id": "simulation_spec",
+            "input_mode": "truth_table",
+            "description": "Scenarios were read from the versioned SimulationSpec.",
+            "simulated_cases": scenarios if isinstance(scenarios, list) else [],
+            "missing_cases": [],
+        }
     return {
         "scenario_id": "default_step",
         "input_mode": "default_step",
@@ -277,7 +287,7 @@ def _model_limitations() -> list[str]:
     return [
         "The ODE model is a reduced resource-aware screening model, not a calibrated in vivo prediction.",
         "Output protein values are arbitrary units unless explicitly calibrated.",
-        "The model does not fully capture plasmid copy number, host growth, toxicity feedback, maturation delay, codon usage, or degradation tags unless those mechanisms are explicitly encoded.",
+        "Copy number, growth dilution, and maturation are simplified approximations; toxicity feedback, codon usage, degradation tags, and condition-specific calibration remain incomplete.",
     ]
 
 

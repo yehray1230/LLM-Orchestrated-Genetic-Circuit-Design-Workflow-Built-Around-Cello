@@ -55,6 +55,20 @@ class CelloWrapper:
         else:
             topologies = [self._run_external_cello(index, code) for index, code in enumerate(valid_codes)]
 
+        proposals = node.logic_proposals if node else state.logic_proposals
+        for i, topo in enumerate(topologies):
+            copy_number = 1
+            chassis = state.host_organism
+            if proposals and i < len(proposals):
+                try:
+                    data = json.loads(proposals[i])
+                    copy_number = int(data.get("copy_number", 1))
+                    chassis = str(data.get("chassis") or state.host_organism)
+                except Exception:
+                    pass
+            topo["copy_number"] = copy_number
+            topo["chassis"] = chassis
+
         if node:
             node.candidate_topologies = topologies
         state.candidate_topologies = topologies

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Compare Research Runs{% endblock %}
+{% block content %}
+<header class="page-header"><span class="eyebrow">v2.0 comparison</span><h1>Compare Research Runs</h1><p class="muted">Only runs with matching model and scoring versions are directly comparable.</p></header>
+<article class="card">
+  <form method="get" action="/web/research/compare">
+    <label>Run IDs, comma separated<input name="runs" value="{{ selected|join(',') }}" placeholder="research_abc,research_def"></label>
+    <button class="button" type="submit">Compare</button>
+  </form>
+</article>
+{% if error %}<div class="error-box section-space">{{ error }}</div>{% endif %}
+{% if comparison %}
+{% if comparison.warning %}<div class="warning-box section-space">{{ comparison.warning }}</div>{% endif %}
+<article class="card section-space"><h2>Ranked results</h2>
+<table><tr><th>Rank</th><th>Run</th><th>Score</th><th>Grade</th><th>Model</th><th>Scoring</th></tr>
+{% for item in comparison.ranked_runs %}<tr><td>{{ item.rank }}</td><td><a href="/web/research/runs/{{ item.research_run_id }}">{{ item.research_run_id }}</a></td><td>{{ "%.3f"|format(item.score) }}</td><td>{{ item.grade }}</td><td>{{ item.model_version }}</td><td>{{ item.scoring_version }}</td></tr>{% endfor %}
+</table></article>
+{% endif %}
+<article class="card section-space"><h2>Available completed runs</h2>
+{% for run in runs if run.status == "completed" %}<code>{{ run.run_id }}</code><br>{% else %}<p class="muted">No completed runs.</p>{% endfor %}</article>
+{% endblock %}
