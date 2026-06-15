@@ -63,6 +63,7 @@ from schemas.simulation import (
     SIMULATION_MODEL_VERSION,
     simulation_spec_from_design_ir_v2,
 )
+from tools.assembly_planner import create_assembly_plan
 from tools.ode_simulator import BatchODESimulator
 
 
@@ -422,6 +423,70 @@ class PlasmidAssemblyService:
         )
 
 
+class AssemblyPlanningService:
+    def __init__(
+        self,
+        assemblies: PlasmidAssemblyService,
+        backbones: BackboneRegistryService,
+    ):
+        self.assemblies = assemblies
+        self.backbones = backbones
+
+    def plan(
+        self,
+        design_id: str,
+        *,
+        plasmid_id: str,
+        backbone_id: str,
+        backbone_version: str,
+        insertion_region_id: str,
+        insertion_start: int,
+        insertion_end: int,
+        method: str,
+        restriction_enzymes: list[str] | None = None,
+        gibson_overlap_length: int = 25,
+        golden_gate_enzyme: str = "BsaI",
+        golden_gate_overhangs: list[str] | None = None,
+    ) -> dict[str, Any]:
+        backbone = self.backbones.get(backbone_id, backbone_version)
+        if backbone is None:
+            raise ValueError(
+                f"Unknown registered backbone: {backbone_id}@{backbone_version}"
+            )
+        assembly = self.assemblies.assemble(
+            design_id,
+            plasmid_id=plasmid_id,
+            backbone_id=backbone_id,
+            backbone_version=backbone_version,
+            insertion_region_id=insertion_region_id,
+            insertion_start=insertion_start,
+            insertion_end=insertion_end,
+            assembly_method="direct_insertion",
+        )
+        if not assembly.ok:
+            return {
+                "ok": False,
+                "assembly": assembly.to_dict(),
+                "plan": None,
+            }
+        plan = create_assembly_plan(
+            assembly,
+            backbone,
+            method=method,
+            insertion_start=insertion_start,
+            insertion_end=insertion_end,
+            restriction_enzymes=restriction_enzymes,
+            gibson_overlap_length=gibson_overlap_length,
+            golden_gate_enzyme=golden_gate_enzyme,
+            golden_gate_overhangs=golden_gate_overhangs,
+        )
+        return {
+            "ok": not plan.blockers,
+            "assembly": assembly.to_dict(),
+            "plan": plan.to_dict(),
+        }
+
+
 class RunService:
     def __init__(self, run_store: RunStore):
         self.run_store = run_store
@@ -517,6 +582,7 @@ class ApplicationServices:
     exports: ExportService
     backbones: BackboneRegistryService
     plasmid_assemblies: PlasmidAssemblyService
+    assembly_plans: AssemblyPlanningService
     runs: RunService
 
     @property
@@ -537,6 +603,7 @@ def create_application_services(
     run_store = RunStore(base_dir=selected / "runs")
     simulation_service = SimulationService()
     backbones = BackboneRegistryService(backbone_repository)
+    plasmid_assemblies = PlasmidAssemblyService(designs, backbones)
     research_run_store = RunStore(
         base_dir=selected / "research_runs",
         max_workers=2,
@@ -558,7 +625,11 @@ def create_application_services(
         ),
         exports=ExportService(designs),
         backbones=backbones,
-        plasmid_assemblies=PlasmidAssemblyService(designs, backbones),
+        plasmid_assemblies=plasmid_assemblies,
+        assembly_plans=AssemblyPlanningService(
+            plasmid_assemblies,
+            backbones,
+        ),
         runs=RunService(run_store),
     )
 

@@ -541,6 +541,33 @@ This is a sequence-complete computational assembly preview. Gibson overlap
 arms, primers, restriction-fragment planning, codon optimization, and expert
 experimental review remain outside this first version.
 
+### Sequence-level assembly planning
+
+The second assembly stage is available through:
+
+```text
+POST /api/v2/designs/{design_id}/assembly-plans
+```
+
+It first runs the trusted-backbone and part-evidence checks, then produces a
+method-specific plan with a shared fragment, junction, scar, digest, blocker,
+and tool-version schema.
+
+- Restriction analysis uses Biopython enzyme definitions to report cut
+  positions and expected linear or circular fragment sizes.
+- Restriction cloning selects enzymes that cut the backbone core exactly once
+  and leave the insert uncut.
+- Gibson planning creates overlap-bearing backbone and insert fragments,
+  checks forward and reverse-complement overlap uniqueness, and validates
+  circular products with pydna.
+- Golden Gate planning supports BsaI and BsmBI, blocks internal Type IIS sites,
+  validates overhang uniqueness and directionality, records retained fusion
+  scars, and validates digestion/ligation products with pydna.
+
+These plans are computational construction proposals. Primer design,
+oligonucleotide ordering, reaction conditions, and experimental review are
+still required.
+
 Relevant implementation paths:
 
 - [schemas/design_ir.py](schemas/design_ir.py)

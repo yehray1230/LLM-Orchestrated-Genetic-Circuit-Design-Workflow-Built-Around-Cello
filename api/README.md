@@ -45,6 +45,7 @@ POST /api/v2/backbones
 GET  /api/v2/backbones
 GET  /api/v2/backbones/{backbone_id}/versions/{version}
 POST /api/v2/designs/{design_id}/plasmid-assemblies
+POST /api/v2/designs/{design_id}/assembly-plans
 
 POST /api/v1/runs
 GET  /api/v1/runs

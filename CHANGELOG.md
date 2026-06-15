@@ -18,6 +18,17 @@
   `assembly_check_passed`.
 - The new path does not yet design Gibson overlaps, primers, restriction
   fragments, or codon-optimized coding sequences.
+- Added a shared sequence-level assembly-plan model for fragments, junctions,
+  scars, restriction digests, blockers, and tool provenance.
+- Added complete Biopython restriction-site and digest-fragment analysis for
+  linear inserts and circular backbone/product molecules.
+- Added Gibson fragment planning, overlap uniqueness checks, and pydna
+  circular-product validation.
+- Added Golden Gate planning for BsaI/BsmBI with internal Type IIS site
+  blocking, overhang directionality checks, fusion-scar reporting, and pydna
+  digestion/ligation validation.
+- Added restriction-cloning enzyme-pair selection and
+  `POST /api/v2/designs/{design_id}/assembly-plans`.
 
 ## 2026-06-14 - v2.0 Biological Realism Upgrades
 

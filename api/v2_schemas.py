@@ -86,3 +86,40 @@ class BackboneRegistrationRequest(BaseModel):
     insertion_regions: list[BackboneRegionRequest] = Field(min_length=1)
     essential_regions: list[BackboneRegionRequest] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class AssemblyPlanRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    plasmid_id: str = Field(min_length=1, max_length=128)
+    backbone_id: str = Field(min_length=1, max_length=128)
+    backbone_version: str = Field(min_length=1, max_length=64)
+    insertion_region_id: str = Field(min_length=1, max_length=128)
+    insertion_start: int = Field(ge=0)
+    insertion_end: int = Field(ge=0)
+    method: str = Field(
+        pattern=r"^(restriction_cloning|gibson|golden_gate)$"
+    )
+    restriction_enzymes: list[str] = Field(
+        default_factory=lambda: ["EcoRI", "BsaI", "BsmBI"],
+        min_length=1,
+        max_length=20,
+    )
+    gibson_overlap_length: int = Field(default=25, ge=15, le=80)
+    golden_gate_enzyme: str = Field(
+        default="BsaI",
+        pattern=r"^(BsaI|BsmBI)$",
+    )
+    golden_gate_overhangs: list[str] | None = Field(
+        default=None,
+        min_length=2,
+        max_length=2,
+    )
+
+    @model_validator(mode="after")
+    def validate_plan(self) -> "AssemblyPlanRequest":
+        if self.insertion_start > self.insertion_end:
+            raise ValueError(
+                "insertion_start must be less than or equal to insertion_end."
+            )
+        return self

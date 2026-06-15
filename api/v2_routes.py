@@ -9,6 +9,7 @@ from fastapi.responses import FileResponse
 
 from api.dependencies import get_services
 from api.v2_schemas import (
+    AssemblyPlanRequest,
     BackboneRegistrationRequest,
     PlasmidAssemblyRequest,
     ResearchComparisonRequest,
@@ -108,6 +109,26 @@ def get_backbone(
     if entry is None:
         raise HTTPException(status_code=404, detail="Backbone not found.")
     return envelope(entry.to_dict())
+
+
+@router.post("/designs/{design_id}/assembly-plans")
+def create_plasmid_assembly_plan(
+    design_id: str,
+    request: AssemblyPlanRequest,
+    services: ApplicationServices = Depends(get_services),
+) -> dict[str, Any]:
+    try:
+        result = services.assembly_plans.plan(
+            design_id,
+            **request.model_dump(),
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Design not found.") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not result["ok"]:
+        raise HTTPException(status_code=409, detail=result)
+    return envelope(result)
 
 
 @router.post("/research/runs", status_code=status.HTTP_202_ACCEPTED)
