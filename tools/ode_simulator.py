@@ -238,15 +238,30 @@ class ResourceAwareSimulation:
 
         regulation = np.ones(n)
         promoter_demand = np.zeros(n)
-        kd = max(self.params["kd"], 1e-9)
-        hill = max(self.params["hill_coefficient"], 1.0)
-        leak = max(0.0, min(1.0, self.params["leak_fraction"]))
+        
+        kd_vec = np.zeros(n)
+        hill_vec = np.zeros(n)
+        leak_vec = np.zeros(n)
+        
+        default_kd = self.params["kd"]
+        default_hill = self.params["hill_coefficient"]
+        default_leak = self.params["leak_fraction"]
+        
+        for idx, name in enumerate(self.dynamic_signals):
+            kd_vec[idx] = self.params.get(f"kd_{name}", default_kd)
+            hill_vec[idx] = self.params.get(f"hill_coefficient_{name}", default_hill)
+            leak_vec[idx] = self.params.get(f"leak_fraction_{name}", default_leak)
+            
         base_demand = self.params.get("promoter_resource_demand", max(1.0, self.params["km_rnap"] * 0.35))
         copy_number = self.params.get("copy_number", 1.0)
 
         for idx, name in enumerate(self.dynamic_signals):
             gate_type, gate_inputs = self.deps.get(name, (None, []))
             reg_val = 1.0
+
+            kd = max(kd_vec[idx], 1e-9)
+            hill = max(hill_vec[idx], 1.0)
+            leak = max(0.0, min(1.0, leak_vec[idx]))
 
             if gate_type and gate_inputs:
                 gate_type = gate_type.lower()
@@ -305,17 +320,25 @@ class ResourceAwareSimulation:
         mu = mu_max * (ribo_free / max(ribo_total, 1e-9))
         k_mat = self.params.get("maturation_rate", 0.0011)
 
+        mrna_deg = np.zeros(n)
+        protein_deg = np.zeros(n)
+        default_mrna_deg = self.params["mrna_degradation_rate"]
+        default_protein_deg = self.params["protein_degradation_rate"]
+        for idx, name in enumerate(self.dynamic_signals):
+            mrna_deg[idx] = self.params.get(f"mrna_degradation_rate_{name}", default_mrna_deg)
+            protein_deg[idx] = self.params.get(f"protein_degradation_rate_{name}", default_protein_deg)
+
         d_mrna = (
             self.params["transcription_rate"] * copy_number * regulation * rnap_factor
-            - (self.params["mrna_degradation_rate"] + mu) * mrna
+            - (mrna_deg + mu) * mrna
         )
         d_protein_immature = (
             self.params["translation_rate"] * mrna * ribo_factor
-            - (self.params["protein_degradation_rate"] + k_mat + mu) * protein_immature
+            - (protein_deg + k_mat + mu) * protein_immature
         )
         d_protein_mature = (
             k_mat * protein_immature
-            - (self.params["protein_degradation_rate"] + mu) * protein_mature
+            - (protein_deg + mu) * protein_mature
         )
 
         self.resource_trace.append(
@@ -761,6 +784,7 @@ class BatchODESimulator:
             "y_min",
             "ymax",
             "y_max",
+            "copy_number",
         ]
 
         first_row = truth_table[0] if truth_table else {}
@@ -912,13 +936,22 @@ def _perturb_biokinetic_parameters(
         "y_min",
         "ymax",
         "y_max",
+        "copy_number",
     ]
     for key in keys:
         if key not in sample_params:
             continue
         original = float(sample_params[key])
-        sigma = abs(original) * max(0.0, float(noise_level))
-        sample_params[key] = max(0.0, float(rng.normal(original, sigma)))
+        if key == "copy_number":
+            if original > 0.0:
+                cv = max(0.0, float(noise_level))
+                s = math.sqrt(math.log(1.0 + cv * cv))
+                sample_params[key] = original * math.exp(rng.normal(0.0, s) - 0.5 * s * s)
+            else:
+                sample_params[key] = 0.0
+        else:
+            sigma = abs(original) * max(0.0, float(noise_level))
+            sample_params[key] = max(0.0, float(rng.normal(original, sigma)))
     return sample_params
 
 

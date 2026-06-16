@@ -207,3 +207,45 @@ def _optional_float(value: Any) -> float | None:
         return None if value is None else float(value)
     except (TypeError, ValueError):
         return None
+
+
+def parse_ucf_gate_parameters(ucf_path: str | Path | None) -> dict[str, dict[str, float]]:
+    if not ucf_path:
+        return {}
+    path = Path(ucf_path)
+    if not path.exists() or not path.is_file():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    if not isinstance(payload, list):
+        return {}
+    gate_params = {}
+    for obj in payload:
+        if not isinstance(obj, dict) or obj.get("collection") != "gates":
+            continue
+        gate_name = obj.get("name")
+        regulator = obj.get("regulator")
+        promoter = obj.get("promoter")
+        response = obj.get("response_function", {})
+        if isinstance(response, dict):
+            params = response.get("parameters", {})
+            if isinstance(params, dict):
+                ymin = params.get("ymin")
+                ymax = params.get("ymax")
+                K = params.get("K")
+                n = params.get("n")
+                entry = {
+                    "ymin": float(ymin) if ymin is not None else None,
+                    "ymax": float(ymax) if ymax is not None else None,
+                    "K": float(K) if K is not None else None,
+                    "n": float(n) if n is not None else None,
+                }
+                if gate_name:
+                    gate_params[str(gate_name)] = entry
+                if regulator:
+                    gate_params[str(regulator)] = entry
+                if promoter:
+                    gate_params[str(promoter)] = entry
+    return gate_params

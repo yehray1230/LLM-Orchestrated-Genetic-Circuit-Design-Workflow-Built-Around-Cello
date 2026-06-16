@@ -39,6 +39,7 @@ def evaluate_readiness(
     primer_result: dict[str, Any] | None = None,
     sequence_optimization_result: dict[str, Any] | None = None,
     host_optimization_result: dict[str, Any] | None = None,
+    calibration_result: dict[str, Any] | None = None,
 ) -> ReadinessResult:
     assembly_payload = _payload(assembly_report)
     plan_payload = _payload(assembly_plan)
@@ -67,10 +68,15 @@ def evaluate_readiness(
         assembly_payload,
     )
     assembly_plan_score = _assembly_plan_score(plan_payload)
+    primer_readiness_score = _result_score(primer_result)
+    sequence_optimization_score = _result_score(sequence_optimization_result)
+    host_optimization_score = _result_score(host_optimization_result)
+    calibration_score = _result_score(calibration_result)
     experimental_readiness_score = _experimental_readiness_score(
         primer_result,
         sequence_optimization_result,
         host_optimization_result,
+        calibration_result,
     )
     completed_stages = _completed_stages(
         assembly_payload,
@@ -89,6 +95,10 @@ def evaluate_readiness(
             "part_evidence_score": part_evidence_score,
             "sequence_quality_score": sequence_quality_score,
             "assembly_plan_score": assembly_plan_score,
+            "primer_readiness_score": primer_readiness_score,
+            "sequence_optimization_score": sequence_optimization_score,
+            "host_optimization_score": host_optimization_score,
+            "calibration_score": calibration_score,
             "experimental_readiness_score": experimental_readiness_score,
         },
         domain_applicability={
@@ -108,6 +118,26 @@ def evaluate_readiness(
             "experimental_readiness_score": (
                 "derived_from_deliverables"
                 if experimental_readiness_score is not None
+                else "not_evaluated"
+            ),
+            "primer_readiness_score": (
+                "derived_from_primer_result"
+                if primer_readiness_score is not None
+                else "not_evaluated"
+            ),
+            "sequence_optimization_score": (
+                "derived_from_sequence_optimization_result"
+                if sequence_optimization_score is not None
+                else "not_evaluated"
+            ),
+            "host_optimization_score": (
+                "derived_from_host_optimization_result"
+                if host_optimization_score is not None
+                else "not_evaluated"
+            ),
+            "calibration_score": (
+                "derived_from_calibration_result"
+                if calibration_score is not None
                 else "not_evaluated"
             ),
         },
@@ -167,20 +197,30 @@ def _experimental_readiness_score(
     primer_result: dict[str, Any] | None,
     sequence_optimization_result: dict[str, Any] | None,
     host_optimization_result: dict[str, Any] | None,
+    calibration_result: dict[str, Any] | None,
 ) -> float | None:
     results = [
         primer_result,
         sequence_optimization_result,
         host_optimization_result,
+        calibration_result,
     ]
     available = [result for result in results if isinstance(result, dict)]
     if not available:
         return None
-    values = [
-        1.0 if result.get("status") in {"passed", "ready", "completed"} else 0.0
-        for result in available
-    ]
+    values = [_result_score(result) or 0.0 for result in available]
     return _mean(values)
+
+
+def _result_score(result: dict[str, Any] | None) -> float | None:
+    if not isinstance(result, dict):
+        return None
+    status = result.get("status")
+    if status in {"passed", "ready", "completed"}:
+        return 1.0
+    if status in {"needs_review", "warning"}:
+        return 0.5
+    return 0.0
 
 
 def _completed_stages(

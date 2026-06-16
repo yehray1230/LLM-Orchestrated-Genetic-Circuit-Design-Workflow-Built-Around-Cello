@@ -8,6 +8,7 @@ from uuid import uuid4
 
 from Bio import Restriction, SeqIO
 from Bio.Seq import Seq
+from Bio.SeqUtils import MeltingTemp as mt
 from pydna.assembly2 import Assembly, golden_gate_assembly
 from pydna.dseqrecord import Dseqrecord
 
@@ -126,6 +127,21 @@ def create_assembly_plan(
             enzyme_name=golden_gate_enzyme,
             requested_overhangs=golden_gate_overhangs,
         )
+        enzyme = _restriction_enzyme(golden_gate_enzyme)
+        if enzyme is not None:
+            sites = enzyme.search(target.seq, linear=False)
+            if sites:
+                plan.issues.append(
+                    PlanIssue(
+                        code="GOLDEN_GATE_RETAINED_SITE",
+                        message=(
+                            f"Assembled plasmid product contains {len(sites)} remaining/re-created "
+                            f"{golden_gate_enzyme} recognition site(s) at positions: "
+                            f"{', '.join(str(val) for val in sites)}. This will lead to re-cutting during assembly."
+                        ),
+                        severity="error",
+                    )
+                )
     else:
         _plan_restriction_cloning(
             plan,
@@ -230,6 +246,7 @@ def _plan_gibson(
     combined_source = backbone_core + insert_sequence
     for junction_id, left_id, right_id, overlap in junction_specs:
         unique = _sequence_occurrences(combined_source, overlap) == 1
+        tm_val = round(_calculate_tm(overlap), 2)
         plan.junctions.append(
             AssemblyJunction(
                 junction_id=junction_id,
@@ -238,6 +255,7 @@ def _plan_gibson(
                 junction_type="homology",
                 sequence=overlap,
                 unique=unique,
+                metadata={"tm": tm_val},
             )
         )
         plan.scars.append(
@@ -250,6 +268,18 @@ def _plan_gibson(
                 note="Overlap is not duplicated in the assembled product.",
             )
         )
+        if tm_val < 55.0 or tm_val > 72.0:
+            plan.issues.append(
+                PlanIssue(
+                    code="GIBSON_OVERLAP_TM_OUT_OF_RANGE",
+                    message=(
+                        f"Gibson overlap for {junction_id} has Tm of {tm_val:.1f} C "
+                        f"(recommended: 55-72 C)."
+                    ),
+                    severity="warning",
+                    subject_id=junction_id,
+                )
+            )
         if not unique:
             plan.issues.append(
                 PlanIssue(
@@ -557,6 +587,20 @@ def _plan_restriction_cloning(
 def _restriction_enzyme(name: str):
     enzyme = getattr(Restriction, str(name), None)
     return enzyme if hasattr(enzyme, "search") else None
+
+
+def _calculate_tm(sequence: str) -> float:
+    if not sequence:
+        return 0.0
+    try:
+        return float(mt.Tm_NN(Seq(sequence)))
+    except Exception:
+        seq = sequence.upper()
+        gc = seq.count("G") + seq.count("C")
+        at = seq.count("A") + seq.count("T")
+        if (gc + at) == 0:
+            return 0.0
+        return round(64.9 + 41.0 * (gc - 16.4) / (gc + at), 2)
 
 
 def _digest_fragment_lengths(

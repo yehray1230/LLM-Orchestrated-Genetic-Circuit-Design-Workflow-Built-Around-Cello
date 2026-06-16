@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from schemas.backbone_registry import sequence_checksum
 from schemas.design_ir import BiologicalPart, DesignIR
 
 
@@ -110,8 +111,18 @@ def _part_comparison(part: BiologicalPart | None) -> dict[str, Any] | None:
         "part_type": part.part_type,
         "source": part.source,
         "sequence_status": "available" if part.sequence else "missing",
+        "sequence_checksum": _checksum(part.sequence),
         "assignment_part_id": part.assignment.part_id if part.assignment else None,
     }
+
+
+def _checksum(sequence: str | None) -> str | None:
+    if not sequence:
+        return None
+    try:
+        return sequence_checksum(sequence)
+    except ValueError:
+        return None
 
 
 def _mapping_changes(

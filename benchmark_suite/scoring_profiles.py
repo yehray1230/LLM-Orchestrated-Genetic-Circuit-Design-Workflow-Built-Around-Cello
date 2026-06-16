@@ -57,13 +57,14 @@ RESEARCH_PROFILE = ScoringProfile(
         "candidate comparison. Scores remain computational screening signals."
     ),
     dimension_weights={
-        "logic_function": 0.20,
+        "logic_function": 0.15,
         "dynamic_behavior": 0.15,
         "robustness": 0.15,
         "resource_burden": 0.10,
         "buildability": 0.15,
-        "evidence_quality": 0.15,
+        "evidence_quality": 0.10,
         "data_completeness": 0.10,
+        "semantic_faithfulness": 0.10,
     },
     grade_thresholds={"excellent": 0.80, "pass": 0.60},
 )

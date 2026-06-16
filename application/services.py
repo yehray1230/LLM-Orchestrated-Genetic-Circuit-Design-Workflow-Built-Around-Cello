@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
 import re
@@ -54,7 +56,21 @@ from schemas.design_migrations import (
     migrate_design_payload_to_v2,
 )
 from schemas.design_ir import DesignIR, design_ir_from_dict
-from schemas.design_ir_v2 import DesignIRV2, design_ir_v2_from_dict
+from schemas.design_ir_v2 import (
+    DesignIRV2,
+    DesignRevisionV2,
+    ProvenanceRecordV2,
+    design_ir_v2_from_dict,
+)
+from schemas.host_profile import (
+    HostProfile,
+    default_ecoli_profile,
+    host_profile_from_dict,
+)
+from schemas.host_optimization import (
+    calibration_from_dict,
+    measurement_from_dict,
+)
 from schemas.import_draft import (
     ImportDraft,
     import_draft_from_json,
@@ -66,9 +82,17 @@ from schemas.simulation import (
     SIMULATION_MODEL_VERSION,
     simulation_spec_from_design_ir_v2,
 )
+from schemas.sequence_optimization import SequenceOptimizationRequest
 from tools.assembly_planner import create_assembly_plan
 from tools.primer_designer import design_assembly_primers
 from tools.ode_simulator import BatchODESimulator
+from tools.sequence_analyzer import analyze_design_sequences
+from tools.sequence_optimization import evaluate_sequence_optimization
+from tools.sequence_optimization import generate_host_optimized_sequences
+from tools.host_optimization import (
+    rank_host_optimization_candidates,
+    summarize_host_calibration,
+)
 
 
 DEFAULT_API_DATA_DIR = Path("outputs") / "api_data"
@@ -136,6 +160,10 @@ class DesignService:
             migration=migration.to_dict(),
         )
         return design_ir_from_dict(design_ir_v2_to_v1_payload(stored))
+
+    def save_v2(self, design: DesignIRV2) -> DesignIRV2:
+        stored = self.repository.save(design.design_id, design.to_dict())
+        return design_ir_v2_from_dict(stored)
 
     def get(self, design_id: str) -> DesignIR | None:
         payload = self.repository.get(design_id)
@@ -386,6 +414,33 @@ class BackboneRegistryService:
         ]
 
 
+class HostProfileRegistryService:
+    def __init__(self, repository: JsonRepository):
+        self.repository = repository
+        self.ensure_defaults()
+
+    def ensure_defaults(self) -> None:
+        default = default_ecoli_profile()
+        if not self.repository.exists(default.profile_id):
+            self.repository.save(default.profile_id, default.to_dict())
+
+    def register(self, payload: dict[str, Any]) -> HostProfile:
+        profile = host_profile_from_dict(payload)
+        _validate_host_profile(profile)
+        stored = self.repository.save(profile.profile_id, profile.to_dict())
+        return host_profile_from_dict(stored)
+
+    def get(self, profile_id: str) -> HostProfile | None:
+        payload = self.repository.get(profile_id)
+        return host_profile_from_dict(payload) if payload else None
+
+    def list(self) -> list[HostProfile]:
+        return [
+            host_profile_from_dict(payload)
+            for payload in self.repository.list()
+        ]
+
+
 class PlasmidAssemblyService:
     def __init__(
         self,
@@ -578,6 +633,314 @@ class AssemblyDeliverableService:
         return path, str(metadata.get("media_type") or "application/octet-stream")
 
 
+class SequenceQualityService:
+    def __init__(
+        self,
+        designs: DesignService,
+        host_profiles: HostProfileRegistryService,
+    ):
+        self.designs = designs
+        self.host_profiles = host_profiles
+
+    def analyze(
+        self,
+        design_id: str,
+        *,
+        part_ids: list[str] | None = None,
+        window_size: int = 50,
+        homopolymer_threshold: int = 6,
+        repeat_length: int = 12,
+    ) -> dict[str, Any]:
+        design = self.designs.get_v2(design_id)
+        if design is None:
+            raise KeyError(design_id)
+        return analyze_design_sequences(
+            design,
+            part_ids=part_ids,
+            window_size=window_size,
+            homopolymer_threshold=homopolymer_threshold,
+            repeat_length=repeat_length,
+        ).to_dict()
+
+    def evaluate_optimization(
+        self,
+        design_id: str,
+        request: dict[str, Any],
+    ) -> dict[str, Any]:
+        design = self.designs.get_v2(design_id)
+        if design is None:
+            raise KeyError(design_id)
+        optimization_request = SequenceOptimizationRequest(
+            design_id=design_id,
+            objective=str(
+                request.get("objective") or "sequence_quality_baseline"
+            ),
+            host_profile_id=_optional_string(request.get("host_profile_id")),
+            part_ids=list(request.get("part_ids") or []),
+            optimized_sequences=dict(request.get("optimized_sequences") or {}),
+            constraints=dict(request.get("constraints") or {}),
+            dry_run=bool(request.get("dry_run", True)),
+        )
+        results = evaluate_sequence_optimization(design, optimization_request)
+        statuses = [result.status for result in results]
+        if any(status == "blocked" for status in statuses):
+            status = "blocked"
+        elif any(status == "needs_review" for status in statuses):
+            status = "needs_review"
+        else:
+            status = "passed"
+        return {
+            "status": status,
+            "design_id": design_id,
+            "objective": optimization_request.objective,
+            "host_profile_id": optimization_request.host_profile_id,
+            "result_count": len(results),
+            "results": [result.to_dict() for result in results],
+            "schema_version": "1.0.0",
+        }
+
+    def create_optimized_revision(
+        self,
+        design_id: str,
+        request: dict[str, Any],
+    ) -> dict[str, Any]:
+        original = self.designs.get_v2(design_id)
+        if original is None:
+            raise KeyError(design_id)
+        profile_id = str(request.get("host_profile_id") or "ecoli_k12_default")
+        host_profile = self.host_profiles.get(profile_id)
+        if host_profile is None:
+            raise ValueError(f"Unknown host profile: {profile_id}")
+        part_ids = list(request.get("part_ids") or [])
+        generated = generate_host_optimized_sequences(
+            original,
+            host_profile,
+            part_ids=part_ids,
+        )
+        optimization_request = SequenceOptimizationRequest(
+            design_id=design_id,
+            objective=str(request.get("objective") or "codon_optimization"),
+            host_profile_id=host_profile.profile_id,
+            part_ids=part_ids,
+            optimized_sequences=generated,
+            constraints={
+                **dict(request.get("constraints") or {}),
+                "protein_sequence": "preserve",
+                "forbidden_motifs": list(host_profile.forbidden_motifs),
+            },
+            dry_run=False,
+        )
+        results = evaluate_sequence_optimization(original, optimization_request)
+        if not results:
+            raise ValueError("No CDS parts were available for optimization.")
+        status = _optimization_rollup([result.status for result in results])
+        if status == "blocked":
+            readiness = evaluate_readiness(
+                original,
+                sequence_optimization_result={
+                    "status": "blocked",
+                    "results": [result.to_dict() for result in results],
+                },
+            )
+            return {
+                "ok": False,
+                "status": "blocked",
+                "design": original.to_dict(),
+                "optimization": {
+                    "status": "blocked",
+                    "results": [result.to_dict() for result in results],
+                    "schema_version": "1.0.0",
+                },
+                "diff": None,
+                "readiness": readiness.to_dict(),
+            }
+        revised = _apply_sequence_optimization_revision(
+            original,
+            host_profile=host_profile,
+            results=results,
+            created_by=str(request.get("created_by") or "sequence_optimizer"),
+        )
+        saved = self.designs.save_v2(revised)
+        diff = compare_designs(
+            design_ir_from_dict(design_ir_v2_to_v1_payload(original.to_dict())),
+            design_ir_from_dict(design_ir_v2_to_v1_payload(saved.to_dict())),
+        )
+        optimization_payload = {
+            "status": status,
+            "design_id": design_id,
+            "host_profile_id": host_profile.profile_id,
+            "objective": optimization_request.objective,
+            "result_count": len(results),
+            "results": [result.to_dict() for result in results],
+            "schema_version": "1.0.0",
+        }
+        readiness = evaluate_readiness(
+            saved,
+            sequence_optimization_result=optimization_payload,
+        )
+        return {
+            "ok": True,
+            "status": status,
+            "design": saved.to_dict(),
+            "optimization": optimization_payload,
+            "diff": asdict(diff),
+            "readiness": readiness.to_dict(),
+        }
+
+
+class HostOptimizationService:
+    def __init__(
+        self,
+        designs: DesignService,
+        host_profiles: HostProfileRegistryService,
+        repository: JsonRepository,
+    ):
+        self.designs = designs
+        self.host_profiles = host_profiles
+        self.repository = repository
+
+    def rank_candidates(
+        self,
+        design_id: str,
+        request: dict[str, Any],
+    ) -> dict[str, Any]:
+        design = self.designs.get_v2(design_id)
+        if design is None:
+            raise KeyError(design_id)
+        profile_id = str(request.get("host_profile_id") or "ecoli_k12_default")
+        profile = self.host_profiles.get(profile_id)
+        if profile is None:
+            raise ValueError(f"Unknown host profile: {profile_id}")
+        result = rank_host_optimization_candidates(
+            design,
+            profile,
+            part_ids=list(request.get("part_ids") or []),
+            objective_weights=dict(request.get("objective_weights") or {}),
+        )
+        payload = result.to_dict()
+        readiness = evaluate_readiness(
+            design,
+            host_optimization_result=payload,
+        )
+        return {
+            "ok": result.status == "ready",
+            "optimization": payload,
+            "readiness": readiness.to_dict(),
+        }
+
+    def calibrate(self, request: dict[str, Any]) -> dict[str, Any]:
+        design_id = str(request.get("design_id") or "")
+        if self.designs.get_v2(design_id) is None:
+            raise KeyError(design_id)
+        profile_id = _optional_string(request.get("host_profile_id"))
+        if profile_id and self.host_profiles.get(profile_id) is None:
+            raise ValueError(f"Unknown host profile: {profile_id}")
+        measurements = [
+            measurement_from_dict(item)
+            for item in list(request.get("measurements") or [])
+            if isinstance(item, dict)
+        ]
+        if not measurements:
+            raise ValueError("At least one experimental measurement is required.")
+        result = summarize_host_calibration(
+            calibration_id=_optional_string(request.get("calibration_id")),
+            design_id=design_id,
+            host_profile_id=profile_id,
+            measurements=measurements,
+        )
+        payload = result.to_dict()
+        self.repository.save(result.calibration_id, payload)
+        return payload
+
+    def get_calibration(self, calibration_id: str) -> dict[str, Any] | None:
+        payload = self.repository.get(calibration_id)
+        return calibration_from_dict(payload).to_dict() if payload else None
+
+    def list_calibrations(self) -> dict[str, Any]:
+        items = [calibration_from_dict(payload).to_dict() for payload in self.repository.list()]
+        return {"items": items, "count": len(items)}
+
+
+class OptimizationWorkflowService:
+    def __init__(
+        self,
+        designs: DesignService,
+        sequence_quality: SequenceQualityService,
+        host_optimization: HostOptimizationService,
+    ):
+        self.designs = designs
+        self.sequence_quality = sequence_quality
+        self.host_optimization = host_optimization
+
+    def run(
+        self,
+        design_id: str,
+        request: dict[str, Any],
+    ) -> dict[str, Any]:
+        original = self.designs.get_v2(design_id)
+        if original is None:
+            raise KeyError(design_id)
+        part_ids = list(request.get("part_ids") or [])
+        host_profile_id = str(request.get("host_profile_id") or "ecoli_k12_default")
+        analysis = self.sequence_quality.analyze(
+            design_id,
+            part_ids=part_ids,
+        )
+        sequence_revision = self.sequence_quality.create_optimized_revision(
+            design_id,
+            {
+                "host_profile_id": host_profile_id,
+                "part_ids": part_ids,
+                "objective": str(request.get("sequence_objective") or "codon_optimization"),
+                "constraints": dict(request.get("constraints") or {}),
+                "created_by": str(request.get("created_by") or "optimization_workflow"),
+            },
+        )
+        if not sequence_revision["ok"]:
+            return {
+                "ok": False,
+                "status": "blocked",
+                "design_id": design_id,
+                "steps": {
+                    "sequence_analysis": analysis,
+                    "sequence_optimization": sequence_revision,
+                    "host_optimization": None,
+                },
+                "readiness": sequence_revision["readiness"],
+            }
+        optimized_design = self.designs.get_v2(design_id)
+        assert optimized_design is not None
+        host_candidates = self.host_optimization.rank_candidates(
+            design_id,
+            {
+                "host_profile_id": host_profile_id,
+                "part_ids": part_ids,
+                "objective_weights": dict(request.get("objective_weights") or {}),
+            },
+        )
+        sequence_optimization_result = sequence_revision["optimization"]
+        host_optimization_result = host_candidates["optimization"]
+        readiness = evaluate_readiness(
+            optimized_design,
+            sequence_optimization_result=sequence_optimization_result,
+            host_optimization_result=host_optimization_result,
+        )
+        return {
+            "ok": True,
+            "status": "completed",
+            "design_id": design_id,
+            "host_profile_id": host_profile_id,
+            "current_revision": optimized_design.revision.revision_number,
+            "steps": {
+                "sequence_analysis": analysis,
+                "sequence_optimization": sequence_revision,
+                "host_optimization": host_candidates,
+            },
+            "readiness": readiness.to_dict(),
+            "limitations": list(host_optimization_result.get("limitations") or []),
+        }
+
+
 class RunService:
     def __init__(self, run_store: RunStore):
         self.run_store = run_store
@@ -672,9 +1035,13 @@ class ApplicationServices:
     research: ResearchService
     exports: ExportService
     backbones: BackboneRegistryService
+    host_profiles: HostProfileRegistryService
     plasmid_assemblies: PlasmidAssemblyService
     assembly_plans: AssemblyPlanningService
     assembly_deliverables: AssemblyDeliverableService
+    sequence_quality: SequenceQualityService
+    host_optimization: HostOptimizationService
+    optimization_workflows: OptimizationWorkflowService
     runs: RunService
 
     @property
@@ -689,6 +1056,8 @@ def create_application_services(
     draft_repository = JsonRepository(selected / "drafts")
     benchmark_repository = JsonRepository(selected / "benchmark_runs")
     backbone_repository = JsonRepository(selected / "backbones")
+    host_profile_repository = JsonRepository(selected / "host_profiles")
+    host_calibration_repository = JsonRepository(selected / "host_calibrations")
     deliverable_repository = JsonRepository(selected / "assembly_deliverables")
     design_repository = create_design_repository(selected / "research.db")
     designs = DesignService(design_repository)
@@ -696,8 +1065,15 @@ def create_application_services(
     run_store = RunStore(base_dir=selected / "runs")
     simulation_service = SimulationService()
     backbones = BackboneRegistryService(backbone_repository)
+    host_profiles = HostProfileRegistryService(host_profile_repository)
     plasmid_assemblies = PlasmidAssemblyService(designs, backbones)
     assembly_plans = AssemblyPlanningService(plasmid_assemblies, backbones)
+    sequence_quality = SequenceQualityService(designs, host_profiles)
+    host_optimization = HostOptimizationService(
+        designs,
+        host_profiles,
+        host_calibration_repository,
+    )
     research_run_store = RunStore(
         base_dir=selected / "research_runs",
         max_workers=2,
@@ -719,6 +1095,7 @@ def create_application_services(
         ),
         exports=ExportService(designs),
         backbones=backbones,
+        host_profiles=host_profiles,
         plasmid_assemblies=plasmid_assemblies,
         assembly_plans=assembly_plans,
         assembly_deliverables=AssemblyDeliverableService(
@@ -726,8 +1103,145 @@ def create_application_services(
             deliverable_repository,
             selected / "assembly_delivery_files",
         ),
+        sequence_quality=sequence_quality,
+        host_optimization=host_optimization,
+        optimization_workflows=OptimizationWorkflowService(
+            designs,
+            sequence_quality,
+            host_optimization,
+        ),
         runs=RunService(run_store),
     )
+
+
+def _validate_host_profile(profile: HostProfile) -> None:
+    if not profile.profile_id.strip():
+        raise ValueError("Host profile_id is required.")
+    if not profile.name.strip():
+        raise ValueError("Host profile name is required.")
+    if not profile.host_organism.strip():
+        raise ValueError("Host organism is required.")
+    if not profile.codon_usage:
+        raise ValueError("Host profile codon_usage is required.")
+
+
+def _optimization_rollup(statuses: list[str]) -> str:
+    if any(status == "blocked" for status in statuses):
+        return "blocked"
+    if any(status == "needs_review" for status in statuses):
+        return "needs_review"
+    return "passed"
+
+
+def _apply_sequence_optimization_revision(
+    design: DesignIRV2,
+    *,
+    host_profile: HostProfile,
+    results: list[Any],
+    created_by: str,
+) -> DesignIRV2:
+    revised = deepcopy(design)
+    result_by_part = {result.part_id: result for result in results}
+    created_at = datetime.now(timezone.utc).isoformat()
+    provenance_id = f"sequence_optimization_{host_profile.profile_id}"
+    revised.provenance.append(
+        ProvenanceRecordV2(
+            id=provenance_id,
+            source_type="host_profile",
+            source_uri=host_profile.source,
+            source_version=host_profile.version,
+            generated_by="sequence_optimizer",
+            generated_at=created_at,
+            metadata={
+                "host_profile_id": host_profile.profile_id,
+                "host_organism": host_profile.host_organism,
+                "evidence_level": host_profile.evidence_level,
+            },
+        )
+    )
+    changes: list[dict[str, Any]] = []
+    for part in revised.parts:
+        result = result_by_part.get(part.id)
+        if result is None or result.optimized_sequence is None:
+            continue
+        before = part.sequence
+        part.sequence = result.optimized_sequence
+        part.source = "sequence_optimized"
+        if provenance_id not in part.provenance_ids:
+            part.provenance_ids.append(provenance_id)
+        part.metadata = {
+            **dict(part.metadata or {}),
+            "sequence_optimization": {
+                "status": result.status,
+                "host_profile_id": host_profile.profile_id,
+                "objective": result.objective,
+                "original_checksum": result.original_checksum,
+                "optimized_checksum": result.optimized_checksum,
+                "protein_preserved": result.protein_preserved,
+                "change_count": len(result.changes),
+            },
+        }
+        changes.append(
+            {
+                "operation": "optimize_sequence",
+                "part_id": part.id,
+                "before_checksum": result.original_checksum,
+                "after_checksum": result.optimized_checksum,
+                "change_count": len(result.changes),
+                "before_sequence": before,
+                "after_sequence": part.sequence,
+            }
+        )
+    status = _optimization_rollup([result.status for result in results])
+    revised.validation_status = {
+        **dict(revised.validation_status or {}),
+        "sequence_optimization": status,
+        "sequences": _sequence_coverage_v2(revised),
+    }
+    revised.extensions = {
+        **dict(revised.extensions or {}),
+        "sequence_optimization": {
+            "status": status,
+            "host_profile_id": host_profile.profile_id,
+            "result_count": len(results),
+        },
+    }
+    parent_revision = revised.revision
+    revised.revision = DesignRevisionV2(
+        revision_id=f"revision_{parent_revision.revision_number + 1}",
+        parent_revision_id=parent_revision.revision_id,
+        revision_number=parent_revision.revision_number + 1,
+        created_at=created_at,
+        created_by=created_by,
+        change_type="sequence_optimization",
+        summary=(
+            f"Optimized {len(changes)} CDS sequence(s) using "
+            f"{host_profile.profile_id}."
+        ),
+        changes=changes,
+    )
+    if status == "needs_review":
+        revised.warnings = list(
+            dict.fromkeys(
+                revised.warnings
+                + [
+                    "Sequence optimization completed with warnings; review "
+                    "before treating the design as sequence optimized."
+                ]
+            )
+        )
+    return revised
+
+
+def _sequence_coverage_v2(design: DesignIRV2) -> str:
+    if not design.parts:
+        return "missing"
+    count = sum(1 for part in design.parts if part.sequence)
+    if not count:
+        return "missing"
+    if count == len(design.parts):
+        return "complete"
+    return "partial"
 
 
 @lru_cache(maxsize=1)

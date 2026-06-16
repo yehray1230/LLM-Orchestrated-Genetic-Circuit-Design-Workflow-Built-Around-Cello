@@ -12,9 +12,16 @@ from api.v2_schemas import (
     AssemblyDeliverableRequest,
     AssemblyPlanRequest,
     BackboneRegistrationRequest,
+    HostProfileRegistrationRequest,
+    HostCalibrationRequest,
+    HostOptimizationCandidateRequest,
     PlasmidAssemblyRequest,
+    OptimizationWorkflowRequest,
     ResearchComparisonRequest,
     ResearchSimulationRequest,
+    SequenceAnalysisRequest,
+    SequenceOptimizationEvaluationRequest,
+    SequenceOptimizationRevisionRequest,
 )
 from application.services import ApplicationServices
 
@@ -110,6 +117,166 @@ def get_backbone(
     if entry is None:
         raise HTTPException(status_code=404, detail="Backbone not found.")
     return envelope(entry.to_dict())
+
+
+@router.get("/host-profiles")
+def list_host_profiles(
+    services: ApplicationServices = Depends(get_services),
+) -> dict[str, Any]:
+    profiles = services.host_profiles.list()
+    return envelope(
+        {
+            "items": [profile.to_dict() for profile in profiles],
+            "count": len(profiles),
+        }
+    )
+
+
+@router.get("/host-profiles/{profile_id}")
+def get_host_profile(
+    profile_id: str,
+    services: ApplicationServices = Depends(get_services),
+) -> dict[str, Any]:
+    profile = services.host_profiles.get(profile_id)
+    if profile is None:
+        raise HTTPException(status_code=404, detail="Host profile not found.")
+    return envelope(profile.to_dict())
+
+
+@router.post("/host-profiles", status_code=status.HTTP_201_CREATED)
+def register_host_profile(
+    request: HostProfileRegistrationRequest,
+    services: ApplicationServices = Depends(get_services),
+) -> dict[str, Any]:
+    try:
+        profile = services.host_profiles.register(request.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return envelope(profile.to_dict())
+
+
+@router.post("/designs/{design_id}/sequence-analysis")
+def analyze_design_sequences(
+    design_id: str,
+    request: SequenceAnalysisRequest,
+    services: ApplicationServices = Depends(get_services),
+) -> dict[str, Any]:
+    try:
+        result = services.sequence_quality.analyze(
+            design_id,
+            **request.model_dump(),
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Design not found.") from exc
+    return envelope(result)
+
+
+@router.post("/designs/{design_id}/sequence-optimization/evaluate")
+def evaluate_design_sequence_optimization(
+    design_id: str,
+    request: SequenceOptimizationEvaluationRequest,
+    services: ApplicationServices = Depends(get_services),
+) -> dict[str, Any]:
+    try:
+        result = services.sequence_quality.evaluate_optimization(
+            design_id,
+            request.model_dump(),
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Design not found.") from exc
+    return envelope(result)
+
+
+@router.post("/designs/{design_id}/sequence-optimization/revisions")
+def create_design_sequence_optimization_revision(
+    design_id: str,
+    request: SequenceOptimizationRevisionRequest,
+    services: ApplicationServices = Depends(get_services),
+) -> dict[str, Any]:
+    try:
+        result = services.sequence_quality.create_optimized_revision(
+            design_id,
+            request.model_dump(),
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Design not found.") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not result["ok"]:
+        raise HTTPException(status_code=409, detail=result)
+    return envelope(result)
+
+
+@router.post("/designs/{design_id}/host-optimization/candidates")
+def rank_design_host_optimization_candidates(
+    design_id: str,
+    request: HostOptimizationCandidateRequest,
+    services: ApplicationServices = Depends(get_services),
+) -> dict[str, Any]:
+    try:
+        result = services.host_optimization.rank_candidates(
+            design_id,
+            request.model_dump(),
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Design not found.") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not result["ok"]:
+        raise HTTPException(status_code=409, detail=result)
+    return envelope(result)
+
+
+@router.post("/host-optimization/calibrations", status_code=status.HTTP_201_CREATED)
+def create_host_calibration(
+    request: HostCalibrationRequest,
+    services: ApplicationServices = Depends(get_services),
+) -> dict[str, Any]:
+    try:
+        result = services.host_optimization.calibrate(request.model_dump())
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Design not found.") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return envelope(result)
+
+
+@router.get("/host-optimization/calibrations")
+def list_host_calibrations(
+    services: ApplicationServices = Depends(get_services),
+) -> dict[str, Any]:
+    return envelope(services.host_optimization.list_calibrations())
+
+
+@router.get("/host-optimization/calibrations/{calibration_id}")
+def get_host_calibration(
+    calibration_id: str,
+    services: ApplicationServices = Depends(get_services),
+) -> dict[str, Any]:
+    result = services.host_optimization.get_calibration(calibration_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Host calibration not found.")
+    return envelope(result)
+
+
+@router.post("/designs/{design_id}/optimization-workflow")
+def run_design_optimization_workflow(
+    design_id: str,
+    request: OptimizationWorkflowRequest,
+    services: ApplicationServices = Depends(get_services),
+) -> dict[str, Any]:
+    try:
+        result = services.optimization_workflows.run(
+            design_id,
+            request.model_dump(),
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Design not found.") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not result["ok"]:
+        raise HTTPException(status_code=409, detail=result)
+    return envelope(result)
 
 
 @router.post("/designs/{design_id}/assembly-plans")

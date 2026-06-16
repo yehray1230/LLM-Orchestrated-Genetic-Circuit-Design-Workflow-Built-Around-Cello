@@ -30,6 +30,95 @@ class ResearchComparisonRequest(BaseModel):
     research_run_ids: list[str] = Field(min_length=2, max_length=20)
 
 
+class SequenceAnalysisRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    part_ids: list[str] | None = Field(default=None, max_length=200)
+    window_size: int = Field(default=50, ge=1, le=1000)
+    homopolymer_threshold: int = Field(default=6, ge=3, le=50)
+    repeat_length: int = Field(default=12, ge=4, le=100)
+
+
+class SequenceOptimizationEvaluationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    objective: str = Field(default="sequence_quality_baseline", max_length=128)
+    host_profile_id: str | None = Field(default=None, max_length=128)
+    part_ids: list[str] | None = Field(default=None, max_length=200)
+    optimized_sequences: dict[str, str] = Field(default_factory=dict)
+    constraints: dict[str, Any] = Field(default_factory=dict)
+    dry_run: bool = True
+
+
+class SequenceOptimizationRevisionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    objective: str = Field(default="codon_optimization", max_length=128)
+    host_profile_id: str = Field(default="ecoli_k12_default", max_length=128)
+    part_ids: list[str] | None = Field(default=None, max_length=200)
+    constraints: dict[str, Any] = Field(default_factory=dict)
+    created_by: str = Field(default="sequence_optimizer", max_length=128)
+
+
+class HostProfileRegistrationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    profile_id: str = Field(min_length=1, max_length=128)
+    name: str = Field(min_length=1, max_length=256)
+    host_organism: str = Field(min_length=1, max_length=256)
+    strain: str = Field(default="", max_length=256)
+    codon_usage: dict[str, dict[str, float]] = Field(default_factory=dict)
+    forbidden_motifs: list[str] = Field(default_factory=list, max_length=200)
+    rare_codon_threshold: float = Field(default=0.10, ge=0.0, le=1.0)
+    evidence_level: str = Field(default="defaulted", max_length=64)
+    source: str = Field(default="user_supplied", max_length=2000)
+    version: str = Field(default="1.0.0", max_length=64)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class HostOptimizationCandidateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    host_profile_id: str = Field(default="ecoli_k12_default", max_length=128)
+    part_ids: list[str] | None = Field(default=None, max_length=200)
+    objective_weights: dict[str, float] = Field(default_factory=dict)
+
+
+class ExperimentalMeasurementRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    measurement_id: str = Field(min_length=1, max_length=128)
+    design_id: str = Field(min_length=1, max_length=128)
+    candidate_id: str | None = Field(default=None, max_length=128)
+    host_profile_id: str | None = Field(default=None, max_length=128)
+    expression_value: float | None = None
+    growth_rate: float | None = None
+    burden_value: float | None = None
+    on_off_ratio: float | None = None
+    units: dict[str, str] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class HostCalibrationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    calibration_id: str | None = Field(default=None, max_length=128)
+    design_id: str = Field(min_length=1, max_length=128)
+    host_profile_id: str | None = Field(default=None, max_length=128)
+    measurements: list[ExperimentalMeasurementRequest] = Field(min_length=1)
+
+
+class OptimizationWorkflowRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    host_profile_id: str = Field(default="ecoli_k12_default", max_length=128)
+    part_ids: list[str] | None = Field(default=None, max_length=200)
+    sequence_objective: str = Field(default="codon_optimization", max_length=128)
+    objective_weights: dict[str, float] = Field(default_factory=dict)
+    constraints: dict[str, Any] = Field(default_factory=dict)
+    created_by: str = Field(default="optimization_workflow", max_length=128)
+
+
 class PlasmidAssemblyRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

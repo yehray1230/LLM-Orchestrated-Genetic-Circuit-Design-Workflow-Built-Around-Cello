@@ -208,6 +208,7 @@ def _dimension_scores(
 ) -> tuple[dict[str, float], dict[str, str]]:
     evidence_quality, evidence_status = _evidence_quality(candidate)
     completeness, completeness_status = _data_completeness(candidate)
+    semantic_faithfulness = _candidate_float(candidate, "semantic_faithfulness_score", 1.0)
     dimensions = {
         "logic_function": components.get("functional", 0.0),
         "dynamic_behavior": _mean(
@@ -223,6 +224,7 @@ def _dimension_scores(
         ),
         "evidence_quality": evidence_quality,
         "data_completeness": completeness,
+        "semantic_faithfulness": semantic_faithfulness,
     }
     applicability = {
         "logic_function": "measured_or_derived",
@@ -232,6 +234,7 @@ def _dimension_scores(
         "buildability": "derived",
         "evidence_quality": evidence_status,
         "data_completeness": completeness_status,
+        "semantic_faithfulness": "explicit" if "semantic_faithfulness_score" in candidate else "defaulted",
     }
     return (
         {key: _clamp_score(value) for key, value in dimensions.items()},

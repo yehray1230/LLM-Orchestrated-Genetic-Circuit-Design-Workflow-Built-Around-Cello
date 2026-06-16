@@ -37,6 +37,18 @@ def write_assembly_deliverables(
         _report_markdown(payload),
         "text/markdown",
     )
+    artifacts["opentrons"] = _write_text(
+        output_dir,
+        "opentrons_protocol.py",
+        _opentrons_protocol(payload),
+        "text/x-python",
+    )
+    artifacts["echo"] = _write_text(
+        output_dir,
+        "echo_transfer_list.csv",
+        _echo_transfer_list(payload),
+        "text/csv",
+    )
     map_path = output_dir / "plasmid_map.png"
     if _write_plasmid_map(str(payload["assembly"]["genbank"]), map_path):
         artifacts["plasmid_map"] = {
@@ -211,3 +223,68 @@ def _write_plasmid_map(genbank: str, output_path: Path) -> bool:
     except Exception:
         # Plasmid-map rendering is optional and must not block core artifacts.
         return False
+
+
+def _opentrons_protocol(payload: dict[str, Any]) -> str:
+    plan = payload.get("plan") or {}
+    fragments = plan.get("fragments") or []
+    design_id = plan.get("design_id") or "design"
+    method = plan.get("method") or "gibson"
+    
+    protocol_code = f"""# Opentrons OT-2 Protocol generated for genetic circuit assembly
+from opentrons import protocol_api
+
+metadata = {{
+    'protocolName': '{method.capitalize()} Assembly Setup for {design_id}',
+    'author': 'Antigravity AI Assistant',
+    'description': 'Automated PCR/Assembly setup for design {design_id}',
+    'apiLevel': '2.14'
+}}
+
+def run(protocol: protocol_api.ProtocolContext):
+    # Labware
+    tiprack_20 = protocol.load_labware('opentrons_96_tiprack_20ul', '1')
+    p20 = protocol.load_instrument('p20_single_gen2', 'right', tip_racks=[tiprack_20])
+    
+    # Plates
+    dna_plate = protocol.load_labware('nest_96_wellplate_100ul_pcr_full_skirt', '2')
+    assembly_plate = protocol.load_labware('nest_96_wellplate_100ul_pcr_full_skirt', '3')
+    reagents = protocol.load_labware('nest_12_reservoir_15ml', '4')
+    
+    # Reagent Locations
+    assembly_mix = reagents.wells_by_name()['A1']
+    water = reagents.wells_by_name()['A2']
+    
+    # DNA fragment transfers (2 uL each into assembly well A1)
+"""
+    transfer_lines = []
+    well_idx = 1
+    for i, frag in enumerate(fragments):
+        name = frag.get("name") or frag.get("fragment_id") or f"Fragment_{i+1}"
+        transfer_lines.append(f"    # Transfer {name}")
+        transfer_lines.append(f"    p20.pick_up_tip()")
+        transfer_lines.append(f"    p20.transfer(2.0, dna_plate.wells_by_name()['A{well_idx}'], assembly_plate.wells_by_name()['A1'], new_tip='never')")
+        transfer_lines.append(f"    p20.drop_tip()")
+        well_idx += 1
+        
+    transfer_lines.append(f"    # Transfer Assembly Master Mix")
+    transfer_lines.append(f"    p20.pick_up_tip()")
+    transfer_lines.append(f"    p20.transfer(10.0, assembly_mix, assembly_plate.wells_by_name()['A1'], mix_after=(3, 10), new_tip='never')")
+    transfer_lines.append(f"    p20.drop_tip()")
+    
+    protocol_code += "\n".join(transfer_lines)
+    protocol_code += "\n"
+    return protocol_code
+
+
+def _echo_transfer_list(payload: dict[str, Any]) -> str:
+    plan = payload.get("plan") or {}
+    fragments = plan.get("fragments") or []
+    lines = ["Source Plate Name,Source Well,Destination Plate Name,Destination Well,Transfer Volume"]
+    well_idx = 1
+    for i, frag in enumerate(fragments):
+        lines.append(f"DNA_Plate,A{well_idx},Assembly_Plate,A1,2000")
+        well_idx += 1
+    lines.append(f"Reagent_Plate,A1,Assembly_Plate,A1,10000")
+    return "\n".join(lines)
+

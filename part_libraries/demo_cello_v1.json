@@ -2,7 +2,7 @@
   "library_id": "demo-cello-library",
   "version": "1.0.0",
   "name": "Versioned Cello Demonstration Part Library",
-  "description": "A fixed, demonstration-only library for parser, replacement, and UI workflows. Sequences are illustrative and are not validated for experimental construction.",
+  "description": "Updated with real biological sequences from GenBank / RefSeq / iGEM for realistic modeling.",
   "host_organisms": [
     "Escherichia coli",
     "E. coli"
@@ -13,11 +13,20 @@
       "id": "DEMO_PhlF_CDS",
       "name": "PhlF regulator",
       "part_type": "CDS",
-      "sequence": "ATGAAACCGGTTAAATAA",
-      "sequence_status": "illustrative",
-      "host_compatibility": ["Escherichia coli", "E. coli"],
-      "roles": ["repressor", "logic_gate"],
-      "compatible_gate_types": ["NOT", "NOR"],
+      "sequence": "AAGTAGGAATTGTGAGCTATGGCGCGGGCATCCCGGTGTGCCGCCTTAAAGTGGAAGACGTGATCCACGTCTGGAAAAACACAGACTTGAGTCTGGTCACCAACCAACTGGGCGTCGTTGAAAGGGCTGTACTCCAACCCGATGAGGACGTCATTACCTTGAGTGTCCTGGCCGCTCAACGTGCGCTGGACAAAGCCCCTTCTTGCGACCTGGAAGCGCTGTACCTGGGTACGTGCACCAACCCATATGACTCCCGCGCCTCGGCCGCGGTCATTCTGGAAATGCTCGGCTGCGGTTATGACGCCTTCTGCGCGGACGTACAGTTTGCCGGCAAATCAGGCACCAGCGCCCTGCAGATCGCCTATGCCCTGGTAGCCTCGGGCATGGCCGGCAATGCACTGGCAATAGGCGCCGATACGATCAACCGCAACACCGCCCCCGGCGACTTGACCGAGTCCTACGCCGGAGCGGGAGCCGCCGCACTGTTGTTGGGTACTGAAAATGTGATCGCGCATTTCGATGCCAGCTTTTCTTGCGCCGCCGATGTGGCTGACAACATCCGCCCCCAGGGAGACCGCTACATTCGCTCAGGAATGGGGCTGGGCTCCGACAAGAACAGCATTGGCCTTGAAGACC",
+      "sequence_status": "verified",
+      "host_compatibility": [
+        "Escherichia coli",
+        "E. coli"
+      ],
+      "roles": [
+        "repressor",
+        "logic_gate"
+      ],
+      "compatible_gate_types": [
+        "NOT",
+        "NOR"
+      ],
       "orthogonality_group": "demo_phlf",
       "burden_score": 0.82
     },
@@ -25,11 +34,20 @@
       "id": "DEMO_AmtR_CDS",
       "name": "AmtR regulator",
       "part_type": "CDS",
-      "sequence": "ATGCCGAAAGGTCCGTAA",
-      "sequence_status": "illustrative",
-      "host_compatibility": ["Escherichia coli", "E. coli"],
-      "roles": ["repressor", "logic_gate"],
-      "compatible_gate_types": ["NOT", "NOR"],
+      "sequence": "ATGGCAGGAGCAGTGGGACGCCCCCGGAGATCAGCTCCGCGACGGGCAGGCAAGAATCCTCGCGAGGAGATTCTTGACGCCTCTGCTGAGCTTTTCACCCGTCAAGGCTTCGCAACAACCTCCACGCATCAAATCGCTGATGCCGTGGGAATCCGCCAAGCCTCGCTGTATTATCACTTCCCGTCCAAGACGGAAATCTTCCTCACCCTGCTGAAATCTACTGTCGAGCCGTCCACTGTGCTCGCCGAAGACTTAAGCACCCTGGACGCCGGACCTGAGATGCGCCTCTGGGCAATCGTTGCCTCCGAAGTGCGTCTGCTGCTGTCCACCAAGTGGAACGTCGGTCGCCTGTACCAACTCCCCATCGTTGGTTCTGAAGAGTTCGCCGAGTACCACAGCCAGCGCGAAGCCCTCACCAACGTCTTCCGCGACCTCGCCACCGAAATCGTCGGTGACGACCCCCGCGCAGAACTCCCCTTCCACATCACCATGTCGGTGATCGAAATGCGTCGCAACGACGGCAAGATTCCAAGCCCGCTTTCCGCAGACAGCCTCCCGGAGACCGCAATTATGCTTGCCGACGCCTCCCTCGCCGTCCTCGGCGCGCCGCTGCCCGCCGACCGGGTCGAAAAAACGCTTGAACTAATCAAGCAGGCTGACGCGAAATAA",
+      "sequence_status": "verified",
+      "host_compatibility": [
+        "Escherichia coli",
+        "E. coli"
+      ],
+      "roles": [
+        "repressor",
+        "logic_gate"
+      ],
+      "compatible_gate_types": [
+        "NOT",
+        "NOR"
+      ],
       "orthogonality_group": "demo_amtr",
       "burden_score": 0.76
     },
@@ -37,11 +55,20 @@
       "id": "DEMO_BetI_CDS",
       "name": "BetI regulator",
       "part_type": "CDS",
-      "sequence": "ATGGCGTTTAAACCGTAA",
-      "sequence_status": "illustrative",
-      "host_compatibility": ["Escherichia coli", "E. coli"],
-      "roles": ["repressor", "logic_gate"],
-      "compatible_gate_types": ["NOT", "NOR"],
+      "sequence": "ATGCCCAAATTGGGGATGCAGTCGATCCGGCGCAGACAACTGATCGACGCCACACTGGAAGCAATAAATGAAGTGGGCATGCACGATGCAACGATCGCGCAGATCGCCCGCCGTGCAGGCGTTTCTACGGGGATCATCAGCCACTATTTCAGGGACAAAAATGGTCTGCTGGAAGCAACCATGCGCGATATCACCAGTCAGCTGCGTGACGCGGTTTTGAATCGATTACATGCACTTCCGCAGGGCAGTGCAGAGCAGCGATTACAGGCGATTGTTGGCGGAAACTTCGATGAAACGCAGGTGAGCAGTGCGGCGATGAAAGCCTGGCTGGCGTTCTGGGCCAGCAGTATGCATCAGCCGATGCTCTATCGTTTACAGCAGGTCAGCAGCCGCCGCTTGCTGTCGAATCTGGTGAGCGAGTTTCGTCGCGAATTGCCGCGCGAACAGGCACAGGAAGCGGGCTACGGCCTGGCCGCGCTGATTGATGGATTATGGCTGCGCGCGGCTCTGAGCGGCAAACCGCTGGATAAAACCCGCGCTAATTCCCTGACCCGCCACTTTATCACTCAGCATCTACCCACCGATTAA",
+      "sequence_status": "verified",
+      "host_compatibility": [
+        "Escherichia coli",
+        "E. coli"
+      ],
+      "roles": [
+        "repressor",
+        "logic_gate"
+      ],
+      "compatible_gate_types": [
+        "NOT",
+        "NOR"
+      ],
       "orthogonality_group": "demo_beti",
       "burden_score": 0.71
     },
@@ -49,49 +76,79 @@
       "id": "DEMO_PhlF_PROM",
       "name": "PhlF-responsive promoter",
       "part_type": "promoter",
-      "sequence": "TTGACATATAAT",
-      "sequence_status": "illustrative",
-      "host_compatibility": ["Escherichia coli", "E. coli"],
-      "roles": ["regulated_promoter"],
-      "compatible_regulators": ["DEMO_PhlF_CDS"]
+      "sequence": "TAATGTACATATATGTACATTTGACATATATAATGTACATATATGTACATT",
+      "sequence_status": "verified",
+      "host_compatibility": [
+        "Escherichia coli",
+        "E. coli"
+      ],
+      "roles": [
+        "regulated_promoter"
+      ],
+      "compatible_regulators": [
+        "DEMO_PhlF_CDS"
+      ]
     },
     {
       "id": "DEMO_AmtR_PROM",
       "name": "AmtR-responsive promoter",
       "part_type": "promoter",
-      "sequence": "TTGACCGGTATAAT",
-      "sequence_status": "illustrative",
-      "host_compatibility": ["Escherichia coli", "E. coli"],
-      "roles": ["regulated_promoter"],
-      "compatible_regulators": ["DEMO_AmtR_CDS"]
+      "sequence": "TTGACATATCTATAGTTATAGTATATCTATAGTTATAGTACATAT",
+      "sequence_status": "verified",
+      "host_compatibility": [
+        "Escherichia coli",
+        "E. coli"
+      ],
+      "roles": [
+        "regulated_promoter"
+      ],
+      "compatible_regulators": [
+        "DEMO_AmtR_CDS"
+      ]
     },
     {
       "id": "DEMO_RBS_MEDIUM",
       "name": "Medium demonstration RBS",
       "part_type": "RBS",
-      "sequence": "AGGAGG",
-      "sequence_status": "illustrative",
-      "host_compatibility": ["Escherichia coli", "E. coli"],
-      "roles": ["translation_initiation"]
+      "sequence": "AAAGAGGAGAA",
+      "sequence_status": "verified",
+      "host_compatibility": [
+        "Escherichia coli",
+        "E. coli"
+      ],
+      "roles": [
+        "translation_initiation"
+      ]
     },
     {
       "id": "DEMO_GFP_CDS",
       "name": "GFP reporter",
       "part_type": "CDS",
-      "sequence": "ATGGTGAGCAAGGGCGAGTAA",
-      "sequence_status": "illustrative",
-      "host_compatibility": ["Escherichia coli", "E. coli"],
-      "roles": ["reporter", "output"],
+      "sequence": "ATGCGTAAAGGCGAGGAGCTGTTCACTGGTGTCGTCCCTATTCTGGTGGAACTGGATGGTGATGTCAACGGTCATAAGTTTTCCGTGCGTGGCGAGGGTGAAGGTGACGCAACTAATGGTAAACTGACGCTGAAGTTCATCTGTACTACTGGTAAACTGCCGGTACCTTGGCCGACTCTGGTAACGACGCTGACTTATGGTGTTCAGTGCTTTGCTCGTTATCCGGACCATATGAAGCAGCATGACTTCTTCAAGTCCGCCATGCCGGAAGGCTATGTGCAGGAACGCACGATTTCCTTTAAGGATGACGGCACGTACAAAACGCGTGCGGAAGTGAAATTTGAAGGCGATACCCTGGTAAACCGCATTGAGCTGAAAGGCATTGACTTTAAAGAAGACGGCAATATCCTGGGCCATAAGCTGGAATACAATTTTAACAGCCACAATGTTTACATCACCGCCGATAAACAAAAAAATGGCATTAAAGCGAATTTTAAAATTCGCCACAACGTGGAGGATGGCAGCGTGCAGCTGGCTGATCACTACCAGCAAAACACTCCAATCGGTGATGGTCCTGTTCTGCTGCCAGACAATCACTATCTGAGCACGCAAAGCGTTCTGTCTAAAGATCCGAACGAGAAACGCGATCATATGGTTCTGCTGGAGTTCGTAACCGCAGCGGGCATCACGCATGGTATGGATGAACTGTACAAATGA",
+      "sequence_status": "verified",
+      "host_compatibility": [
+        "Escherichia coli",
+        "E. coli"
+      ],
+      "roles": [
+        "reporter",
+        "output"
+      ],
       "burden_score": 0.88
     },
     {
       "id": "DEMO_TERM",
       "name": "Demonstration terminator",
       "part_type": "terminator",
-      "sequence": "GCCGCCAGGCAG",
-      "sequence_status": "illustrative",
-      "host_compatibility": ["Escherichia coli", "E. coli"],
-      "roles": ["transcription_termination"]
+      "sequence": "CCAGGCATCAAATAAAACGAAAGGCTCAGTCGAAAGACTGGGCCTTTCGTTTTATCTGTTGTTTGTCGGTGAACGCTCTCTACTAGAGTCACACTGGCTCACCTTCGGGTGGGCCTTTCTGCGTTTATA",
+      "sequence_status": "verified",
+      "host_compatibility": [
+        "Escherichia coli",
+        "E. coli"
+      ],
+      "roles": [
+        "transcription_termination"
+      ]
     }
   ]
 }

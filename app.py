@@ -21,6 +21,7 @@ from schemas.design_diff import compare_designs
 from schemas.design_ir import DesignIR, topology_to_design_ir
 from schemas.design_operations import replace_part_immutable, validate_replacement
 from schemas.state import DesignState, SearchNode
+from agents.pm_agent import call_pm_agent
 from mcp_server.ode_explainer import explain_ode_topology
 from tools.part_library import PartLibrary
 from exporters.bom_exporter import export_bom_csv
@@ -157,6 +158,25 @@ def main() -> None:
     state = st.session_state.design_state
     _render_sidebar(state)
 
+    # Detect user intent changes and trigger state reset
+    current_intent = state.user_intent.strip()
+    last_intent = st.session_state.get("last_seen_intent", "").strip()
+    if current_intent != last_intent:
+        state.pm_stage = "elicitation"
+        state.structured_spec = {}
+        state.pm_chat_history = []
+        state.pending_proposal = {}
+        state.tree_nodes = {}
+        state.active_frontier = []
+        state.best_topology = None
+        state.is_completed = False
+        state.requires_human_input = False
+        state.iteration_count = 0
+        state.last_error = None
+        st.session_state.last_seen_intent = current_intent
+        st.session_state.pm_show_custom_input = False
+
+
     st.markdown(
         """
         <div class="app-header">
@@ -173,14 +193,18 @@ def main() -> None:
     _render_human_loop_panel(state)
     render_external_import_workspace(st, _generated_designs_for_comparison(state))
 
-    work_col, inspector_col = st.columns([1.45, 1], gap="large")
-    with work_col:
-        _render_pipeline(state)
-        _render_chart_overview(state)
-        _render_tree_workspace(state)
+    if getattr(state, "pm_stage", "elicitation") == "elicitation":
+        _render_pm_elicitation_dashboard(state)
+    else:
+        work_col, inspector_col = st.columns([1.45, 1], gap="large")
+        with work_col:
+            _render_pipeline(state)
+            _render_chart_overview(state)
+            _render_tree_workspace(state)
 
-    with inspector_col:
-        _render_inspector(state)
+        with inspector_col:
+            _render_inspector(state)
+
 
 
 def _generated_designs_for_comparison(state: DesignState) -> list[DesignIR]:
@@ -539,6 +563,11 @@ def _ensure_session_state() -> None:
             "enable_ode": True,
             "enable_tree_search": True,
             "enable_cache": True,
+            "cello_command": "",
+            "ucf_path": "",
+            "part_library_path": "",
+            "sensor_path": "",
+            "device_path": "",
         }
     if "llm_config" not in st.session_state:
         st.session_state.llm_config = {
@@ -629,6 +658,7 @@ def _render_sidebar(state: DesignState) -> None:
         options["enable_cache"] = st.toggle("快取", value=options["enable_cache"])
 
         _render_byok_controls()
+        _render_cello_controls()
         render_external_import_sidebar(st)
 
         st.subheader("執行")
@@ -760,6 +790,37 @@ def _render_byok_controls() -> None:
         )
 
 
+def _render_cello_controls() -> None:
+    options = st.session_state.ui_options
+    with st.expander("Cello/UCF 物理映射設定", expanded=False):
+        options["cello_command"] = st.text_input(
+            "Cello CLI/Docker 指令",
+            value=options.get("cello_command", ""),
+            placeholder="留空則使用 Mock 模擬映射",
+            help="例如：wsl podman run --rm -i -v {wsl_temp_dir}:/root/input ...",
+        )
+        options["ucf_path"] = st.text_input(
+            "UCF 限制檔案路徑",
+            value=options.get("ucf_path", ""),
+            placeholder="例如：C:\\Cello\\Eco1C1G1T1.UCF.json",
+        )
+        options["part_library_path"] = st.text_input(
+            "自訂元件庫 JSON 路徑",
+            value=options.get("part_library_path", ""),
+            placeholder="留空則使用預設 real sequences 元件庫",
+        )
+        options["sensor_path"] = st.text_input(
+            "Sensor 輸入檔案路徑 (選填)",
+            value=options.get("sensor_path", ""),
+            placeholder="例如：C:\\Cello\\Eco1C1G1T1.input.json",
+        )
+        options["device_path"] = st.text_input(
+            "Device 輸出檔案路徑 (選填)",
+            value=options.get("device_path", ""),
+            placeholder="例如：C:\\Cello\\Eco1C1G1T1.output.json",
+        )
+
+
 def _render_run_message() -> None:
     message = st.session_state.get("run_message")
     if not message:
@@ -777,7 +838,73 @@ def _render_human_loop_panel(state: DesignState) -> None:
     if not state.requires_human_input:
         return
 
+    # Trigger PM Agent to translate raw error to friendly options if in hitl_dialogue stage
+    if state.requires_human_input:
+        if getattr(state, "pm_stage", None) != "hitl_dialogue" or not getattr(state, "pending_proposal", None) or "options" not in state.pending_proposal:
+            state.pm_stage = "hitl_dialogue"
+            config = st.session_state.get("llm_config", {})
+            api_key = config.get("api_key", "").strip() or None
+            model_name = config.get("model_name", "gpt-4o-mini").strip()
+            api_base = config.get("api_base", "").strip() or None
+            call_pm_agent(state, api_key=api_key, model_name=model_name, api_base=api_base)
+
+    if getattr(state, "pm_stage", None) == "hitl_dialogue" and getattr(state, "pending_proposal", None) and "options" in state.pending_proposal:
+        proposal = state.pending_proposal
+        err_summary = proposal.get("error_summary_cn", "系統遇到設計瓶頸")
+        ui_msg = proposal.get("ui_message", "請問您希望如何調整？")
+        selected_node = _selected_node(state)
+        
+        st.markdown(
+            f"""
+            <div class="hitl-panel" style="border-left:5px solid #ea580c;">
+                <h2 style="color:#ea580c;">需要人工介入 (設計經理協同)</h2>
+                <p><strong>問題說明：</strong>{_escape_html(err_summary)}</p>
+                <p style="margin-top:10px;"><strong>經理建議：</strong>{_escape_html(ui_msg)}</p>
+                <div class="hitl-meta">目前節點：{_escape_html(selected_node.node_id if selected_node else "無")}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        if state.human_constraints:
+            with st.expander("已套用的人工限制", expanded=False):
+                for constraint in state.human_constraints:
+                    st.write(f"- {constraint}")
+
+        for opt in proposal["options"]:
+            opt_id = opt.get("option_id", "A")
+            label = opt.get("label", "")
+            action = opt.get("action", "Repair")
+            constraints = opt.get("constraints", [])
+            extra_budget = opt.get("extra_budget", 2)
+            
+            if st.button(f"👉 {opt_id}: {label}", key=f"pm_opt_{opt_id}", use_container_width=True, type="primary" if opt_id == "A" else "secondary"):
+                state.human_constraints.extend(constraints)
+                if extra_budget:
+                    state.compute_budget += extra_budget
+                if action == "Accept_Fallback":
+                    _select_best_fallback(state)
+                    state.is_completed = state.best_topology is not None
+                else:
+                    _create_guided_child(state, "Repair")
+                
+                state.requires_human_input = False
+                state.pm_stage = "engine_running"
+                state.pause_reason = None
+                state.human_feedback_prompt = None
+                state.pending_proposal = {}
+                st.session_state.run_message = ("success", f"已套用設計經理方案 {opt_id}。請繼續執行下一輪搜尋。")
+                st.rerun()
+
+        if st.button("✏️ 切換為傳統手動輸入表單", use_container_width=True):
+            state.pm_stage = "engine_running"
+            state.pending_proposal = {}
+            st.rerun()
+        return
+
+    # Fallback to normal human-loop panel if no options found
     selected_node = _selected_node(state)
+
     prompt = state.human_feedback_prompt or state.latest_critic_feedback or "系統需要更多限制或偏好，才能安全地繼續搜尋。"
     reason_label = _pause_reason_label(state.pause_reason)
     best_score = _best_score(state)
@@ -2135,11 +2262,27 @@ def _render_topology_charts(node: SearchNode, state: DesignState) -> None:
 
 
 def _run_demo_iteration(state: DesignState) -> None:
+    # Auto-complete PM Stage if running engine directly
+    if getattr(state, "pm_stage", "elicitation") == "elicitation":
+        fallbacks = {
+            "chassis": "Escherichia coli",
+            "inputs": [{"name": "IPTG", "sensor_promoter": "pLac", "type": "input_sensor"}],
+            "outputs": [{"name": "sfGFP", "type": "reporter_gene"}],
+            "logic_relation": "sfGFP = IPTG",
+            "copy_number": 15
+        }
+        for k, v in fallbacks.items():
+            if k not in state.structured_spec:
+                state.structured_spec[k] = v
+        state.pm_stage = "completed"
+        state.pending_proposal = {}
+
     options = st.session_state.ui_options
     if not state.tree_nodes:
         root = SearchNode(node_id="root", search_mode="Exploration")
         state.tree_nodes[root.node_id] = root
         state.active_frontier = [root.node_id]
+
 
     if not state.active_frontier or state.used_budget >= state.compute_budget:
         _select_best_fallback(state)
@@ -2192,6 +2335,22 @@ def _run_byok_workflow(state: DesignState) -> None:
     if not state.user_intent.strip():
         st.session_state.run_message = ("warning", "請先輸入設計需求再執行自備金鑰工作流程。")
         return
+
+    # Auto-complete PM Stage if running engine directly
+    if getattr(state, "pm_stage", "elicitation") == "elicitation":
+        fallbacks = {
+            "chassis": "Escherichia coli",
+            "inputs": [{"name": "IPTG", "sensor_promoter": "pLac", "type": "input_sensor"}],
+            "outputs": [{"name": "sfGFP", "type": "reporter_gene"}],
+            "logic_relation": "sfGFP = IPTG",
+            "copy_number": 15
+        }
+        for k, v in fallbacks.items():
+            if k not in state.structured_spec:
+                state.structured_spec[k] = v
+        state.pm_stage = "completed"
+        state.pending_proposal = {}
+
     if not config.get("api_key", "").strip():
         st.session_state.run_message = ("warning", "請在自備金鑰模型設定中輸入 API key。")
         return
@@ -2244,7 +2403,13 @@ def _run_byok_workflow(state: DesignState) -> None:
             state=state,
             builder=BuilderAgent(api_key=api_key, model_name=model_name, api_base=api_base),
             translator=TranslatorRunner(api_key=api_key, model_name=model_name, api_base=api_base),
-            cello_wrapper=CelloWrapper(),
+            cello_wrapper=CelloWrapper(
+                cello_command=options.get("cello_command") or None,
+                ucf_path=options.get("ucf_path") or None,
+                part_library_path=options.get("part_library_path") or None,
+                sensor_path=options.get("sensor_path") or None,
+                device_path=options.get("device_path") or None,
+            ),
             batch_ode_simulator=BatchODESimulator() if options["enable_ode"] else _NoOpODESimulator(),
             critic=CriticAgent(api_key=api_key, model_name=model_name, api_base=api_base),
             consolidator=ConsolidatorAgent(),
@@ -2944,6 +3109,221 @@ def _child_id(parent_id: str, mode: str) -> str:
     return f"{parent_id}_{mode}_{uuid.uuid4().hex[:4]}"
 
 
+def _generate_mermaid_from_spec(spec: dict[str, Any]) -> str:
+    if not spec:
+        return ""
+    lines = ["graph LR"]
+    inputs = spec.get("inputs", [])
+    outputs = spec.get("outputs", [])
+    logic = spec.get("logic_relation", "")
+    chassis = spec.get("chassis", "Unknown Host")
+    
+    # 建立 Logic Engine 節點
+    logic_label = f"\"🧬 {chassis} 電路核心<br/>規格: {logic}\"" if logic else f"\"🧬 {chassis} 電路核心\""
+    lines.append(f"    Logic[{logic_label}]")
+    
+    # 建立 Inputs 連結
+    for index, inp in enumerate(inputs):
+        name = inp.get("name", f"Input_{index}")
+        promoter = inp.get("sensor_promoter", "")
+        label = f"\"{name} (感測器: {promoter})\"" if promoter else f"\"{name}\""
+        lines.append(f"    In_{index}[{label}] --> Logic")
+        
+    # 建立 Outputs 連結
+    for index, out in enumerate(outputs):
+        name = out.get("name", f"Output_{index}")
+        label = f"\"{name} (報告基因)\""
+        lines.append(f"    Logic --> Out_{index}[{label}]")
+        
+    # 美化樣式
+    lines.append("    style Logic fill:#f1f5f9,stroke:#334155,stroke-width:2px")
+    for index in range(len(inputs)):
+        lines.append(f"    style In_{index} fill:#eff6ff,stroke:#2563eb,stroke-width:1px")
+    for index in range(len(outputs)):
+        lines.append(f"    style Out_{index} fill:#ecfdf5,stroke:#059669,stroke-width:2px")
+        
+    return "\n".join(lines)
+
+
+def _render_pm_elicitation_dashboard(state: DesignState) -> None:
+    st.markdown(
+        """
+        <div style="padding:15px; background-color:#f8fafc; border-radius:8px; border:1px solid #e2e8f0; margin-bottom:20px;">
+            <h3 style="margin:0 0 5px 0; color:#1e293b;">🧬 基因電路設計經理 (Bio-Design PM)</h3>
+            <p style="margin:0; font-size:14px; color:#64748b;">
+                我們將透過簡單的對話確認您的設計規格（Chassis, Inputs, Outputs, Logic 等）。
+                PM Agent 會自動尋找生物學上的推薦預設值，以提高後續評分並防範模擬錯誤。
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    field_status = state.pending_proposal.get("field_status") if state.pending_proposal else []
+    if not field_status and state.structured_spec:
+        ordered_fields = ["chassis", "inputs", "outputs", "logic_relation", "copy_number"]
+        field_status = [
+            {
+                "field": field,
+                "label": field.replace("_", " ").title(),
+                "status": "confirmed" if field in state.structured_spec else "pending",
+                "value": state.structured_spec.get(field),
+            }
+            for field in ordered_fields
+        ]
+    if field_status:
+        cols = st.columns(len(field_status))
+        for col, item in zip(cols, field_status):
+            status = item.get("status", "pending")
+            icon = "✅" if status == "confirmed" else "🔵" if status == "current" else "·"
+            col.metric(
+                f"{icon} {item.get('label', item.get('field', 'Field'))}",
+                "完成" if status == "confirmed" else "確認中" if status == "current" else "待補",
+            )
+
+    # 1. 檢查是否有輸入 Intent
+    if not state.user_intent.strip():
+        st.info("💡 請在左側側邊欄的「設計需求」中輸入您的初步意圖（例如：『我需要一個溫敏型啟動子，高溫時啟動 GFP』），隨後 PM Agent 將為您補完其他規格。")
+        if st.button("⚡ 略過對話，直接以大腸桿菌預設值啟動設計", use_container_width=True):
+            state.structured_spec = {
+                "chassis": "Escherichia coli",
+                "inputs": [{"name": "IPTG", "sensor_promoter": "pLac", "type": "input_sensor"}],
+                "outputs": [{"name": "sfGFP", "type": "reporter_gene"}],
+                "logic_relation": "sfGFP = IPTG",
+                "copy_number": 15
+            }
+            state.pm_stage = "completed"
+            st.session_state.run_message = ("success", "已略過前置對話，已載入預設規格。")
+            st.rerun()
+        return
+
+    # 2. 如果沒有 pending_proposal，嘗試初始化
+    if not state.pending_proposal:
+        config = st.session_state.get("llm_config", {})
+        api_key = config.get("api_key", "").strip() or None
+        model_name = config.get("model_name", "gpt-4o-mini").strip()
+        api_base = config.get("api_base", "").strip() or None
+        
+        # 顯示載入中
+        with st.spinner("設計經理正在分析意圖並規劃生物學預設推薦..."):
+            call_pm_agent(state, api_key=api_key, model_name=model_name, api_base=api_base)
+        st.rerun()
+
+    # 3. 呈現對話歷史
+    if not state.pm_chat_history:
+        state.pm_chat_history.append({
+            "role": "assistant",
+            "content": f"你好！我是您的設計經理。我看到您的意圖是：『{state.user_intent}』。為了保證後續的電路模擬與評分能順利成功，我會逐步向您提議規格設定，您只需確認或修改即可。"
+        })
+
+    chat_container = st.container(height=280, border=True)
+    with chat_container:
+        for msg in state.pm_chat_history:
+            with st.chat_message(msg["role"]):
+                st.write(msg["content"])
+
+    # 4. 如果有等待確認 copy_number
+    if state.pending_proposal and "missing_field" in state.pending_proposal:
+        proposal = state.pending_proposal
+        missing_field = proposal["missing_field"]
+        proposed_value = proposal["proposed_value"]
+        reason = proposal.get("proposal_reason", "無特定理由")
+        ui_msg = proposal.get("ui_message", f"我為您推薦了 {missing_field} 欄位的預設值，請問您同意嗎？")
+        source = proposal.get("source", "unknown")
+        confidence = proposal.get("confidence", "unknown")
+        
+        st.markdown(
+            f"""
+            <div class="hitl-panel" style="margin-top:15px; margin-bottom:15px; border-left:5px solid #2563eb; background-color:#f1f5f9;">
+                <h4 style="margin:0 0 5px 0; color:#2563eb; font-size:16px;">💡 設計經理推薦方案 ({missing_field.upper()})</h4>
+                <p style="margin:0 0 5px 0; font-size:12px; color:#64748b;">來源：{_escape_html(str(source))} · 信心：{_escape_html(str(confidence))}</p>
+                <p style="margin:0 0 5px 0; font-size:14px;"><strong>推薦預設：</strong><code>{json.dumps(proposed_value, ensure_ascii=False)}</code></p>
+                <p style="margin:0 0 5px 0; font-size:14px; color:#475569;"><strong>推薦原因：</strong>{reason}</p>
+                <div style="margin-top:8px; font-weight:bold; font-size:14px; color:#1e293b;">{ui_msg}</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("👍 同意推薦並繼續", type="primary", use_container_width=True):
+                # 寫入規格
+                state.structured_spec[missing_field] = proposed_value
+                # 對話紀錄
+                state.pm_chat_history.append({"role": "user", "content": f"同意使用推薦值：{json.dumps(proposed_value, ensure_ascii=False)}"})
+                state.pm_chat_history.append({"role": "assistant", "content": f"已儲存 {missing_field} 設定。"})
+                # 清除提案，以便下一步尋找新的缺失項
+                state.pending_proposal = {}
+                
+                config = st.session_state.get("llm_config", {})
+                api_key = config.get("api_key", "").strip() or None
+                model_name = config.get("model_name", "gpt-4o-mini").strip()
+                api_base = config.get("api_base", "").strip() or None
+                call_pm_agent(state, api_key=api_key, model_name=model_name, api_base=api_base)
+                st.rerun()
+
+        with col2:
+            if st.button("✏️ 自訂修改此項", use_container_width=True):
+                st.session_state.pm_show_custom_input = True
+
+        if st.session_state.get("pm_show_custom_input"):
+            st.markdown("---")
+            custom_input = st.text_input(
+                f"自訂 {missing_field} 設定:",
+                value=json.dumps(proposed_value, ensure_ascii=False) if not isinstance(proposed_value, (list, dict)) else ""
+            )
+            c_col1, c_col2 = st.columns([1, 4])
+            with c_col1:
+                if st.button("確認套用", type="primary", use_container_width=True):
+                    try:
+                        parsed_val = json.loads(custom_input)
+                    except Exception:
+                        if "," in custom_input:
+                            parsed_val = [x.strip() for x in custom_input.split(",")]
+                        else:
+                            parsed_val = custom_input
+                    
+                    state.structured_spec[missing_field] = parsed_val
+                    state.pm_chat_history.append({"role": "user", "content": f"我想要改為：{custom_input}"})
+                    state.pm_chat_history.append({"role": "assistant", "content": f"已自訂 {missing_field} 為: {json.dumps(parsed_val, ensure_ascii=False)}。"})
+                    state.pending_proposal = {}
+                    st.session_state.pm_show_custom_input = False
+                    
+                    config = st.session_state.get("llm_config", {})
+                    api_key = config.get("api_key", "").strip() or None
+                    model_name = config.get("model_name", "gpt-4o-mini").strip()
+                    api_base = config.get("api_base", "").strip() or None
+                    call_pm_agent(state, api_key=api_key, model_name=model_name, api_base=api_base)
+                    st.rerun()
+
+    # 呈現電路視覺化流程圖預覽
+    if state.structured_spec:
+        st.markdown("---")
+        st.subheader("📊 當前規格電路流程圖 (高階預覽)")
+        mermaid_code = _generate_mermaid_from_spec(state.structured_spec)
+        st.markdown(f"```mermaid\n{mermaid_code}\n```")
+
+    # 提供直接啟動選項
+    st.markdown("---")
+
+    if st.button("⚡ 結束對話，將剩餘項目套用預設值並直接啟動設計", use_container_width=True):
+        fallbacks = {
+            "chassis": "Escherichia coli",
+            "inputs": [{"name": "IPTG", "sensor_promoter": "pLac", "type": "input_sensor"}],
+            "outputs": [{"name": "sfGFP", "type": "reporter_gene"}],
+            "logic_relation": "sfGFP = IPTG",
+            "copy_number": 15
+        }
+        for k, v in fallbacks.items():
+            if k not in state.structured_spec:
+                state.structured_spec[k] = v
+        state.pm_stage = "completed"
+        state.pending_proposal = {}
+        st.session_state.run_message = ("success", "已略過剩餘對話，規格已齊全，可開始執行設計。")
+        st.rerun()
+
+
 def _escape_html(value: str) -> str:
     value = str(value)
     return (
@@ -2956,3 +3336,4 @@ def _escape_html(value: str) -> str:
 
 if __name__ == "__main__":
     main()
+

@@ -69,10 +69,43 @@ def _read_verilog_source(candidate: dict[str, Any]) -> tuple[str | None, str | N
     return None, None
 
 
+def _determine_ideal_gate_limit(candidate: dict[str, Any], default_limit: int) -> int:
+    if "ideal_gate_limit" in candidate:
+        try:
+            return int(candidate["ideal_gate_limit"])
+        except (TypeError, ValueError):
+            pass
+
+    # Extract truth table/logic matrix
+    raw_table = (
+        candidate.get("truth_table")
+        or candidate.get("truth_table_or_logic_matrix")
+        or candidate.get("logic_matrix")
+    )
+    if isinstance(raw_table, list) and raw_table:
+        first_row = raw_table[0]
+        if isinstance(first_row, dict):
+            # Output keys matching standard defaults from functional_scorer.py
+            output_match_set = {"y", "out", "output", "z", "result"}
+            inputs = []
+            for key in first_row.keys():
+                key_str = str(key)
+                if (
+                    key_str.lower() not in output_match_set
+                    and not any(o in key_str.lower() for o in ("output", "result"))
+                ):
+                    inputs.append(key_str)
+            num_inputs = len(inputs)
+            if num_inputs > 0:
+                # Dynamic formula: 2 * num_inputs + 1
+                return max(3, 2 * num_inputs + 1)
+    return default_limit
+
+
 class MetabolicBurdenEvaluator(BaseEvaluator):
     def __init__(
         self,
-        ideal_gate_limit: int = DEFAULT_IDEAL_GATE_LIMIT,
+        ideal_gate_limit: int | None = None,
         decay_rate: float = DEFAULT_DECAY_RATE,
     ):
         self.ideal_gate_limit = ideal_gate_limit
@@ -99,9 +132,15 @@ class MetabolicBurdenEvaluator(BaseEvaluator):
                     complexity_penalty=0.0,
                 )
 
+            # Determine dynamic or configured ideal gate limit
+            if self.ideal_gate_limit is not None:
+                limit = self.ideal_gate_limit
+            else:
+                limit = _determine_ideal_gate_limit(candidate, DEFAULT_IDEAL_GATE_LIMIT)
+
             score = metabolic_burden_score(
                 gate_count,
-                ideal_gate_limit=self.ideal_gate_limit,
+                ideal_gate_limit=limit,
                 decay_rate=self.decay_rate,
             )
             complexity_penalty = 1.0 - score
@@ -111,7 +150,7 @@ class MetabolicBurdenEvaluator(BaseEvaluator):
                     "metric": "metabolic_burden",
                     "status": "ok",
                     "source": source,
-                    "ideal_gate_limit": self.ideal_gate_limit,
+                    "ideal_gate_limit": limit,
                     "decay_rate": self.decay_rate,
                 },
                 metabolic_burden_score=score,
@@ -134,3 +173,4 @@ class MetabolicBurdenEvaluator(BaseEvaluator):
 
 def score_metabolic_burden(candidate: dict[str, Any]) -> EvaluationResult:
     return MetabolicBurdenEvaluator().evaluate(candidate)
+
