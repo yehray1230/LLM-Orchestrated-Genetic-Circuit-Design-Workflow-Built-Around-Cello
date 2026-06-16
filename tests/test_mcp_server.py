@@ -44,6 +44,21 @@ def _wait_for_completed(fetch_result):
     return result
 
 
+def _wait_for_completed_topology(fetch_result):
+    result = fetch_result()
+    for _ in range(100):
+        summary = result.get("summary", {})
+        if (
+            result.get("status") == "completed"
+            and isinstance(summary, dict)
+            and isinstance(summary.get("best_topology"), dict)
+        ):
+            return result
+        time.sleep(0.02)
+        result = fetch_result()
+    return result
+
+
 def test_evaluate_verilog_writes_agent_artifacts(tmp_path: Path) -> None:
     result = evaluate_verilog(
         "module genetic_circuit(input A, input B, output Y); assign Y = A & ~B; endmodule",
@@ -341,8 +356,11 @@ def test_compare_design_runs_ranks_completed_runs(tmp_path: Path) -> None:
         },
         request={"user_intent": "high"},
     )
-    _wait_for_completed(lambda: store.result(low["run_id"]))
-    _wait_for_completed(lambda: store.result(high["run_id"]))
+    low_result = _wait_for_completed_topology(lambda: store.result(low["run_id"]))
+    high_result = _wait_for_completed_topology(lambda: store.result(high["run_id"]))
+
+    assert low_result["summary"]["best_topology"]["score"] == 0.4
+    assert high_result["summary"]["best_topology"]["score"] == 0.9
 
     compared = compare_design_runs([low["run_id"], high["run_id"]], run_store=store)
 
