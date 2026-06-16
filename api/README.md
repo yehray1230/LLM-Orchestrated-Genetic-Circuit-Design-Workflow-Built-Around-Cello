@@ -46,10 +46,35 @@ GET  /api/v2/backbones
 GET  /api/v2/backbones/{backbone_id}/versions/{version}
 POST /api/v2/designs/{design_id}/plasmid-assemblies
 POST /api/v2/designs/{design_id}/assembly-plans
+POST /api/v2/designs/{design_id}/assembly-deliverables
+GET  /api/v2/assembly-deliverables/{deliverable_id}
+GET  /api/v2/assembly-deliverables/{deliverable_id}/artifacts/{artifact_key}
+POST /api/v2/designs/{design_id}/sequence-analysis
+POST /api/v2/designs/{design_id}/sequence-optimization/evaluate
+POST /api/v2/designs/{design_id}/sequence-optimization/revisions
+GET  /api/v2/host-profiles
+GET  /api/v2/host-profiles/{profile_id}
+POST /api/v2/host-profiles
+POST /api/v2/designs/{design_id}/host-optimization/candidates
+POST /api/v2/host-optimization/calibrations
+GET  /api/v2/host-optimization/calibrations
+GET  /api/v2/host-optimization/calibrations/{calibration_id}
+POST /api/v2/designs/{design_id}/optimization-workflow
 
 Assembly-plan responses contain `assembly`, `plan`, and `readiness`. The
 readiness object uses schema version `1.0.0`; hard blockers are independent
 from the legacy benchmark score.
+
+Sequence-analysis and optimization endpoints are conservative computational
+checks. `sequence-optimization/revisions` creates immutable DesignIR v2
+revisions for synonymous CDS codon optimization under a host profile.
+`host-optimization/candidates` returns ranked trade-off candidates rather than
+validated expression predictions. Calibration endpoints store and summarize
+user-supplied measurements; they do not fit a validated host-cell model.
+
+`optimization-workflow` chains sequence analysis, sequence-optimization
+revision creation, host-optimization candidate ranking, and readiness reporting
+in one call.
 
 POST /api/v1/runs
 GET  /api/v1/runs
@@ -102,6 +127,8 @@ outputs/api_data/
   research.db
   benchmark_runs/
   benchmark_reports/
+  host_profiles/
+  host_calibrations/
   runs/
 ```
 
@@ -111,6 +138,10 @@ records, revision history, and migration audit records use SQLite. Legacy
 `designs/*.json` records are imported idempotently. Run metadata, events,
 feedback, results, artifacts, and reproducibility manifests use the persistent
 `RunStore`.
+
+Host profiles and host-calibration summaries are JSON records. The default
+`ecoli_k12_default` host profile is installed automatically when application
+services are created.
 
 The public v1 design endpoint remains backward compatible. Use `/ir-v2` to
 inspect biological context, construct/plasmid layers, field provenance, and

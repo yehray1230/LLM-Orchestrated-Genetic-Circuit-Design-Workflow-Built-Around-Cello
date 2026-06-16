@@ -1,5 +1,5 @@
-# Multi-Agent Framework for Translating Natural Language to Genetic Circuit Design Candidates
-# 用於將自然語言翻譯為基因電路設計候選方案的多智能體框架
+# LLM-Orchestrated Genetic Circuit Design Workflow Built Around Cello
+# 圍繞 Cello 構建且由 LLM 編排的基因電路設計工作流
 
 This project is a research prototype for exploring how LLM-based agents can turn a natural-language circuit design request into computational genetic-circuit design candidates. It focuses on the design-assistance layer: intent interpretation, Boolean-logic drafting, Cello-compatible Verilog generation, optional Cello mapping, resource-aware ODE simulation, and benchmark-driven revision.
 
@@ -27,8 +27,8 @@ What this project attempts to do:
   解析使用者請求，例如「僅在輸入 A 存在且輸入 B 不存在時激活 GFP」。
 - Generate candidate Boolean logic and Cello-compatible combinational Verilog.
   生成候選的布林邏輯以及與 Cello 相容的組合邏輯 Verilog。
-- Route candidates through a multi-agent Reflexion loop: Builder, Translator, Cello wrapper, DataMiner, ODE simulator, Benchmark, Critic, Consolidator, and SkillExtractor.
-  將候選方案路由至多智能體 Reflexion 迴圈：Builder（構建者）、Translator（翻譯者）、Cello wrapper（Cello 包裝器）、DataMiner（數據挖掘者）、ODE simulator（ODE 模擬器）、Benchmark（基準測試）、Critic（評論者）、Consolidator（鞏固者）以及 SkillExtractor（技能提取者）。
+- Route candidates through a multi-agent Reflexion loop: PM, Builder, Translator, Cello wrapper, DataMiner, ODE simulator, Benchmark, Critic, Consolidator, and SkillExtractor.
+  將候選方案路由至多智能體 Reflexion 迴圈：PM（產品經理）、Builder（構建者）、Translator（翻譯者）、Cello wrapper（Cello 包裝器）、DataMiner（數據挖掘者）、ODE simulator（ODE 模擬器）、Benchmark（基準測試）、Critic（評論者）、Consolidator（鞏固者）以及 SkillExtractor（技能提取者）。
 - Score candidates with functional, kinetic, burden, robustness, temporal, orthogonality, and Cello-assignment metrics.
   利用功能性、動力學、負載、魯棒性、時序、正交性以及 Cello 分配指標對候選方案進行評分。
 - Surface failure modes so later iterations can repair logic, mapping, or part-assignment problems.
@@ -78,10 +78,10 @@ The main Reflexion workflow is implemented in [workflows/reflexion_controller.py
 
 主要的 Reflexion 工作流實作於 [workflows/reflexion_controller.py](workflows/reflexion_controller.py)。
 
-1. The user provides a natural-language design request and optional host/model settings.
-   使用者提供自然語言設計請求以及選擇性的宿主/模型設定。
-2. `BuilderAgent` proposes logic strategies, truth-table structure, and design constraints.
-   `BuilderAgent` 提出邏輯策略、真值表結構與設計約束。
+1. The user provides a natural-language intent. `PMAgent` guides them progressively, autocompleting missing specifications (chassis, inputs, outputs, logic relation, copy number) with biological default recommendations in a one-click consent flow.
+   使用者提供自然語言意圖。`PMAgent` 進行漸進式引導，主動對缺失的規格（宿主、輸入、輸出、邏輯關係、拷貝數）給出生物學預設推薦，實現一鍵同意流程。
+2. `BuilderAgent` receives the structured specification and proposes logic strategies, truth-table structure, and design constraints.
+   `BuilderAgent` 接收此結構化規格，並提出邏輯策略、真值表結構與設計約束。
 3. `TranslatorAgent` converts the proposal into Cello-compatible combinational Verilog.
    `TranslatorAgent` 將提案轉換為與 Cello 相容的組合邏輯 Verilog。
 4. `CelloWrapper` either runs an external Cello command or returns mock unmapped topology data when Cello is not configured. Topologies carry explicit `cello_mode`, `cello_claim_level`, and `cello_warning` metadata so mock output is not confused with real part mapping.
@@ -612,11 +612,70 @@ Relevant implementation paths:
 - [schemas/design_ir.py](schemas/design_ir.py)
 - [schemas/design_operations.py](schemas/design_operations.py)
 - [schemas/design_diff.py](schemas/design_diff.py)
+- [schemas/sequence_analysis.py](schemas/sequence_analysis.py)
+- [schemas/sequence_optimization.py](schemas/sequence_optimization.py)
+- [schemas/host_profile.py](schemas/host_profile.py)
+- [schemas/host_optimization.py](schemas/host_optimization.py)
 - [tools/cello_artifact_parser.py](tools/cello_artifact_parser.py)
 - [tools/part_library.py](tools/part_library.py)
+- [tools/sequence_analyzer.py](tools/sequence_analyzer.py)
+- [tools/sequence_optimization.py](tools/sequence_optimization.py)
+- [tools/host_optimization.py](tools/host_optimization.py)
 - [part_libraries/](part_libraries)
 - [exporters/](exporters)
 - [CHANGELOG.md](CHANGELOG.md)
+
+### Sequence and host optimization workflow
+
+The v2 API includes a conservative optimization foundation that builds on the
+sequence-complete assembly layer:
+
+```text
+POST /api/v2/designs/{design_id}/sequence-analysis
+POST /api/v2/designs/{design_id}/sequence-optimization/evaluate
+POST /api/v2/designs/{design_id}/sequence-optimization/revisions
+GET  /api/v2/host-profiles
+POST /api/v2/host-profiles
+POST /api/v2/designs/{design_id}/host-optimization/candidates
+POST /api/v2/host-optimization/calibrations
+GET  /api/v2/host-optimization/calibrations
+GET  /api/v2/host-optimization/calibrations/{calibration_id}
+POST /api/v2/designs/{design_id}/optimization-workflow
+```
+
+`sequence-analysis` reports IUPAC validity, CDS framing, start/stop codons,
+internal stop codons, GC and window GC, homopolymers, direct and inverted
+repeats, common restriction sites, Type IIS sites, host annotations, and
+checksums.
+
+`sequence-optimization/revisions` creates immutable DesignIR v2 revisions for
+CDS codon optimization. The current implementation is intentionally narrow:
+it targets *Escherichia coli* host profiles, performs synonymous CDS codon
+replacement, preserves the translated protein sequence, avoids configured
+forbidden motifs where possible, and records before/after analysis, provenance,
+diffs, and readiness evidence.
+
+`host-optimization/candidates` ranks computational trade-off candidates rather
+than declaring a single biological optimum. The current candidate families are
+`high_expression`, `low_burden`, and `balanced`. These are ranking signals for
+review, not calibrated in vivo expression predictions.
+
+`host-optimization/calibrations` stores and summarizes user-supplied
+experimental measurements such as expression, growth rate, burden, and ON/OFF
+ratio. The calibration layer currently produces coverage summaries and
+recommendations; it does not yet fit a validated host-cell model.
+
+`optimization-workflow` is the integrated endpoint. It runs sequence analysis,
+creates a sequence-optimization revision, ranks host-optimization candidates,
+and returns a combined readiness summary in one call.
+
+Readiness now reports separate optimization-oriented domains:
+
+- `primer_readiness_score`
+- `sequence_optimization_score`
+- `host_optimization_score`
+- `calibration_score`
+- `experimental_readiness_score` as a backward-compatible aggregate
 
 ## Simulation Foundation v1.9
 

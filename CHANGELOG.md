@@ -1,5 +1,32 @@
 # Changelog
 
+## 2026-06-16
+
+- Added Product Manager (PM) Agent to orchestrate user interactions and design specifications:
+  - Dialogue Elicitation: Prompts users progressively, proposing default biological values based on reference knowledge (Chassis, Inputs, Outputs, Logic relation, copy number) to prevent downstream simulation errors.
+  - One-click Consent Flow: Built Streamlit UI cards supporting "Accept Recommendation" and "Custom Modify" for easy, progressive configuration.
+  - Human-in-the-Loop (HITL) Translation: Translates complex simulator/critic errors into Traditional Chinese plain language, offering three trade-off option buttons that automatically append constraints and restart the Reflexion workflow.
+  - Visual Mermaid Preview: Deterministically generates a high-level circuit flowchart (graph LR) and renders it dynamically inside the PM chat container.
+  - Session Reset & Truncation: Auto-resets PM state on sidebar user intent change and truncates dialogue history over 12 messages to manage context size and prevent LLM hallucinations.
+- Optimized the metabolic burden scorer by implementing dynamic ideal gate limits:
+  - Automatically parses the number of inputs ($N$) from the candidate's truth table or logic matrix.
+  - Dynamically calculates the limit as $\max(3, 2N + 1)$ instead of a static value of 3, preventing false rejections of complex logic.
+- Integrated semantic faithfulness score into `RESEARCH_PROFILE` (`research-v1.8`) with a weight of `0.10` (adjusting `logic_function` and `evidence_quality` weights to maintain sum of 1.0).
+- Bypassed Cello buildability rejections in Critic Agent when Cello is running in mock mode, preventing deadlock loops during dry-runs/local testing.
+- Added a sequence quality analyzer (`tools/sequence_analyzer.py`) reporting IUPAC validity, CDS framing, restriction sites, Type IIS sites, homopolymers, repeats, annotations, and checksums.
+- Added synonymous E. coli CDS codon optimization (`tools/sequence_optimization.py`) for translated protein sequence preservation.
+- Added host-optimization candidate ranking (`tools/host_optimization.py`) supporting E. coli high-expression, low-burden, and balanced strategies.
+- Added user-supplied experimental calibrations logging and summary reporting.
+- Added v2 optimization workflow API endpoint (`POST /api/v2/designs/{design_id}/optimization-workflow`) integrating sequence analysis, CDS optimization revision, host-candidate ranking, and readiness reporting.
+- Added E. coli host profile registry and E. coli readiness evaluation sub-scores for primers, sequence optimization, host optimization, and calibration.
+- Added biological rationality optimizations (Phase 1 & Phase 2):
+  - Gibson/Seamless assembly overlap $T_m$ calculation using Biopython and planning warnings for Tm out of range.
+  - Golden Gate assembly re-cutting check validating circular product sequence does not contain active Type IIS sites.
+  - Sliding-window internal Shine-Dalgarno (SD) motif warning.
+  - Active C-terminal degradation tag detection (LVA/LAV/ASV) and signal-specific degradation rate scaling in ODE simulation.
+  - Cello UCF (User Constraint File) parser extracting characterized gate parameters ($y_{\text{min}}, y_{\text{max}}, K_d, n$) and dynamic mapping to signal-specific ODE Hill parameters.
+  - Log-normal plasmid copy-number perturbation preserving arithmetic mean during Monte Carlo robustness analysis.
+
 ## 2026-06-15
 
 - Added a Biopython-backed DesignIR v2 plasmid assembler for real GenBank
@@ -125,6 +152,22 @@
   immutable part replacement, revision diff, and BOM/GenBank/SBOL3 export tools.
 - Hardened concurrent run metadata writes with re-entrant locking and unique atomic temp files.
 # 變更紀錄
+
+## 2026-06-16
+
+- 新增序列品質分析器（`tools/sequence_analyzer.py`），可報告 IUPAC 有效性、CDS 框架、限制酶切位點、Type IIS 位點、同聚物、重複序列、註釋與校驗和。
+- 新增針對大腸桿菌（E. coli）宿主的同義 CDS 密碼子優化（`tools/sequence_optimization.py`），並保留翻譯之蛋白質序列。
+- 新增宿主優化候選方案排序（`tools/host_optimization.py`），支援高表達、低負載與平衡等策略。
+- 新增使用者提供之實驗校準數據記錄與摘要報告。
+- 新增 v2 優化工作流 API 進入點（`POST /api/v2/designs/{design_id}/optimization-workflow`），整合序列分析、CDS 優化版本、宿主候選排序與整備度報告。
+- 新增大腸桿菌宿主設定檔註冊，以及針對引物、序列優化、宿主優化與實驗校準的整備度評估子分數。
+- 新增生物學合理性與物理真實性優化功能（第一與第二階段）：
+  - 使用 Biopython 計算 Gibson/Seamless 組裝 overlap 的熔解溫度 $T_m$，並在 $T_m$ 超出範圍時提供設計警告。
+  - 實作 Golden Gate 組裝產物限制酶位點再切除（Re-cutting）檢查，確保最終產物不包含未被切割的 Type IIS 位點。
+  - 新增內部 Shine-Dalgarno (SD) 樣基序之滑動窗口掃描與警告。
+  - 偵測 CDS C端的活性降解標籤（LVA/LAV/ASV），並在 ODE 模擬中動態調整該訊號蛋白質的降解速率。
+  - 支援解析 Cello UCF (User Constraint File) 門控實驗表徵參數（$y_{\text{min}}, y_{\text{max}}, K_d, n$），並動態映射至 ODE 模擬器之特定訊號 Hill 參數。
+  - 針對 Monte Carlo 魯棒性評估，實作質體拷貝數（copy_number）的對數常態（Log-normal）隨機微擾，保留算術平均值之一致性。
 
 ## 2026-06-14 - v2.0 生物學合理性升級
 

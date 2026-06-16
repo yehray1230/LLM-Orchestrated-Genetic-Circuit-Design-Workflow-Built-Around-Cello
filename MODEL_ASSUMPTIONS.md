@@ -204,12 +204,13 @@ Current default parameters include:
 - `protein_degradation_rate` (protein degradation rate / 蛋白質降解速率, 1/s)
 - `maturation_rate` (protein maturation rate / 蛋白質成熟速率, 1/s)
 - `growth_rate_dilution` (maximum growth rate dilution / 最大生長稀釋速率, 1/s)
-- `kd` (dissociation constant / 解離常數, nM)
-- `hill_coefficient` (Hill coefficient / 希爾係數, dimensionless)
-- `leak_fraction` (promoter leak fraction / 啟動子洩漏比例, dimensionless)
+- `kd` / `kd_<node_id>` (dissociation constant / 解離常數, nM; can be loaded from Cello UCF response functions)
+- `hill_coefficient` / `hill_coefficient_<node_id>` (Hill coefficient / 希爾係數, dimensionless; can be loaded from Cello UCF response functions)
+- `leak_fraction` / `leak_fraction_<node_id>` (promoter leak fraction / 啟動子洩漏比例, dimensionless; computed as ymin/ymax from Cello UCF)
 - `burden_soft_limit` (burden penalty threshold / 負載懲罰閾值, nM)
 - `toxicity_threshold` (toxicity threshold / 毒性閾值, nM)
 - `copy_number` (plasmid copy number / 質體複製數, default: 1.0)
+- `protein_degradation_rate_<part_id>` / `protein_degradation_rate_<node_id>` (specific protein degradation rate / 特異性蛋白質降解速率, 1/s; dynamically scaled by active degradation tags like LVA/LAV/ASV)
 
 Chassis-Specific Defaults:
 DataMinerAgent supports host-specific overrides for two major chassis models:
@@ -269,12 +270,21 @@ A successful integration means the model equations were solved numerically under
 
 ## 9. Noise and Monte Carlo Assumptions/雜訊與蒙特卡羅假設
 
-Monte Carlo perturbation is used as a sensitivity screen. It perturbs selected kinetic parameters by sampling around their current values:
+Monte Carlo perturbation is used as a sensitivity screen. It perturbs selected kinetic parameters by sampling around their current values. For standard biokinetic parameters, normal distribution perturbation is used:
 
-蒙特卡羅微擾被用作敏感性篩選。它通過在其當前值周圍進行抽樣來對選定的動力學參數進行微擾：
+蒙特卡羅微擾被用作敏感性篩選。它通過在其當前值周圍進行抽樣來對選定的動力學參數進行微擾。對於標準生物動力學參數，使用常態分佈微擾：
 
 ```text
 sampled_value = max(0.0, normal(original_value, abs(original_value) * noise_level))
+```
+
+For plasmid copy number (`copy_number`), log-normal perturbation is used to preserve the arithmetic mean and ensure strictly positive values:
+
+對於質體複製數 (`copy_number`)，使用對數常態（Log-normal）微擾，以保留其算術平均值並確保數值恆大於零：
+
+```text
+sampled_value = original_value * exp(normal(0.0, s) - 0.5 * s * s)
+where s = sqrt(log(1.0 + noise_level^2))
 ```
 
 Perturbable parameters include:
@@ -291,6 +301,7 @@ Perturbable parameters include:
 - `y_min`
 - `ymax`
 - `y_max`
+- `copy_number`
 
 The noisy-response scorer compares terminal output against an early output window:
 
@@ -357,8 +368,8 @@ The current model does not include:
   DNA 超螺旋或本地序列上下文；
 - RNA folding, RNA stability motifs, or transcript processing;
   RNA 折疊、RNA 穩定性基序或轉錄本處理；
-- codon usage, translation initiation context, or ribosome traffic;
-  密碼子使用偏好、翻譯起始上下文或核糖體交通（Ribosome traffic）；
+- detailed codon-pair bias, translation initiation context, or ribosome traffic (synonymous E. coli codon replacement is now supported at the sequence level, but not dynamically simulated in ODEs);
+  詳細的密碼子對偏好、翻譯起始上下文或核糖體交通（目前已在序列層級支援大腸桿菌同義密碼子替換，但尚未在 ODE 中進行動態模擬）；
 - detailed protein folding pathways, chaperones, degradation tags, or active/inactive maturation states (modeled via a simplified first-order maturation rate delay);
   詳細的蛋白質折疊路徑、分子伴侶、降解標籤或活性/非活性成熟狀態（目前透過簡化的一階成熟速率延遲進行建模）；
 - inducer transport, ligand binding, or environmental dynamics;
@@ -406,8 +417,8 @@ It should not be described as:
 
 > A quantitative predictor of complete, buildable, experimentally validated genetic circuits.
 > 完整、可構建且經過實驗驗證 of 基因電路的定量預測器。
-# Relationship Between DesignIR and the ODE Model (2026-06-06)
-# DesignIR 與 ODE 模型的關係（2026-06-06）
+## 13. Relationship Between DesignIR and the ODE Model (2026-06-06)
+## 13. DesignIR 與 ODE 模型的關係（2026-06-06）
 
 The new part, revision, comparison, and export layers do not expand the biological scope of the ODE model.
 
@@ -425,3 +436,19 @@ The new part, revision, comparison, and export layers do not expand the biologic
 Therefore, a sequence-backed export should not be interpreted as a sequence-aware ODE prediction. Stronger coupling would require part-specific response functions, promoter/RBS models, degradation parameters, copy-number context, and calibrated host data.
 
 因此，具有序列的匯出不應解讀為 sequence-aware ODE 預測。更強的耦合需要元件特定 response function、promoter/RBS 模型、降解參數、copy-number 情境與經校準的宿主資料。
+
+## 14. Sequence and Host Optimization Assumptions (2026-06-16)
+## 14. 序列與宿主優化假設（2026-06-16）
+
+The new synonymous codon-optimization, host profiling, and experimental calibration layers introduce additional computational models with specific assumptions:
+
+新增的同義密碼子優化、宿主設定檔與實驗校準層引入了具有特定假設的額外計算模型：
+
+- **Synonymous CDS Replacement**: Assumes synonymous codon replacements preserve the primary protein structure and translated folding rate. Mature dynamic maturation delay rates are kept constant.
+  **同義 CDS 替換**：假設同義密碼子替換保留了主要蛋白質結構與翻譯折疊速率。成熟的動態成熟延遲速率保持不變。
+- **Motif Avoidance**: Assumes configured forbidden restriction/Type IIS sites can be resolved synonomously without affecting translation efficiency.
+  **基序避免**：假設已配置的禁用限制酶切位點/Type IIS 位點可以被同義解決，而不影響翻譯效率。
+- **Candidate Ranking Strategies**: Matches E. coli candidates under high-expression, low-burden, and balanced strategies to fixed copy-number classes, promoter strengths, and RBS strengths. Biases (expression/burden/stability) are static scores and do not dynamically simulate cellular trajectories.
+  **候選方案排序策略**：將在高表達、低負載與平衡策略下的大腸桿菌候選方案與固定的複製數類別、啟動子強度及 RBS 強度相匹配。偏置分數（表達量/負載/穩定性）是靜態分數，不會動態模擬細胞軌跡。
+- **Calibration Model Independence**: Experimental calibration summaries evaluate dataset coverage and average performance; they do not calibrate parameters dynamically in the ODE simulation.
+  **校準模型獨立性**：實驗校準摘要評估數據集覆蓋率和平均表現；它們目前不會動態調整 ODE 模擬中的參數。

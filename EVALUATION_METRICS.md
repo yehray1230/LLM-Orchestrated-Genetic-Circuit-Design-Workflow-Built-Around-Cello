@@ -44,13 +44,14 @@ continues to use `legacy-weighted@1.0.0` unless it explicitly selects another
 profile.
 
 ```text
-0.20 logic_function
+0.15 logic_function
 0.15 dynamic_behavior
 0.15 robustness
 0.10 resource_burden
 0.15 buildability
-0.15 evidence_quality
+0.10 evidence_quality
 0.10 data_completeness
+0.10 semantic_faithfulness
 ```
 
 Each result includes `scoring_profile`, `scoring_version`, and
@@ -554,12 +555,19 @@ The burden proxy is:
 excess_gates = max(0, gate_count - ideal_gate_limit)
 ```
 
-where:
+where `ideal_gate_limit` is dynamically calculated based on the number of inputs ($N$) in the candidate's truth table or logic matrix:
+```text
+ideal_gate_limit = max(3, 2 * num_inputs + 1)
+```
+If no truth table is provided, it falls back to the default limit of 3. It can also be overridden explicitly using the `ideal_gate_limit` key in the candidate metadata.
 
-其中：
+其中 `ideal_gate_limit` 是根據候選設計真值表或邏輯矩陣中的輸入數量（$N$）動態計算的：
+```text
+ideal_gate_limit = max(3, 2 * num_inputs + 1)
+```
+如果沒有提供真值表，則回退至預設限制 3。它也可以使用候選元數據中的 `ideal_gate_limit` 鍵進行明確覆寫。
 
 ```text
-ideal_gate_limit = 3
 decay_rate = 0.35
 ```
 
@@ -775,9 +783,9 @@ Mock-mode results should not be described as successful Cello mapping.
 ## 9. Semantic Faithfulness
 ## 9. 語義忠實性
 
-Implemented in [benchmark_suite/semantic_evaluator.py](benchmark_suite/semantic_evaluator.py), but not currently part of `SCORE_WEIGHTS`.
+Implemented in [benchmark_suite/semantic_evaluator.py](benchmark_suite/semantic_evaluator.py) and integrated into the `research-v1.8` scoring profile.
 
-實作於 [benchmark_suite/semantic_evaluator.py](benchmark_suite/semantic_evaluator.py)，但目前不屬於 `SCORE_WEIGHTS`（分數權重）的一部分。
+實作於 [benchmark_suite/semantic_evaluator.py](benchmark_suite/semantic_evaluator.py)，並已整合至 `research-v1.8` 分數權重設定檔中。
 
 The semantic evaluator can use an LLM to compare the original natural-language request with generated Verilog and return:
 
@@ -802,9 +810,9 @@ missed_edge_cases =
   or []
 ```
 
-Because semantic faithfulness is not currently included in the weighted total, it should be treated as diagnostic metadata rather than a direct scoring component.
+Semantic faithfulness is integrated in the `research-v1.8` scoring profile with a weight of `0.10` to measure compliance of the generated logic structure with the user's intent.
 
-由於語義忠實性目前未包含在加權總分中，因此應將其視為診斷元數據（Diagnostic metadata），而非直接的評分組件。
+語義忠實性已整合至 `research-v1.8` 分數設定檔中，加權權重為 `0.10`，以評估所生成邏輯結構與使用者意圖的一致性。
 
 ## 10. Critic Thresholds
 ## 10. Critic 閾值
@@ -836,6 +844,10 @@ Critic 可以將失效路由至：
   `Translator`，用於元件/映射/Verilog 導向的修復。
 - `Consolidator`, when the candidate is acceptable.
   `Consolidator`，當候選方案可接受時。
+
+Note: If Cello is executed in mock mode (i.e. `cello_mode` is `"mock"`), the `cello_buildable=false` check is bypassed by the Critic Agent to prevent blocking workflow progression during local testing.
+
+註：如果 Cello 運作於模擬模式（即 `cello_mode` 為 `"mock"`），Critic 智能體會豁免 `cello_buildable=false` 的檢測，以避免在本地測試時阻塞工作流的推進。
 
 ## 11. How to Read Scores
 ## 11. 如何解讀分數

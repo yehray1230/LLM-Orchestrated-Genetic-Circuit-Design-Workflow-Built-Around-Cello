@@ -42,6 +42,7 @@ The central design goal is not full automation of synthetic-biology design. The 
 
 ```text
 User intent
+  -> PMAgent (Elicitation / Autocomplete)
   -> DesignState
   -> BuilderAgent
   -> TranslatorAgent
@@ -50,6 +51,7 @@ User intent
   -> BatchODESimulator
   -> benchmark_suite.evaluate_candidate()
   -> CriticAgent
+  -> (if pause) -> PMAgent (HITL Option Translation) -> User choice -> DesignState -> ...
   -> repair / exploitation / consolidation
 ```
 
@@ -65,14 +67,20 @@ The workflow is coordinated by [workflows/reflexion_controller.py](workflows/ref
 | [app.py](app.py) | Streamlit UI, demo workflow controls, BYOK settings, result panels, and visualization. <br> Streamlit UI、展示工作流控制項、BYOK 設定、結果面板與視覺化。 |
 | [schemas/state.py](schemas/state.py) | Shared state models: `DesignState` and `SearchNode`. <br> 共享狀態模型：`DesignState` 與 `SearchNode`。 |
 | [workflows/reflexion_controller.py](workflows/reflexion_controller.py) | Main Reflexion loop, search routing, benchmark integration, and pause logic. <br> 主 Reflexion 迴圈、搜尋路由、基準整合與暫停邏輯。 |
-| [agents/](agents) | Builder, Translator, DataMiner, Critic, Consolidator, and SkillExtractor agents. <br> Builder、Translator、DataMiner、Critic、Consolidator 和 SkillExtractor 智能體。 |
+| [agents/pm_agent.py](agents/pm_agent.py) | Product Manager Agent responsible for dialogue elicitation, specification autocomplete, and human-in-the-loop option translation. <br> 產品經理智能體，負責對話式規格引導、主動需求補完、與人機協同選項翻譯。 |
+| [agents/](agents) | PM, Builder, Translator, DataMiner, Critic, Consolidator, and SkillExtractor agents. <br> PM、Builder、Translator、DataMiner、Critic、Consolidator 和 SkillExtractor 智能體。 |
 | [tools/cello_wrapper.py](tools/cello_wrapper.py) | Optional external Cello integration and explicit mock topology fallback. <br> 可選的外部 Cello 整合與明確的模擬拓撲回退。 |
+| [tools/cello_artifact_parser.py](tools/cello_artifact_parser.py) | Parser for Cello UCF (User Constraint File) gate parameters and assignment artifacts. <br> 用於 Cello UCF (User Constraint File) 門控參數與分配產物的解析器。 |
 | [tools/ode_simulator.py](tools/ode_simulator.py) | Reduced resource-aware ODE simulation and Monte Carlo perturbation. <br> 簡化的資源感知 ODE 模擬與蒙特卡羅微擾。 |
-| [benchmark_suite/](benchmark_suite) | Deterministic and heuristic scoring components. <br> 確定性與啟發式評分組件。 |
+| [tools/sequence_analyzer.py](tools/sequence_analyzer.py) | Sequence quality analyzer (IUPAC, restriction sites, homopolymers, repeats). <br> 序列品質分析器（IUPAC、限制酶切位點、同聚物、重複序列）。 |
+| [tools/sequence_optimization.py](tools/sequence_optimization.py) | Synonymous CDS codon optimization for E. coli host profiles. <br> 針對大腸桿菌宿主設定檔的同義 CDS 密碼子優化。 |
+| [tools/host_optimization.py](tools/host_optimization.py) | Host-candidate ranking (high_expression, low_burden, balanced) and calibrations. <br> 宿主候選方案排序（高表達、低負載、平衡）與實驗校準。 |
+| [api/v2_routes.py](api/v2_routes.py) | V2 API router containing assembly plans, sequence analysis, codon optimization, and host optimization. <br> 包含組裝計畫、序列分析、密碼子優化及宿主優化的 V2 API 路由器。 |
+| [benchmark_suite/](benchmark_suite) | Deterministic, heuristic, and experimental readiness evaluation scoring. <br> 確定性、啟發式與實驗整備度評估評分組件。 |
 | [tools/skill_retriever.py](tools/skill_retriever.py) | Skill retrieval for contextual guidance. <br> 用於上下文引導的技能檢索。 |
 | [tools/vector_retriever.py](tools/vector_retriever.py) | Vector retrieval wrapper for local records. <br> 用於本地記錄的向量檢索包裝器。 |
 | [mcp_server/](mcp_server) | Local service for run artifacts and serialized outputs. <br> 用於運行產物與序列化輸出的本地服務。 |
-| [tests/](tests) | Tests for workflow behavior, topology graphs, simulation, UI support logic, and MCP server behavior. <br> 針對工作流行為、拓撲圖、模擬、UI 支援邏輯與 MCP 伺服器行為的測試。 |
+| [tests/](tests) | Tests for workflow behavior, simulation, assembly planning, optimization, and MCP server. <br> 針對工作流行為、模擬、組裝計畫、優化以及 MCP 伺服器的測試。 |
 
 ## 4. Data Model
 ## 4. 資料模型
@@ -118,6 +126,14 @@ The shared state is defined in [schemas/state.py](schemas/state.py).
   `failed_attempts`：修復歷史與失敗記錄。
 - `requires_human_input`, `pause_reason`, `human_feedback_prompt`: human-in-the-loop pause state.
   `requires_human_input`、`pause_reason`、`human_feedback_prompt`：人機協同（human-in-the-loop）暫停狀態。
+- `structured_spec`: structured circuit specification compiled by PM Agent (Chassis, Inputs, Outputs, Logic relation, copy number).
+  `structured_spec`：由 PM Agent 整理出的結構化電路規格（宿主、輸入、輸出、邏輯關係、拷貝數）。
+- `pm_chat_history`: user-PM dialogue history.
+  `pm_chat_history`：使用者與 PM Agent 的對話歷史紀錄。
+- `pending_proposal`: current autocomplete proposal or HITL options drafted by PM.
+  `pending_proposal`：當前由 PM 起草、待用戶確認的補完建議或人機協同選項。
+- `pm_stage`: current PM lifecycle stage.
+  `pm_stage`：當前 PM 生產週期的階段。
 
 ### `SearchNode`
 ### `SearchNode`
@@ -145,8 +161,30 @@ The shared state is defined in [schemas/state.py](schemas/state.py).
 
 `SearchNode.sync_evaluation_metrics()` 將選定拓撲結構的基準欄位複製到節點中，以便在不重新解析完整拓撲對象的情況下檢查搜尋樹。
 
+### Sequence & Host Optimization Schemas / 序列與宿主優化綱要
+
+- `DesignSequenceAnalysis` ([schemas/sequence_analysis.py](schemas/sequence_analysis.py)): Captures sequence verification results, annotations, and issues.
+  `DesignSequenceAnalysis` ([schemas/sequence_analysis.py](schemas/sequence_analysis.py))：擷取序列驗證結果、註釋與發生的序列問題。
+- `SequenceOptimizationResult` ([schemas/sequence_optimization.py](schemas/sequence_optimization.py)): Records E. coli codon modifications, diffs, protein preservation checks, and revision provenance.
+  `SequenceOptimizationResult` ([schemas/sequence_optimization.py](schemas/sequence_optimization.py))：記錄大腸桿菌密碼子修改、差異比對、蛋白質保留檢查和版本來源資訊。
+- `HostProfile` ([schemas/host_profile.py](schemas/host_profile.py)): Defines host strains, codon usage tables, and default settings.
+  `HostProfile` ([schemas/host_profile.py](schemas/host_profile.py))：定義宿主菌株、密碼子使用表與預設設定。
+- `HostOptimizationResult` ([schemas/host_optimization.py](schemas/host_optimization.py)): Ranks E. coli candidates under high-expression, low-burden, and balanced strategies.
+  `HostOptimizationResult` ([schemas/host_optimization.py](schemas/host_optimization.py))：在大腸桿菌宿主環境下針對高表達、低負載與平衡策略進行候選方案排序的結果。
+
 ## 5. Agent Layer
 ## 5. 智能體層
+
+### PMAgent
+### PMAgent
+
+The Product Manager Agent is the dialogue gatekeeper between the user and the design engine. It works in two modes:
+1. **Requirement Elicitation**: Progressively identifies missing fields in `structured_spec` (chassis, inputs, outputs, logic relation, copy number), proposes biological default recommendations based on reference knowledge, and manages user consent in a one-click flow.
+2. **HITL Option Translation**: When the engine pauses due to search bottlenecks or evaluation failures, it translates technical logs into plain Traditional Chinese, offering three clear trade-off choices to the user.
+
+產品經理智能體（PMAgent）是使用者與後台設計引擎之間的對話門戶。它以兩種模式運作：
+1. **需求引導**：逐步辨識 `structured_spec` 中缺失的欄位（主體宿主、輸入、輸出、邏輯關係、拷貝數），依據常識與元件庫主動提議生物學預設值，並以一鍵式流程引導用戶確認。
+2. **人機協同選項翻譯**：當引擎因搜尋瓶頸或評估失敗暫停時，將生硬的技術日誌翻譯成白話繁體中文，並為用戶提供三個清晰的折衷決策選項。
 
 ### BuilderAgent
 ### BuilderAgent
@@ -325,6 +363,24 @@ For detailed biological assumptions, see [MODEL_ASSUMPTIONS.md](MODEL_ASSUMPTION
 For formulas and fallback behavior, see [EVALUATION_METRICS.md](EVALUATION_METRICS.md).
 
 如需了解公式與回退（fallback）行為，請參見 [EVALUATION_METRICS.md](EVALUATION_METRICS.md)。
+
+### SequenceAnalyzer / 序列分析器
+
+[tools/sequence_analyzer.py](tools/sequence_analyzer.py) performs sequence-level verification including IUPAC validation, open reading frame checks, restriction site identification, homopolymer detection, and repeats counting.
+
+[tools/sequence_analyzer.py](tools/sequence_analyzer.py) 執行序列級驗證，包括 IUPAC 驗證、開放閱讀框（ORF）檢查、限制酶切位點識別、同聚物檢測和重複序列計數。
+
+### SequenceOptimizer / 密碼子優化器
+
+[tools/sequence_optimization.py](tools/sequence_optimization.py) performs synonymous codon replacement for designated host E. coli profiles while avoiding configured forbidden motifs where possible.
+
+[tools/sequence_optimization.py](tools/sequence_optimization.py) 針對指定大腸桿菌宿主設定檔進行同義密碼子替換，同時在可能的情況下盡可能避免已配置的禁用基序。
+
+### HostOptimizer / 宿主優化器
+
+[tools/host_optimization.py](tools/host_optimization.py) generates and ranks host E. coli candidate profiles based on target objectives (expression, burden, stability) and processes experimental calibrations.
+
+[tools/host_optimization.py](tools/host_optimization.py) 根據目標權衡項目（表達量、負載、穩定性）生成並排序大腸桿菌宿主候選方案，並處理實驗校準。
 
 ## 7. Deterministic vs LLM-Dependent Components
 ## 7. 確定性組件與依賴 LLM 的組件

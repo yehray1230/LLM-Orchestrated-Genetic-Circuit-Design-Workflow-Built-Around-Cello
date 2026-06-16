@@ -222,7 +222,7 @@ Use an absolute `cwd` so Python can import `mcp_server` reliably:
     "genetic-circuit-workflow": {
       "command": "python",
       "args": ["-m", "mcp_server.server"],
-      "cwd": "C:\\path\\to\\A-Multi-Agent-Framework-for-Translating-Natural-Language-to-Genetic-Circuits",
+      "cwd": "C:\\path\\to\\LLM-Orchestrated-Genetic-Circuit-Design-Workflow-Built-Around-Cello",
       "env": {
         "OPENAI_API_KEY": "YOUR_API_KEY_HERE",
         "LITELLM_MODEL": "gpt-5.4-mini",
@@ -320,6 +320,20 @@ Agent selection policy:
   在讀取檔案前先使用 `get_design_run_artifacts`；請勿自行猜測產物路徑。
 - If status is `needs_human_input`, ask the user for additional constraints, then start a new refined run. This repository does not yet provide `continue_design_run`.
   若狀態為 `needs_human_input`，請向使用者詢問額外的約束，然後啟動一個新的優化運行。本儲存庫目前尚未提供 `continue_design_run`。
+
+### Optimization & Calibration Boundaries / 優化與校準工具邊界
+
+Currently, the FastAPI REST API v2 endpoints for sequence-level analysis, synonymous E. coli codon-optimization, host-optimization candidate ranking, and experimental calibrations are not wrapped directly as FastMCP tools.
+
+目前，用於序列級分析、大腸桿菌同義密碼子優化、宿主優化候選排序以及實驗校準的 FastAPI REST API v2 進入點尚未直接包裝為 FastMCP 工具。
+
+Agents requiring these services should either:
+1. Make direct HTTP calls to the local REST API `http://localhost:8000/api/v2/...` when running in an autonomous research loop.
+2. Recommend these optimization workflows to the user as post-design human-in-the-loop actions.
+
+智能體若需要這些服務，應採取以下任一方式：
+1. 在自主研究迴圈中運行時，直接對本地 REST API `http://localhost:8000/api/v2/...` 發起 HTTP 請求。
+2. 將這些優化工作流推薦給使用者，作為設計完成後的人機協同（Human-in-the-loop）操作。
 
 ---
 
