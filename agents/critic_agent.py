@@ -28,6 +28,11 @@ CELLO_UCF_GUIDANCE = (
     "（可能發生 Crosstalk 或缺少足夠的正交阻遏蛋白）。請嘗試改變邏輯架構，"
     "例如使用不同的邏輯閘組合（De Morgan's laws）來繞過元件數量的限制。"
 )
+SEQUENCE_QUALITY_THRESHOLD = 0.85
+SEQUENCE_QUALITY_GUIDANCE = (
+    "序列合成複雜度過高：檢測到 Homopolymer（連續重複鹼基）、不適當的限制酶位點（如 BsaI/BsmBI）或重複序列。"
+    "這可能導致 DNA 合成失敗。請引導 Builder/Translator 進行密碼子最佳化（Codon Optimization）或同義密碼子替換以消除這些位點。"
+)
 
 
 def _extract_score(best_topo: dict | None) -> float | None:
@@ -73,11 +78,14 @@ def _benchmark_report(best_topo: dict | None) -> dict:
         "orthogonality_score",
         "cello_assignment_score",
         "cello_buildable",
+        "cello_mode",
+        "cello_claim_level",
         "toxicity",
         "toxicity_score",
         "semantic_faithfulness_score",
         "missed_edge_cases",
         "missed_conditions",
+        "sequence_quality",
     ):
         if key not in report and key in best_topo:
             report[key] = best_topo[key]
@@ -150,6 +158,21 @@ def _extract_cello_buildable(report: dict) -> bool | None:
             return False
         return None
     return bool(value)
+
+
+def _extract_sequence_quality(report: dict) -> float | None:
+    score = report.get("sequence_quality")
+    if score is None:
+        for detail in report.get("details", []):
+            if not isinstance(detail, dict):
+                continue
+            if detail.get("metric") == "sequence_quality":
+                score = detail.get("sequence_quality", detail.get("score"))
+                break
+    try:
+        return None if score is None else float(score)
+    except (TypeError, ValueError):
+        return None
 
 
 SEMANTIC_FAITHFULNESS_GUIDANCE_TEMPLATE = (
@@ -237,8 +260,9 @@ def _ensure_cello_ucf_guidance(
     feedback: str,
     cello_buildable: bool | None,
     orthogonality_score: float | None,
+    is_mock_cello: bool = False,
 ) -> str:
-    if cello_buildable is not False and (
+    if (cello_buildable is not False or is_mock_cello) and (
         orthogonality_score is None or orthogonality_score > ORTHOGONALITY_THRESHOLD
     ):
         return feedback
@@ -264,6 +288,17 @@ def _ensure_semantic_faithfulness_guidance(
     if guidance in feedback:
         return feedback
     return f"{feedback}\n{guidance}" if feedback else guidance
+
+
+def _ensure_sequence_quality_guidance(
+    feedback: str,
+    sequence_quality: float | None,
+) -> str:
+    if sequence_quality is None or sequence_quality >= SEQUENCE_QUALITY_THRESHOLD:
+        return feedback
+    if SEQUENCE_QUALITY_GUIDANCE in feedback:
+        return feedback
+    return f"{feedback}\n{SEQUENCE_QUALITY_GUIDANCE}" if feedback else SEQUENCE_QUALITY_GUIDANCE
 
 
 def _routing_target(error_type: str) -> str:
@@ -308,6 +343,7 @@ class CriticAgent(AgentProtocol):
         semantic_faithfulness_score = _extract_semantic_faithfulness_score(benchmark_report)
         missed_edge_cases = _extract_missed_edge_cases(benchmark_report)
         signal_overlap = _has_signal_overlap(benchmark_report)
+        sequence_quality = _extract_sequence_quality(benchmark_report)
 
         system_prompt = f"""You are a rigorous Synthetic Biology Critic Agent.
 Your job is to evaluate the Builder's logic proposal, generated topology, and benchmark report.
@@ -318,9 +354,10 @@ Benchmark report contract:
 - `robustness_score` is normalized from 0 to 1; lower means noisy biochemical parameter perturbations make ON/OFF states unreliable.
 - `orthogonality_score` is normalized from 0 to 1; very low values mean the biological parts cannot remain independent enough for the topology.
 - `cello_assignment_score` is normalized from 0 to 1 and records Cello's gate assignment quality.
-- `cello_buildable=false` means Cello failed UCF constraints or could not generate a DNA-buildable design.
+- `cello_buildable=false` means Cello failed UCF constraints or could not generate a DNA-buildable design (ignore this buildability failure if Cello is in mock mode, i.e. `cello_mode="mock"` is specified).
 - `semantic_faithfulness_score` is normalized from 0 to 1; lower means the Verilog missed explicit or implicit user requirements.
 - `missed_edge_cases` lists requirement conditions that the Verilog did not cover.
+- `sequence_quality` is normalized from 0 to 1; lower means the sequence has homopolymers, forbidden restriction sites (BsaI/BsmBI), or repeats that make it hard to synthesize.
 - If score < {FAIL_SCORE_THRESHOLD:.2f}, the design MUST fail with is_approved=false.
 - If score >= {PASS_SCORE_THRESHOLD:.2f}, approve only when the logic also matches the user intent and the mapped topology is usable.
 - Scores between {FAIL_SCORE_THRESHOLD:.2f} and {PASS_SCORE_THRESHOLD:.2f} require a clear routing decision.
@@ -328,17 +365,20 @@ Benchmark report contract:
   "{METABOLIC_BURDEN_GUIDANCE}"
 - If `robustness_score` is below {ROBUSTNESS_THRESHOLD:.2f}, or if benchmark details report `collapsed=true` / ON-OFF signal overlap, mark the design as not approved, route feedback to Builder, and the feedback MUST include this exact guidance:
   "{ROBUSTNESS_GUIDANCE}"
-- If `cello_buildable` is false or `orthogonality_score` is at or below {ORTHOGONALITY_THRESHOLD:.2f}, mark the design as not approved, route feedback to Builder, and the feedback MUST include this exact guidance:
+- If `cello_buildable` is false (and Cello is NOT in mock mode, i.e., `cello_mode` is not `"mock"`) or `orthogonality_score` is at or below {ORTHOGONALITY_THRESHOLD:.2f}, mark the design as not approved, route feedback to Builder, and the feedback MUST include this exact guidance:
   "{CELLO_UCF_GUIDANCE}"
 - If `semantic_faithfulness_score` is below {SEMANTIC_FAITHFULNESS_THRESHOLD:.2f} and `missed_edge_cases` is non-empty, mark the design as not approved, route feedback to Builder, and precisely identify the missed edge cases using this template:
   "{SEMANTIC_FAITHFULNESS_GUIDANCE_TEMPLATE}"
+- If `sequence_quality` is below {SEQUENCE_QUALITY_THRESHOLD:.2f}, mark the design as not approved, route feedback to Builder, and the feedback MUST include this exact guidance:
+  "{SEQUENCE_QUALITY_GUIDANCE}"
 
 Routing rules:
 - Functional score is low, truth table does not satisfy intent, Boolean expression is wrong, or intent is misunderstood -> LOGIC_ERROR.
 - Excessive logic gates or low metabolic_burden_score -> LOGIC_ERROR, because Builder must simplify Boolean logic or Verilog structure.
 - Low robustness_score or ON/OFF signal overlap under Gaussian perturbation -> LOGIC_ERROR, because Builder must improve circuit architecture and signal margin.
 - Low semantic_faithfulness_score with missed_edge_cases -> LOGIC_ERROR, because Builder or Translator must modify Verilog logic to cover the original user requirement.
-- Failed Cello UCF buildability, severe crosstalk, not enough gates, or very low orthogonality_score -> LOGIC_ERROR, because Builder must change the logic architecture or gate composition.
+- Failed Cello UCF buildability (only if Cello is NOT in mock mode), severe crosstalk, not enough gates, or very low orthogonality_score -> LOGIC_ERROR, because Builder must change the logic architecture or gate composition.
+- Low sequence_quality or synthesis complexity issues -> LOGIC_ERROR, because Builder or Translator must perform synonym codon replacement or optimize sequence complexity.
 - Logic is acceptable but Cello mapping failed, kinetic/static plausibility is low, toxicity/part constraints are violated, or ODE dynamics are poor -> PART_ERROR.
 - Logic and physical implementation are both problematic -> BOTH.
 - Everything is acceptable -> NONE and is_approved=true.
@@ -403,15 +443,18 @@ You MUST output ONLY a valid JSON object matching this schema:
                 if error_type == "NONE" and not is_approved:
                     error_type = "PART_ERROR"
 
+                is_mock_cello = (benchmark_report.get("cello_mode") == "mock")
+
                 feedback = data.get("feedback", "No feedback provided.")
                 feedback = _ensure_metabolic_burden_guidance(feedback, metabolic_burden_score)
                 feedback = _ensure_robustness_guidance(feedback, robustness_score, signal_overlap)
-                feedback = _ensure_cello_ucf_guidance(feedback, cello_buildable, orthogonality_score)
+                feedback = _ensure_cello_ucf_guidance(feedback, cello_buildable, orthogonality_score, is_mock_cello)
                 feedback = _ensure_semantic_faithfulness_guidance(
                     feedback,
                     semantic_faithfulness_score,
                     missed_edge_cases,
                 )
+                feedback = _ensure_sequence_quality_guidance(feedback, sequence_quality)
                 if metabolic_burden_score is not None and metabolic_burden_score < METABOLIC_BURDEN_THRESHOLD:
                     is_approved = False
                     if error_type in {"NONE", "PART_ERROR"}:
@@ -423,7 +466,7 @@ You MUST output ONLY a valid JSON object matching this schema:
                     is_approved = False
                     if error_type in {"NONE", "PART_ERROR"}:
                         error_type = "LOGIC_ERROR"
-                cello_ucf_failed = cello_buildable is False or (
+                cello_ucf_failed = (cello_buildable is False and not is_mock_cello) or (
                     orthogonality_score is not None
                     and orthogonality_score <= ORTHOGONALITY_THRESHOLD
                 )
@@ -440,6 +483,14 @@ You MUST output ONLY a valid JSON object matching this schema:
                     is_approved = False
                     if error_type in {"NONE", "PART_ERROR"}:
                         error_type = "LOGIC_ERROR"
+                sequence_quality_failed = (
+                    sequence_quality is not None
+                    and sequence_quality < SEQUENCE_QUALITY_THRESHOLD
+                )
+                if sequence_quality_failed:
+                    is_approved = False
+                    if error_type in {"NONE", "PART_ERROR"}:
+                        error_type = "LOGIC_ERROR"
                 requires_human_input = bool(data.get("requires_human_input", False))
                 recoverable = bool(data.get("recoverable", True))
                 if not recoverable:
@@ -452,6 +503,7 @@ You MUST output ONLY a valid JSON object matching this schema:
                     or robustness_failed
                     or cello_ucf_failed
                     or semantic_failed
+                    or sequence_quality_failed
                 ) else data.get("routing_target") or _routing_target(error_type)
                 benchmark_summary = data.get("benchmark_summary", "")
                 

@@ -38,6 +38,22 @@ def _build_system_prompt(
     skill_retriever: SkillRetriever | None = None,
     skill_file_path: str = "邏輯設計skill.json",
 ) -> str:
+    # Prioritize structured specifications compiled by the PM Agent
+    if getattr(state, "structured_spec", None):
+        spec_detail = json.dumps(state.structured_spec, indent=2, ensure_ascii=False)
+        spec_text = f"""Structured Design Specification (Compiled by PM Agent):
+{spec_detail}
+
+You MUST follow these specs (chassis, inputs, outputs, and logic relation) precisely. Do not introduce inputs/outputs not defined in the specification.
+"""
+    else:
+        spec_text = f"""Target host:
+{state.host_organism}
+
+User intent:
+{state.user_intent}
+"""
+
     system_prompt = f"""You are Bio-Logic Architect, a synthetic biology design agent.
 
 Goal:
@@ -45,17 +61,14 @@ Goal:
 - Keep designs combinational and suitable for Cello CAD technology mapping.
 - Prefer designs that can later be translated to simple Verilog gates (`and`, `or`, `not`, `nand`, `nor`, `xor`, `xnor`, or `assign`).
 
-Target host:
-{state.host_organism}
-
-User intent:
-{state.user_intent}
+{spec_text}
 
 Design constraints:
 - Return exactly three top-level strategies: `gate_count_optimization`, `depth_optimization`, and `robustness_strategy`.
 - `gate_count_optimization` must minimize the number of Boolean gates and biological repressors.
 - `depth_optimization` must minimize logic depth and signal propagation delay.
 - `robustness_strategy` must prioritize biological part compatibility, toxicity avoidance, and dynamic robustness while remaining Cello-compatible.
+- Maximize sequence quality and synthesis compatibility. Ensure that coding sequences avoid homopolymers (>= 6 identical bases), repeated segments, or forbidden restriction sites (such as BsaI/BsmBI). When repairing existing designs, suggest codon-optimization directives or synonym codon replacement to eliminate restriction sites and homopolymer runs.
 - Each strategy must include a truth table or logic matrix and a raw Verilog draft.
 - Include "copy_number" (integer, e.g., 5 for low-copy like pSC101, 15 for medium-copy like p15A, 50 for high-copy like ColE1) based on user metabolic load requirements.
 - Include "chassis" (string, e.g. "Escherichia coli" or "Saccharomyces cerevisiae") reflecting the target host.

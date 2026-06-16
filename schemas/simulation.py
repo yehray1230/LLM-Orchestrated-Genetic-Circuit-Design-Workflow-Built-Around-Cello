@@ -212,6 +212,8 @@ def simulation_spec_from_design_ir_v2(
     design: DesignIRV2,
     **overrides: Any,
 ) -> SimulationSpec:
+    from tools.sequence_analyzer import detect_degradation_tags
+
     chassis_value = (
         design.biological_context.chassis.value
         or design.biological_context.host_organism.value
@@ -226,13 +228,92 @@ def simulation_spec_from_design_ir_v2(
     else:
         assumptions.append("Plasmid copy number was not defined; 1.0 was used.")
 
+    # Detect degradation tags on CDS parts
+    biokinetic_params = dict(design.extensions.get("biokinetic_parameters", {}))
+    
+    # Check for UCF path and parse gate parameters
+    ucf_path = design.extensions.get("ucf_path") or biokinetic_params.get("ucf_path")
+    gate_params = {}
+    if ucf_path:
+        from tools.cello_artifact_parser import parse_ucf_gate_parameters
+        gate_params = parse_ucf_gate_parameters(ucf_path)
+        if gate_params:
+            assumptions.append(f"Loaded characterized gate parameters from UCF: {ucf_path}")
+
+    degradation_multipliers = {
+        "ssrA_LVA": 8.0,
+        "ssrA_LAV": 6.0,
+        "ssrA_ASV": 4.0,
+    }
+
+    # Map part IDs to logic node IDs (Verilog signal names)
+    assignments = getattr(design, "assignments", []) or design.extensions.get("assignments", [])
+    part_to_logic_node = {}
+    for asn in assignments:
+        part_id = getattr(asn, "part_id", None) or (asn.get("part_id") if isinstance(asn, dict) else None)
+        node_id = getattr(asn, "logic_node_id", None) or (asn.get("logic_node_id") if isinstance(asn, dict) else None)
+        part_name = getattr(asn, "part_name", None) or (asn.get("part_name") if isinstance(asn, dict) else None)
+        if part_id and node_id:
+            part_to_logic_node[part_id] = node_id
+            
+            # Map UCF parameters to this node
+            match_entry = None
+            for key in (part_id, part_name, node_id):
+                if key and key in gate_params:
+                    match_entry = gate_params[key]
+                    break
+            if not match_entry and part_id:
+                clean_part_id = part_id.replace("DEMO_", "").replace("_CDS", "").replace("_PROM", "")
+                if clean_part_id in gate_params:
+                    match_entry = gate_params[clean_part_id]
+            
+            if match_entry:
+                if match_entry.get("K") is not None:
+                    biokinetic_params[f"kd_{node_id}"] = match_entry["K"]
+                if match_entry.get("n") is not None:
+                    biokinetic_params[f"hill_coefficient_{node_id}"] = match_entry["n"]
+                ymin = match_entry.get("ymin")
+                ymax = match_entry.get("ymax")
+                if ymin is not None and ymax is not None and ymax > 0:
+                    biokinetic_params[f"leak_fraction_{node_id}"] = ymin / ymax
+                assumptions.append(
+                    f"Mapped characterized Hill parameters for logic node {node_id} (from part {part_id})."
+                )
+
+    # Retrieve default rate
+    default_rate = 0.0007
+    if "protein_degradation_rate" in biokinetic_params:
+        try:
+            val = biokinetic_params["protein_degradation_rate"]
+            if isinstance(val, dict) and "value" in val:
+                default_rate = float(val["value"])
+            else:
+                default_rate = float(val)
+        except (TypeError, ValueError):
+            pass
+
+    for part in design.parts:
+        if part.part_type.lower() == "cds" and part.sequence:
+            tag = detect_degradation_tags(part.sequence)
+            if tag in degradation_multipliers:
+                multiplier = degradation_multipliers[tag]
+                custom_rate = default_rate * multiplier
+                biokinetic_params[f"protein_degradation_rate_{part.id}"] = custom_rate
+                if part.id in part_to_logic_node:
+                    logic_node = part_to_logic_node[part.id]
+                    biokinetic_params[f"protein_degradation_rate_{logic_node}"] = custom_rate
+                assumptions.append(
+                    f"Degradation tag {tag} detected on part {part.id}. "
+                    f"Protein degradation rate adjusted to {custom_rate:.5f} 1/s."
+                )
+
     spec = simulation_spec_from_topology(
         {
             "verilog": design.extensions.get("verilog", ""),
             "truth_table": design.specification.truth_table,
             "chassis": chassis_value,
             "copy_number": copy_number,
-            "biokinetic_parameters": design.extensions.get("biokinetic_parameters", {}),
+            "biokinetic_parameters": biokinetic_params,
         },
         input_signals=design.specification.inputs,
         target_output=design.specification.outputs[0] if design.specification.outputs else None,

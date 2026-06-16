@@ -47,6 +47,23 @@ from schemas.design_migrations import (
     migrate_design_payload_to_v2,
 )
 from schemas.run_manifest import RunManifest
+from schemas.host_profile import HostProfile, default_ecoli_profile, host_profile_from_dict
+from schemas.host_optimization import (
+    ExperimentalMeasurement,
+    HostCalibrationResult,
+    HostOptimizationCandidate,
+    HostOptimizationResult,
+)
+from schemas.sequence_analysis import (
+    DesignSequenceAnalysis,
+    SequenceAnalysisResult,
+    SequenceIssue,
+)
+from schemas.sequence_optimization import (
+    SequenceChange,
+    SequenceOptimizationRequest,
+    SequenceOptimizationResult,
+)
 
 __all__ = [
     "BiologicalPart",
@@ -90,4 +107,17 @@ __all__ = [
     "migrate_design_ir_v1_to_v2",
     "migrate_design_payload_to_v2",
     "RunManifest",
+    "HostProfile",
+    "default_ecoli_profile",
+    "host_profile_from_dict",
+    "ExperimentalMeasurement",
+    "HostCalibrationResult",
+    "HostOptimizationCandidate",
+    "HostOptimizationResult",
+    "DesignSequenceAnalysis",
+    "SequenceAnalysisResult",
+    "SequenceIssue",
+    "SequenceChange",
+    "SequenceOptimizationRequest",
+    "SequenceOptimizationResult",
 ]

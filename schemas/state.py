@@ -229,6 +229,12 @@ class DesignState:
     iteration_count: int = 0
     last_error: str | None = None
 
+    # PM Agent Fields
+    structured_spec: dict[str, Any] = field(default_factory=dict)
+    pm_chat_history: list[dict[str, str]] = field(default_factory=list)
+    pending_proposal: dict[str, Any] = field(default_factory=dict)
+    pm_stage: Literal["elicitation", "engine_running", "hitl_dialogue", "completed"] = "elicitation"
+
     @property
     def latest_critic_feedback(self) -> str:
         if self.current_node_id and self.current_node_id in self.tree_nodes:
@@ -236,3 +242,4 @@ class DesignState:
             if feedbacks:
                 return feedbacks[-1]
         return self.critic_feedbacks[-1] if self.critic_feedbacks else ""
+
