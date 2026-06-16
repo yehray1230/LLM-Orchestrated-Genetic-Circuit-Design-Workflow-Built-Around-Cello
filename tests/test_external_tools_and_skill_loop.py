@@ -2,20 +2,7 @@ from __future__ import annotations
 
 import json
 import sys
-import types
 from pathlib import Path
-
-litellm_stub = types.ModuleType("litellm")
-litellm_stub.completion = lambda **_: None
-litellm_exceptions_stub = types.ModuleType("litellm.exceptions")
-for name in ["AuthenticationError", "RateLimitError", "BadRequestError", "APIError"]:
-    setattr(litellm_exceptions_stub, name, type(name, (Exception,), {}))
-litellm_caching_stub = types.ModuleType("litellm.caching")
-litellm_caching_stub.Cache = lambda **_: object()
-litellm_stub.exceptions = litellm_exceptions_stub
-sys.modules.setdefault("litellm", litellm_stub)
-sys.modules.setdefault("litellm.exceptions", litellm_exceptions_stub)
-sys.modules.setdefault("litellm.caching", litellm_caching_stub)
 
 from agents.builder_agent import call_builder
 from agents.skill_extractor_agent import SkillExtractorAgent
@@ -397,6 +384,51 @@ def test_metabolic_scorer_handles_file_read_failure(tmp_path: Path) -> None:
     assert result.metabolic_burden_score == 0.0
     assert result.gate_count == 0
     assert result.complexity_penalty == 1.0
+
+
+def test_metabolic_scorer_dynamic_gate_limit() -> None:
+    # 1. Without truth table: should fallback to DEFAULT_IDEAL_GATE_LIMIT = 3
+    result_default = MetabolicBurdenEvaluator().evaluate({"gate_count": 4})
+    assert result_default.details["ideal_gate_limit"] == 3
+    # gate count 4 > limit 3 -> penalized
+    assert result_default.metabolic_burden_score < 1.0
+
+    # 2. With 2-input truth table: dynamic limit = max(3, 2*2 + 1) = 5
+    candidate_2_inputs = {
+        "gate_count": 4,
+        "truth_table": [
+            {"A": 0, "B": 0, "Y": 0},
+            {"A": 1, "B": 1, "Y": 1}
+        ]
+    }
+    result_2_inputs = MetabolicBurdenEvaluator().evaluate(candidate_2_inputs)
+    assert result_2_inputs.details["ideal_gate_limit"] == 5
+    # gate count 4 <= limit 5 -> no penalty
+    assert result_2_inputs.metabolic_burden_score == 1.0
+
+    # 3. With 3-input truth table: dynamic limit = max(3, 2*3 + 1) = 7
+    candidate_3_inputs = {
+        "gate_count": 6,
+        "truth_table_or_logic_matrix": [
+            {"In1": 0, "In2": 0, "In3": 0, "output": 0}
+        ]
+    }
+    result_3_inputs = MetabolicBurdenEvaluator().evaluate(candidate_3_inputs)
+    assert result_3_inputs.details["ideal_gate_limit"] == 7
+    # gate count 6 <= limit 7 -> no penalty
+    assert result_3_inputs.metabolic_burden_score == 1.0
+
+    # 4. Verification that explicit override via candidate metadata is respected
+    candidate_override = {
+        "gate_count": 4,
+        "ideal_gate_limit": 2,
+        "truth_table": [
+            {"A": 0, "B": 0, "Y": 0}
+        ]
+    }
+    result_override = MetabolicBurdenEvaluator().evaluate(candidate_override)
+    assert result_override.details["ideal_gate_limit"] == 2
+    assert result_override.metabolic_burden_score < 1.0
 
 
 def test_builder_prompt_includes_retrieved_skills_and_apply_instruction(monkeypatch) -> None:

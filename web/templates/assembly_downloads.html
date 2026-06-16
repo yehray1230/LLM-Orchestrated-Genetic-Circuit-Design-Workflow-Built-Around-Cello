@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Assembly Downloads {{ deliverable.deliverable_id }}{% endblock %}
+{% block content %}
+<header class="page-header split-header">
+  <div>
+    <span class="eyebrow">Artifact downloads</span>
+    <h1>{{ deliverable.deliverable_id }}</h1>
+    <p class="muted">Download generated GenBank, CSV, JSON, report, and visualization artifacts for review and handoff.</p>
+  </div>
+  <a class="button secondary" href="/web/assembly/deliverables/{{ deliverable.deliverable_id }}">Back to report</a>
+</header>
+
+<nav class="workspace-steps">
+  <a href="/web/assembly">Overview</a>
+  <a href="/web/assembly/backbones">Backbones</a>
+  <a href="/web/assembly/new">New deliverable</a>
+  <a href="/web/assembly/deliverables/{{ deliverable.deliverable_id }}">Report</a>
+  <a class="active" href="/web/assembly/deliverables/{{ deliverable.deliverable_id }}/downloads">Downloads</a>
+</nav>
+
+<section class="card section-space">
+  <h2>Download deliverables</h2>
+  <div class="download-grid">
+    {% for key, artifact in deliverable.artifacts.items() %}
+    <a class="download-card" href="/web/assembly/deliverables/{{ deliverable.deliverable_id }}/artifacts/{{ key }}"><strong>{{ key|upper }}</strong><span>{{ artifact.filename }}</span></a>
+    {% endfor %}
+  </div>
+  <p class="muted section-space">These files are computational planning outputs. Review sequence assumptions, reagent constraints, and protocol details before wet-lab execution.</p>
+</section>
+{% endblock %}

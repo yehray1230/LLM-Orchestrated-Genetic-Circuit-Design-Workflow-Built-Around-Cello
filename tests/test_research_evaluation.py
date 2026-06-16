@@ -36,6 +36,7 @@ def _candidate(*, evidence_quality: float = 0.9) -> dict:
         "rise_time": 120,
         "evidence_quality": evidence_quality,
         "data_completeness": 0.9,
+        "semantic_faithfulness_score": 0.95,
     }
 
 
@@ -70,6 +71,7 @@ def test_research_profile_returns_explainable_dimensions() -> None:
         "buildability",
         "evidence_quality",
         "data_completeness",
+        "semantic_faithfulness",
     }
     assert result["component_scores"]["cello_assignment"] == pytest.approx(0.8)
 

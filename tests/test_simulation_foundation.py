@@ -180,3 +180,77 @@ def test_simulation_api_and_design_spec_endpoint(tmp_path: Path) -> None:
     assert simulated.json()["data"]["simulation_result"]["status"] == "simulated"
     assert spec.status_code == 200
     assert spec.json()["data"]["model_version"] == SIMULATION_MODEL_VERSION
+
+
+def test_simulation_with_ucf_and_copy_number_perturbation(tmp_path: Path) -> None:
+    # 1. Create a mock UCF file
+    ucf_content = [
+        {
+            "collection": "gates",
+            "name": "P1_PhlF",
+            "gate_type": "NOR",
+            "response_function": {
+                "function": "hill_function",
+                "parameters": {
+                    "ymin": 0.02,
+                    "ymax": 2.0,
+                    "K": 0.45,
+                    "n": 2.5
+                }
+            },
+            "regulator": "PhlF",
+            "promoter": "P_PhlF"
+        }
+    ]
+    import json
+    ucf_file = tmp_path / "test_ucf.json"
+    ucf_file.write_text(json.dumps(ucf_content), encoding="utf-8")
+
+    # 2. Test parse_ucf_gate_parameters
+    from tools.cello_artifact_parser import parse_ucf_gate_parameters
+    gate_params = parse_ucf_gate_parameters(ucf_file)
+    assert "PhlF" in gate_params
+    assert gate_params["PhlF"]["ymin"] == 0.02
+    assert gate_params["PhlF"]["ymax"] == 2.0
+    assert gate_params["PhlF"]["K"] == 0.45
+    assert gate_params["PhlF"]["n"] == 2.5
+
+    # 3. Test simulation_spec_from_design_ir_v2 mapping
+    design = migrate_design_ir_v1_to_v2(
+        topology_to_design_ir(
+            _buffer_topology(),
+            host_organism="Escherichia coli",
+            design_id="simulation_mapping",
+        ).to_dict()
+    ).design
+    design.specification.truth_table = _buffer_topology()["truth_table"]
+    design.extensions["verilog"] = _buffer_topology()["verilog"]
+    design.extensions["ucf_path"] = str(ucf_file.resolve())
+    
+    from schemas.design_ir import PartAssignment
+    design.assignments = [
+        PartAssignment(
+            logic_node_id="g1",
+            part_id="DEMO_PhlF_CDS",
+            part_name="PhlF regulator",
+            part_type="CDS"
+        )
+    ]
+    
+    spec = simulation_spec_from_design_ir_v2(design)
+    assert spec.parameters.get("kd_g1") == 0.45
+    assert spec.parameters.get("hill_coefficient_g1") == 2.5
+    assert spec.parameters.get("leak_fraction_g1") == 0.02 / 2.0
+
+    # 4. Test log-normal perturbation of copy_number
+    from tools.ode_simulator import _perturb_biokinetic_parameters
+    import numpy as np
+    rng = np.random.default_rng(42)
+    perturbed = _perturb_biokinetic_parameters(
+        {"copy_number": 5.0},
+        noise_level=0.15,
+        rng=rng,
+        perturbable=["copy_number"]
+    )
+    assert perturbed["copy_number"] > 0.0
+    assert perturbed["copy_number"] != 5.0

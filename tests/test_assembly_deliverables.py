@@ -64,14 +64,26 @@ def test_deliverable_service_writes_complete_package(tmp_path: Path) -> None:
 
     assert result["ok"] is True
     assert result["readiness"]["readiness_status"] == "primer_ready"
-    assert {"genbank", "csv", "json", "report"}.issubset(result["artifacts"])
-    for key in ("genbank", "csv", "json", "report"):
+    assert {"genbank", "csv", "json", "report", "opentrons", "echo"}.issubset(result["artifacts"])
+    for key in ("genbank", "csv", "json", "report", "opentrons", "echo"):
         artifact = services.assembly_deliverables.artifact(
             result["deliverable_id"],
             key,
         )
         assert artifact is not None
         assert artifact[0].is_file()
+        
+    opentrons_artifact = services.assembly_deliverables.artifact(
+        result["deliverable_id"],
+        "opentrons",
+    )
+    assert "opentrons" in opentrons_artifact[0].read_text("utf-8")
+    
+    echo_artifact = services.assembly_deliverables.artifact(
+        result["deliverable_id"],
+        "echo",
+    )
+    assert "Source Plate Name" in echo_artifact[0].read_text("utf-8")
     csv_artifact = services.assembly_deliverables.artifact(
         result["deliverable_id"],
         "csv",
@@ -123,9 +135,17 @@ def test_html_assembly_workspace_renders_report_and_downloads(
     app.dependency_overrides[get_services] = lambda: services
     try:
         with TestClient(app) as client:
-            page = client.get(
+            legacy = client.get(
                 "/web/assembly",
                 params={"deliverable_id": result["deliverable_id"]},
+                follow_redirects=False,
+            )
+            page = client.get(
+                f"/web/assembly/deliverables/{result['deliverable_id']}",
+            )
+            downloads = client.get(
+                "/web/assembly/deliverables/"
+                f"{result['deliverable_id']}/downloads",
             )
             download = client.get(
                 "/web/assembly/deliverables/"
@@ -134,9 +154,15 @@ def test_html_assembly_workspace_renders_report_and_downloads(
     finally:
         app.dependency_overrides.clear()
 
+    assert legacy.status_code == 303
+    assert legacy.headers["location"] == (
+        f"/web/assembly/deliverables/{result['deliverable_id']}"
+    )
     assert page.status_code == 200
-    assert "質體組裝與實驗交付物" in page.text
+    assert "Assembly report" in page.text
     assert "Fragment and primer table" in page.text
     assert result["deliverable_id"] in page.text
+    assert downloads.status_code == 200
+    assert "Download deliverables" in downloads.text
     assert download.status_code == 200
     assert "LOCUS" in download.text

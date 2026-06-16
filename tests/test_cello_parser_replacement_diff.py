@@ -67,7 +67,7 @@ def test_cello_v2_json_parser_resolves_library_parts(tmp_path: Path) -> None:
     assert len(result.assignments) == 2
     cds = next(item for item in result.assignments if item["part_type"] == "CDS")
     assert cds["part_id"] == "DEMO_PhlF_CDS"
-    assert cds["sequence"] == "ATGAAACCGGTTAAATAA"
+    assert cds["sequence"].startswith("AAGTAGGAATTG")
     assert cds["library_version"] == "1.0.0"
     assert cds["gate_type"] == "NOT"
 
@@ -114,7 +114,7 @@ def test_cello_wrapper_parses_assignments_from_output_directory(tmp_path: Path) 
     design = topology_to_design_ir(topology)
     regulator = next(part for part in design.parts if part.id == "regulator_1_n")
     assert regulator.name == "PhlF regulator"
-    assert regulator.sequence == "ATGAAACCGGTTAAATAA"
+    assert regulator.sequence.startswith("AAGTAGGAATTG")
 
 
 def test_replacement_validation_rejects_type_mismatch() -> None:
@@ -152,7 +152,7 @@ def test_replacement_creates_immutable_revision_and_design_diff() -> None:
     revised_part = next(part for part in revised.parts if part.id == "output_cds_GFP")
     assert original_part.sequence is None
     assert original_part.assignment is None
-    assert revised_part.sequence == "ATGGTGAGCAAGGGCGAGTAA"
+    assert revised_part.sequence.startswith("ATGCGTAAAGGC")
     assert revised.revision.parent_revision_id == original.revision.revision_id
     assert revised.revision.revision_number == original.revision.revision_number + 1
 

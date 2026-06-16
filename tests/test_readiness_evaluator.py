@@ -168,6 +168,10 @@ def test_readiness_separates_domains_and_keeps_future_scores_null() -> None:
     assert result.domain_scores["dynamic_score"] == 0.7
     assert result.domain_scores["part_evidence_score"] == 0.9
     assert result.domain_scores["assembly_plan_score"] == 1.0
+    assert result.domain_scores["primer_readiness_score"] is None
+    assert result.domain_scores["sequence_optimization_score"] is None
+    assert result.domain_scores["host_optimization_score"] is None
+    assert result.domain_scores["calibration_score"] is None
     assert result.domain_scores["experimental_readiness_score"] is None
     assert result.next_required_stage == "primer_ready"
     assert result.blockers == []
@@ -203,4 +207,23 @@ def test_primer_stage_only_advances_when_deliverable_is_ready() -> None:
 
     assert result.readiness_status == "primer_ready"
     assert result.next_required_stage == "sequence_optimized"
+    assert result.domain_scores["primer_readiness_score"] == 1.0
+    assert result.domain_scores["sequence_optimization_score"] is None
+    assert result.domain_scores["experimental_readiness_score"] == 1.0
+
+
+def test_readiness_reports_split_optimization_domains() -> None:
+    result = evaluate_readiness(
+        _design(),
+        primer_result={"status": "ready"},
+        sequence_optimization_result={"status": "passed"},
+        host_optimization_result={"status": "ready"},
+        calibration_result={"status": "completed"},
+    )
+
+    assert result.readiness_status == "host_optimized"
+    assert result.domain_scores["primer_readiness_score"] == 1.0
+    assert result.domain_scores["sequence_optimization_score"] == 1.0
+    assert result.domain_scores["host_optimization_score"] == 1.0
+    assert result.domain_scores["calibration_score"] == 1.0
     assert result.domain_scores["experimental_readiness_score"] == 1.0

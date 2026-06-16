@@ -136,6 +136,39 @@ def test_validate_import_confirm_and_list_design(client: TestClient) -> None:
     assert fetched.json()["data"]["name"] == payload["name"]
 
 
+def test_v2_sequence_analysis_and_optimization_evaluation(client: TestClient) -> None:
+    payload = _draft_payload("sequence_api_design")
+    payload["parts"][1]["sequence"] = "ATGAAATAAGGTCTCTAA"
+    client.post("/api/v1/imports/json", json={"draft": payload})
+    client.post(f"/api/v1/imports/{payload['draft_id']}/confirm")
+
+    analysis = client.post(
+        f"/api/v2/designs/{payload['draft_id']}/sequence-analysis",
+        json={"part_ids": ["gfp"]},
+    )
+    optimization = client.post(
+        f"/api/v2/designs/{payload['draft_id']}/sequence-optimization/evaluate",
+        json={
+            "objective": "sequence_quality_baseline",
+            "part_ids": ["gfp"],
+        },
+    )
+
+    assert analysis.status_code == 200
+    data = analysis.json()["data"]
+    assert data["status"] == "blocked"
+    assert data["summary"]["part_count"] == 1
+    assert any(
+        issue["code"] == "INTERNAL_BSAI_SITE"
+        for issue in data["results"][0]["issues"]
+    )
+    assert optimization.status_code == 200
+    result = optimization.json()["data"]
+    assert result["status"] == "needs_review"
+    assert result["results"][0]["optimized_sequence"] is None
+    assert result["results"][0]["issues"][0]["code"] == "NO_OPTIMIZED_SEQUENCE"
+
+
 def test_genbank_import_creates_reviewable_incomplete_draft(
     client: TestClient,
 ) -> None:
@@ -410,3 +443,142 @@ def test_web_run_form_redirects_to_background_run(
 
     assert response.status_code == 303
     assert response.headers["location"] == "/web/runs/run_web_test"
+
+
+def test_web_run_detail_monitor_endpoint(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    services = client.app.state.test_services
+    monkeypatch.setattr(
+        services.runs,
+        "status",
+        lambda run_id: {
+            "run_id": run_id,
+            "status": "completed",
+            "stage": "consolidator",
+            "progress": 1.0,
+        },
+    )
+    monkeypatch.setattr(
+        services.runs,
+        "events",
+        lambda run_id, after_event_id=0, limit=100: {
+            "run_id": run_id,
+            "events": [
+                {
+                    "event_id": 2,
+                    "stage": "consolidator",
+                    "status": "completed",
+                    "message": "Final design assembled.",
+                }
+            ],
+        },
+    )
+    monkeypatch.setattr(
+        services.runs,
+        "result",
+        lambda run_id: {
+            "run_id": run_id,
+            "status": "completed",
+            "design_id": "design_web_test",
+            "summary": {
+                "best_topology": {
+                    "score": 0.91,
+                    "mapping_status": "mapped",
+                    "ode_status": "completed",
+                    "verilog": (
+                        "module genetic_circuit(input A, input B, output Y); "
+                        "assign Y = A & ~B; endmodule"
+                    ),
+                    "semantic_faithfulness_score": 0.95,
+                    "robustness_score": 0.81,
+                    "toxicity_score": 0.88,
+                    "dynamic_margin": 0.42,
+                    "ode_trace": {
+                        "time": [0, 1, 2],
+                        "output_protein": [0, 4, 8],
+                        "total_mrna": [0, 1, 2],
+                        "rnap_occupancy": [0.1, 0.2, 0.3],
+                    },
+                }
+            },
+            "tree_summary": [
+                {
+                    "node_id": "root",
+                    "parent_id": None,
+                    "search_mode": "Exploration",
+                    "status": "Evaluated",
+                    "score": 0.71,
+                    "error_type": "NONE",
+                    "critic_feedback": "Initial candidate was viable.",
+                },
+                {
+                    "node_id": "repair_1",
+                    "parent_id": "root",
+                    "search_mode": "Repair",
+                    "status": "Pass",
+                    "score": 0.91,
+                    "error_type": "NONE",
+                    "critic_feedback": "Repair improved robustness.",
+                },
+            ],
+            "current_node_id": "repair_1",
+        },
+    )
+
+    page = client.get("/web/runs/run_web_test")
+    status = client.get("/web/runs/run_web_test/status")
+
+    assert page.status_code == 200
+    assert "Design run monitor" in page.text
+    assert "Event timeline" in page.text
+    assert "Latest message" in page.text
+    assert "Score breakdown" in page.text
+    assert "Semantic faithfulness" in page.text
+    assert "Topology graph" in page.text
+    assert "ODE trace" in page.text
+    assert "Search tree / branch history" in page.text
+    assert "Output protein" in page.text
+    assert "repair_1" in page.text
+    assert "Debug payload" in page.text
+    assert status.status_code == 200
+    payload = status.json()
+    assert payload["run"]["progress"] == 1.0
+    assert payload["events"][0]["stage"] == "consolidator"
+    assert payload["terminal"] is True
+    assert payload["monitor"]["status_class"] == "status-ready"
+    assert payload["monitor"]["latest_message"] == "Final design assembled."
+    assert payload["monitor"]["score_summary"]["score"] == 0.91
+    assert payload["monitor"]["score_breakdown"][0]["key"] == (
+        "semantic_faithfulness_score"
+    )
+    assert payload["monitor"]["topology_graph"]["nodes"][0]["type"] == "logic"
+    assert payload["monitor"]["ode_trace"]["series"][0]["key"] == "output_protein"
+    assert payload["monitor"]["search_tree"]["path"][-1]["node_id"] == "repair_1"
+
+
+def test_web_interaction_enhancements_are_available(client: TestClient) -> None:
+    research = client.get("/web/research")
+    assembly = client.get("/web/assembly")
+    assembly_backbones = client.get("/web/assembly/backbones")
+    assembly_new = client.get("/web/assembly/new")
+    app_js = Path("web/static/app.js").read_text(encoding="utf-8")
+
+    assert research.status_code == 200
+    assert assembly.status_code == 200
+    assert assembly_backbones.status_code == 200
+    assert assembly_new.status_code == 200
+    assert "Assembly Delivery" in assembly.text
+    assert "Backbone Registry" in assembly_backbones.text
+    assert "New Assembly Deliverable" in assembly_new.text
+    assert 'name="truth_table_json" data-json-input="array"' in research.text
+    assert (
+        'name="essential_regions_json" data-json-input="array"'
+        in assembly_backbones.text
+    )
+    assert "validateJsonField" in app_js
+    assert "aria-busy" in app_js
+    assert "data-run-latest-message" in app_js
+    assert "status-badge" in app_js
+    assert "Please fix invalid JSON fields before submitting." in app_js

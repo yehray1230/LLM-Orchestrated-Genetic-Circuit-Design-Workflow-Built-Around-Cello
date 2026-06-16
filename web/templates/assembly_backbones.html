@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Backbone Registry{% endblock %}
+{% block content %}
+<header class="page-header split-header">
+  <div>
+    <span class="eyebrow">Assembly workflow</span>
+    <h1>Backbone Registry</h1>
+    <p class="muted">Register trusted vector backbones and insertion regions before creating assembly deliverables.</p>
+  </div>
+  <a class="button secondary" href="/web/assembly/new">Create deliverable</a>
+</header>
+
+<nav class="workspace-steps">
+  <a href="/web/assembly">Overview</a>
+  <a class="active" href="/web/assembly/backbones">Backbones</a>
+  <a href="/web/assembly/new">New deliverable</a>
+  <span>Report</span>
+  <span>Downloads</span>
+</nav>
+
+{% if selected_backbone %}
+<div class="form-notice section-space">Registered {{ selected_backbone }}.</div>
+{% endif %}
+
+<section class="grid grid-2 section-space">
+  <article class="card">
+    <span class="step-number">01</span>
+    <h2>Upload backbone</h2>
+    <form action="/web/assembly/backbones" method="post" enctype="multipart/form-data">
+      <div class="form-grid">
+        <label>GenBank file<input type="file" name="file" accept=".gb,.gbk,.genbank" required></label>
+        <label>Backbone ID<input name="backbone_id" placeholder="pUC-derived" required></label>
+        <label>Version<input name="version" value="1.0.0" required></label>
+        <label>Name<input name="name" placeholder="Trusted cloning backbone" required></label>
+        <label>Source URI<input name="source_uri" placeholder="https://... or repository accession"></label>
+        <label>Host organisms<input name="host_organisms" value="Escherichia coli" required></label>
+        <label>Origin of replication<input name="origin_of_replication" placeholder="ColE1" required></label>
+        <label>Selection marker<input name="selection_marker" placeholder="ampicillin" required></label>
+        <label>Copy-number class<select name="copy_number_class"><option>unknown</option><option>low</option><option>medium</option><option>high</option></select></label>
+        <label>Insertion region ID<input name="insertion_region_id" value="mcs" required></label>
+        <label>Insertion region name<input name="insertion_region_name" value="Multiple cloning site" required></label>
+        <label>Insertion start<input type="number" name="insertion_start" min="0" required></label>
+        <label>Insertion end<input type="number" name="insertion_end" min="1" required></label>
+      </div>
+      <label>Essential regions JSON
+        <textarea name="essential_regions_json" data-json-input="array">[]</textarea>
+      </label>
+      <button class="button" type="submit">Register backbone version</button>
+    </form>
+  </article>
+
+  <article class="card">
+    <h2>Registered backbones</h2>
+    <div class="table-scroll"><table>
+      <tr><th>Name</th><th>ID</th><th>Host</th><th>Copy</th></tr>
+      {% for item in backbones %}
+      <tr>
+        <td>{{ item.name }}</td>
+        <td><code>{{ item.backbone_id }}@{{ item.version }}</code></td>
+        <td>{{ item.host_organisms|join(", ") }}</td>
+        <td>{{ item.copy_number_class }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="muted">No registered backbone yet.</td></tr>
+      {% endfor %}
+    </table></div>
+  </article>
+</section>
+{% endblock %}

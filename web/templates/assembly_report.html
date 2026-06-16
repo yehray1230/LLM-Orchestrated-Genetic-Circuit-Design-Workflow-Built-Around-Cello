@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Assembly Report {{ deliverable.deliverable_id }}{% endblock %}
+{% block content %}
+<header class="page-header split-header">
+  <div>
+    <span class="eyebrow">Assembly report</span>
+    <h1>{{ deliverable.deliverable_id }}</h1>
+    <p class="muted">{{ deliverable.plan.method }} · {{ deliverable.plan.target_length }} bp · {{ deliverable.readiness.readiness_status }}</p>
+  </div>
+  <a class="button" href="/web/assembly/deliverables/{{ deliverable.deliverable_id }}/downloads">Downloads</a>
+</header>
+
+<nav class="workspace-steps">
+  <a href="/web/assembly">Overview</a>
+  <a href="/web/assembly/backbones">Backbones</a>
+  <a href="/web/assembly/new">New deliverable</a>
+  <a class="active" href="/web/assembly/deliverables/{{ deliverable.deliverable_id }}">Report</a>
+  <a href="/web/assembly/deliverables/{{ deliverable.deliverable_id }}/downloads">Downloads</a>
+</nav>
+
+<section class="grid grid-3 section-space">
+  <article class="card"><span class="muted">Assembly plan</span><div class="metric compact">{{ deliverable.plan.status }}</div></article>
+  <article class="card"><span class="muted">Primer design</span><div class="metric compact">{{ deliverable.primers.status }}</div></article>
+  <article class="card"><span class="muted">Readiness</span><div class="metric compact">{{ deliverable.readiness.readiness_status }}</div></article>
+</section>
+
+{% if deliverable.artifacts.plasmid_map %}
+<article class="card section-space">
+  <h2>Plasmid map</h2>
+  <img class="plasmid-map" src="/web/assembly/deliverables/{{ deliverable.deliverable_id }}/artifacts/plasmid_map" alt="Assembled plasmid feature map">
+</article>
+{% endif %}
+
+<article class="card section-space">
+  <h2>Fragment and primer table</h2>
+  <div class="table-scroll"><table>
+    <tr><th>Fragment</th><th>Preparation</th><th>Primer</th><th>Sequence (5'→3')</th><th>Tm</th><th>GC</th><th>Hairpin</th><th>Homodimer</th></tr>
+    {% for fragment in deliverable.primers.fragment_primer_sets %}
+      {% if fragment.forward_primer %}
+        {% for primer in [fragment.forward_primer, fragment.reverse_primer] %}
+        <tr>
+          <td>{{ fragment.fragment_name }}<br><span class="muted">{{ fragment.template_length }} → {{ fragment.product_length }} bp</span></td>
+          <td>{{ fragment.preparation }}</td><td>{{ primer.direction }}</td><td><code class="sequence">{{ primer.sequence }}</code></td>
+          <td>{{ primer.tm }} °C</td><td>{{ primer.gc_percent }}%</td><td>{{ primer.hairpin_tm }} °C</td><td>{{ primer.homodimer_tm }} °C</td>
+        </tr>
+        {% endfor %}
+      {% else %}
+        <tr><td>{{ fragment.fragment_name }}</td><td>{{ fragment.preparation }}</td><td colspan="6" class="muted">Primer pair not required</td></tr>
+      {% endif %}
+    {% endfor %}
+  </table></div>
+</article>
+
+<article class="card section-space">
+  <h2>Validation findings</h2>
+  {% for issue in deliverable.plan.issues %}
+    <div class="{{ 'error-box' if issue.severity == 'error' else 'warning-box' }}"><strong>{{ issue.code }}</strong> · {{ issue.message }}</div>
+  {% endfor %}
+  {% for fragment in deliverable.primers.fragment_primer_sets %}
+    {% for issue in fragment.warnings %}<div class="warning-box"><strong>{{ issue.code }}</strong> · {{ issue.message }}</div>{% endfor %}
+    {% for primer in [fragment.forward_primer, fragment.reverse_primer] if primer %}
+      {% for issue in primer.warnings %}<div class="warning-box"><strong>{{ primer.name }} / {{ issue.code }}</strong> · {{ issue.message }}</div>{% endfor %}
+    {% endfor %}
+  {% endfor %}
+  {% if not deliverable.plan.issues and not deliverable.primers.warnings %}<p class="muted">No global blockers were reported.</p>{% endif %}
+</article>
+{% endblock %}
