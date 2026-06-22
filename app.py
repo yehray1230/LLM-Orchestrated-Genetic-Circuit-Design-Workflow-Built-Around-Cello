@@ -182,7 +182,7 @@ def main() -> None:
         <div class="app-header">
             <div>
                 <h1>基因電路設計器</h1>
-                <p>將自然語言需求轉換為 Cello 相容基因電路，整合樹狀搜尋、圖譜 RAG 與評審回饋修正。</p>
+                <p>將自然語言需求轉換為 Cello 相容基因電路，整合樹狀搜尋、邏輯設計知識與評審回饋修正。</p>
             </div>
         </div>
         """,
@@ -559,6 +559,7 @@ def _ensure_session_state() -> None:
         st.session_state.selected_node_id = None
     if "ui_options" not in st.session_state:
         st.session_state.ui_options = {
+            "enable_skill_context": True,
             "enable_rag": True,
             "enable_ode": True,
             "enable_tree_search": True,
@@ -596,7 +597,7 @@ def _render_tutorial() -> None:
                 這是一個將自然語言轉換為基因電路的自動化工具。以下是簡單的使用步驟：
                 
                 1. **輸入需求**：在左側的「設計需求」框中，用自然語言描述想要的基因電路功能（例如：A 和 B 同時存在時輸出 Y）。
-                2. **設定參數**：選擇宿主生物、調整計算預算，並開關 RAG、ODE 模擬等功能。
+                2. **設定參數**：選擇宿主生物、調整計算預算，並開關邏輯設計知識、ODE 模擬等功能。
                 3. **執行生成**：
                    - **示範模式**：點擊「執行示範迭代」或「執行示範搜尋」，體驗系統流程。
                    - **自備金鑰**：於「自備金鑰模型設定」輸入 API Key 後，點擊「執行自備金鑰工作流程」。
@@ -613,7 +614,7 @@ def _render_tutorial() -> None:
             "**📖 系統使用導覽**\n\n"
             "歡迎使用基因電路設計器！以下是簡單的使用步驟：\n\n"
             "1. **輸入需求**：在左側的「設計需求」框中，用自然語言描述想要的基因電路功能。\n"
-            "2. **設定參數**：選擇宿主生物、調整計算預算，並開關 RAG、ODE 模擬等功能。\n"
+            "2. **設定參數**：選擇宿主生物、調整計算預算，並開關邏輯設計知識、ODE 模擬等功能。\n"
             "3. **執行生成**：點擊「執行示範迭代」體驗系統流程，或於設定 API Key 後「執行自備金鑰工作流程」。\n"
             "4. **檢視與分析**：在右側「結果檢視器」切換分頁，查看邏輯提案、Verilog、拓樸與評審回饋。\n"
             "5. **下載狀態**：點擊左側底部的「匯出狀態 JSON」保存您的設計進度。"
@@ -652,7 +653,10 @@ def _render_sidebar(state: DesignState) -> None:
 
         st.subheader("工作流程選項")
         options = st.session_state.ui_options
-        options["enable_rag"] = st.toggle("圖譜 RAG", value=options["enable_rag"])
+        if "enable_skill_context" not in options:
+            options["enable_skill_context"] = options.get("enable_rag", True)
+        options["enable_skill_context"] = st.toggle("邏輯設計知識", value=options["enable_skill_context"])
+        options["enable_rag"] = options["enable_skill_context"]
         options["enable_ode"] = st.toggle("ODE 模擬", value=options["enable_ode"])
         options["enable_tree_search"] = st.toggle("多代理樹狀搜尋", value=options["enable_tree_search"])
         options["enable_cache"] = st.toggle("快取", value=options["enable_cache"])
@@ -1023,9 +1027,10 @@ def _create_guided_child(state: DesignState, search_mode: str) -> None:
 def _render_pipeline(state: DesignState) -> None:
     st.markdown('<div class="section-title">工作流程進度</div>', unsafe_allow_html=True)
     current_step = _current_step(state)
+    skill_context = getattr(state, "skill_context", "") or state.rag_context
     steps = [
         ("需求", bool(state.user_intent.strip()), "自然語言目標"),
-        ("RAG 檢索", bool(state.rag_context), "歷史規則"),
+        ("設計知識", bool(skill_context), "Motif 與記憶"),
         ("設計生成器", bool(state.logic_proposals), "邏輯提案"),
         ("轉譯器", bool(state.verilog_codes), "Cello Verilog"),
         ("Cello 映射", bool(state.candidate_topologies), "拓樸候選"),
@@ -1219,8 +1224,8 @@ def _render_inspector(state: DesignState) -> None:
         )
         return
 
-    explanation_tab, proposal_tab, verilog_tab, topology_tab, compare_tab, ode_tab, charts_tab, critic_tab, rag_tab, raw_tab = st.tabs(
-        ["解釋", "提案", "Verilog", "拓樸", "比較", "ODE 模擬", "圖表", "評審", "RAG 內容", "原始狀態"]
+    explanation_tab, proposal_tab, verilog_tab, topology_tab, compare_tab, ode_tab, charts_tab, critic_tab, skill_tab, raw_tab = st.tabs(
+        ["解釋", "提案", "Verilog", "拓樸", "比較", "ODE 模擬", "圖表", "評審", "設計知識", "原始狀態"]
     )
 
     with explanation_tab:
@@ -1278,11 +1283,12 @@ def _render_inspector(state: DesignState) -> None:
         if node.last_error:
             st.error(node.last_error)
 
-    with rag_tab:
-        if state.rag_context:
-            st.text_area("檢索內容", value=state.rag_context, height=260)
+    with skill_tab:
+        skill_context = getattr(state, "skill_context", "") or state.rag_context
+        if skill_context:
+            st.text_area("Skill Context", value=skill_context, height=260)
         else:
-            st.info("目前尚未檢索 RAG 內容。")
+            st.info("目前尚未載入邏輯設計知識。")
 
     with raw_tab:
         st.json(asdict(node))
@@ -2293,8 +2299,9 @@ def _run_demo_iteration(state: DesignState) -> None:
     state.current_node_id = current_node_id
 
     mode = node.search_mode
-    if options["enable_rag"] and mode in {"Exploration", "Repair"}:
-        state.rag_context = _demo_rag_context(state.user_intent, mode)
+    if options["enable_skill_context"] and mode in {"Exploration", "Repair"}:
+        state.skill_context = _demo_skill_context(state.user_intent, mode)
+        state.rag_context = state.skill_context
 
     if mode != "Exploitation":
         node.logic_proposals = _demo_proposals(state, node)
@@ -2413,7 +2420,7 @@ def _run_byok_workflow(state: DesignState) -> None:
             batch_ode_simulator=BatchODESimulator() if options["enable_ode"] else _NoOpODESimulator(),
             critic=CriticAgent(api_key=api_key, model_name=model_name, api_base=api_base),
             consolidator=ConsolidatorAgent(),
-            skill_retriever=SkillRetriever.from_json_file(include_extracted=True) if options["enable_rag"] else None,
+            skill_retriever=SkillRetriever.from_json_file(include_extracted=True) if options["enable_skill_context"] else None,
             data_miner=DataMinerAgent() if options["enable_ode"] else None,
             skill_extractor=SkillExtractorAgent(
                 vault_dir="outputs/obsidian_skills",
@@ -2626,10 +2633,10 @@ def _select_best_fallback(state: DesignState) -> None:
         st.session_state.selected_node_id = best_node.node_id
 
 
-def _demo_rag_context(intent: str, mode: str) -> str:
+def _demo_skill_context(intent: str, mode: str) -> str:
     return "\n".join(
         [
-            f"模式感知檢索：{MODE_LABELS.get(mode, mode)}",
+            f"模式感知設計知識：{MODE_LABELS.get(mode, mode)}",
             "優先使用 Cello 相容的組合邏輯：primitive gates、wire、assign。",
             "避免 always blocks、registers、clocks、latches、memories 與 delay syntax。",
             f"需求關鍵字：{', '.join(intent.lower().split()[:8]) or '未提供'}",
@@ -3061,9 +3068,10 @@ def _summarize_feedback(feedback: str, limit: int = 110) -> str:
 
 
 def _current_step(state: DesignState) -> int:
+    skill_context = getattr(state, "skill_context", "") or state.rag_context
     checks = [
         bool(state.user_intent.strip()),
-        bool(state.rag_context),
+        bool(skill_context),
         bool(state.logic_proposals),
         bool(state.verilog_codes),
         bool(state.candidate_topologies),

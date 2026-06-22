@@ -212,14 +212,16 @@ def run_reflexion_workflow(
         if node.search_mode == "Exploration":
             temperature = 0.7
             if skill_retriever:
-                state.rag_context = skill_retriever.retrieve_skills(state.user_intent, mode="Exploration")
+                state.skill_context = skill_retriever.retrieve_skills(state.user_intent, mode="Exploration")
+                state.rag_context = state.skill_context
         elif node.search_mode == "Repair":
             temperature = 0.1
             if skill_retriever:
-                state.rag_context = skill_retriever.retrieve_skills(state.user_intent, mode="Repair")
+                state.skill_context = skill_retriever.retrieve_skills(state.user_intent, mode="Repair")
+                state.rag_context = state.skill_context
         elif node.search_mode == "Exploitation":
             temperature = 0.1
-            # Inherit rag_context from parent if possible, or just default
+            # Inherit skill_context from parent if possible, or just default
             
         # 1. Builder
         if node.search_mode != "Exploitation":

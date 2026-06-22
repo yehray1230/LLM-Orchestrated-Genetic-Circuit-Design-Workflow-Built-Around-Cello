@@ -123,10 +123,12 @@ Required schema:
     skill_context = _retrieve_skill_context(state, skill_retriever, skill_file_path)
     if skill_context:
         system_prompt += (
-            "\n=== Retrieved Design Memory ===\n"
+            "\n=== Logic Design Skill Context ===\n"
             f"{skill_context}\n"
-            "Apply reusable successful patterns when relevant, and treat avoid/repair memories "
-            "as constraints that should prevent repeated failed designs.\n"
+            "Use these motif definitions as design constraints and biological trade-off guidance. "
+            "Prefer simple Cello-compatible combinational motifs. Do not use sequential or dynamic "
+            "motifs unless the user explicitly requests memory, oscillation, filtering, or pulse behavior. "
+            "Treat avoid/repair memories as constraints that should prevent repeated failed designs.\n"
         )
     elif getattr(state, "skill_library_context", None):
         system_prompt += f"\nReusable design skill context:\n{state.skill_library_context}\n"
@@ -159,8 +161,11 @@ def _retrieve_skill_context(
     skill_file_path: str,
 ) -> str:
     snippets: list[str] = []
-    if state.rag_context:
-        snippets.append(state.rag_context)
+    existing_context = getattr(state, "skill_context", "") or state.rag_context
+    if existing_context:
+        snippets.append(existing_context)
+        if skill_retriever is None:
+            return "\n".join(snippets)
 
     retriever = skill_retriever
     if retriever is None:

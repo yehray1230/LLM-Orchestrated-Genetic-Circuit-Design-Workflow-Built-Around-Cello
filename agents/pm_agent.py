@@ -34,6 +34,34 @@ Common Reporters (Outputs):
 - AmilCP (Blue chromoprotein, visible to naked eye without excitation)
 """
 
+REQUIREMENT_ANALYSIS_GUIDANCE = """
+=== Requirement Analysis Playbook ===
+When interpreting the user's natural-language intent, separate explicit facts from safe defaults.
+
+Required structured-spec fields:
+- chassis
+- inputs
+- outputs
+- logic_relation
+- copy_number
+
+Optional constraints to preserve only when explicitly stated:
+- timing_requirement
+- memory_requirement
+- safety_constraint
+- reporter_or_payload
+- burden_preference
+- dynamic_behavior
+
+Rules:
+- Identify inputs as biological signals or sensors, not only variable names.
+- Identify outputs as reporters, payload genes, enzymes, survival effects, or pathway controls.
+- Translate phrases like "only when A high and B low" into explicit Boolean relations.
+- Do not invent timing, memory, safety, or payload constraints when absent.
+- If the user asks for persistent memory, oscillation, delay, pulse, or temporal filtering, mark it as dynamic behavior and do not silently treat it as pure Cello-combinational logic.
+- If the missing detail changes circuit semantics, ask for clarification instead of guessing.
+"""
+
 REQUIRED_FIELDS = ["chassis", "inputs", "outputs", "logic_relation", "copy_number"]
 
 FIELD_LABELS = {
@@ -323,6 +351,8 @@ Currently, we are missing the field: '{missing_field}'.
 You must analyze the user's initial intent and the chat history, then consult the reference knowledge below to formulate ONE recommended default option.
 
 {COMMON_BIOPARTS_KNOWLEDGE}
+
+{REQUIREMENT_ANALYSIS_GUIDANCE}
 
 Rules:
 1. Propose exactly ONE logical default value or configuration for '{missing_field}' that fits the context.

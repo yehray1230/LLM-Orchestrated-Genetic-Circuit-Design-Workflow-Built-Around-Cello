@@ -59,15 +59,56 @@ def test_oracle_returns_error_without_verilog(tmp_path: Path) -> None:
 
 def test_skill_retriever_loads_json_and_returns_motif_snippets() -> None:
     retriever = SkillRetriever.from_json_file("邏輯設計skill.json")
+    raw_skills = json.loads(Path("邏輯設計skill.json").read_text(encoding="utf-8"))
 
     xor = retriever.retrieve_skills("xor boolean decomposition", k=2)
     nor = retriever.retrieve_skills("nor promoter gate", k=2)
+    empty_query = retriever.retrieve_skills("", k=2)
 
-    assert len(retriever.skills) == 13
+    assert len(retriever.skills) == 16
+    assert len(retriever.core_skills) == 16
+    assert all(record.get("skill_name") for record in raw_skills)
+    assert all(record.get("motif_name") for record in raw_skills)
+    assert retriever.memory_skills == []
+    assert "Canonical logic skill catalog" in xor
     assert "XOR_GATE" in xor
+    assert "BAND_PASS_FILTER" in xor
+    assert "CELLO_COMPATIBILITY_POLICY" in xor
+    assert "DESIGN_REPAIR_PLAYBOOK" in xor
+    assert "REQUIREMENT_ANALYSIS_PLAYBOOK" in xor
     assert "NOR_GATE" in nor
     assert "Boolean template" in xor
-    assert retriever.retrieve_skills("", k=2) == ""
+    assert "Canonical logic skill catalog" in empty_query
+
+
+def test_skill_retriever_retrieves_extracted_memory_separately(tmp_path: Path) -> None:
+    memory_path = tmp_path / "extracted.jsonl"
+    memory_path.write_text(
+        json.dumps(
+            {
+                "title": "Avoid unstable XOR mapping",
+                "summary": "Use a simpler NOR decomposition after repeated mapping failures.",
+                "memory_kind": "avoid",
+                "confidence_score": 0.9,
+                "tags": ["failure/part-error", "mapping/failed"],
+                "search_text": "xor mapping failure recovery",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    retriever = SkillRetriever.from_json_file(
+        "邏輯設計skill.json",
+        include_extracted=True,
+        extracted_path=memory_path,
+    )
+
+    result = retriever.retrieve_skills("xor mapping failure", mode="Repair", k=2)
+
+    assert len(retriever.core_skills) == 16
+    assert len(retriever.memory_skills) == 1
+    assert "Canonical logic skill catalog" in result
+    assert "Avoid unstable XOR mapping" in result
 
 
 def test_skill_retriever_default_path_is_repo_relative(monkeypatch, tmp_path: Path) -> None:
@@ -75,7 +116,7 @@ def test_skill_retriever_default_path_is_repo_relative(monkeypatch, tmp_path: Pa
 
     retriever = SkillRetriever.from_json_file()
 
-    assert len(retriever.skills) == 13
+    assert len(retriever.skills) == 16
 
 
 def test_core_text_files_are_valid_utf8_without_replacement_characters() -> None:
@@ -448,9 +489,9 @@ def test_builder_prompt_includes_retrieved_skills_and_apply_instruction(monkeypa
     result = call_builder(state, api_key=None, model_name="mock", skill_retriever=Retriever())
 
     assert result.last_error is None
-    assert "Retrieved Design Memory" in captured["system_prompt"]
+    assert "Logic Design Skill Context" in captured["system_prompt"]
     assert "Motif: XOR_GATE" in captured["system_prompt"]
-    assert "Apply reusable successful patterns" in captured["system_prompt"]
+    assert "Use these motif definitions as design constraints" in captured["system_prompt"]
 
 
 def test_cello_wrapper_mock_mode_is_unchanged() -> None:

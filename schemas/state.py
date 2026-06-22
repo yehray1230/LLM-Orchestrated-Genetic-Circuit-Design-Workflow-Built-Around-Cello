@@ -205,6 +205,7 @@ class DesignState:
     compute_budget: int = 6
     used_budget: int = 0
 
+    skill_context: str = ""
     rag_context: str = ""
     skill_library_context: str = ""
     seed_debate_transcript: str = ""

@@ -68,6 +68,10 @@ def test_pm_elicitation_mode(mock_completion) -> None:
     state = call_pm_agent(state, api_key="dummy_key", model_name="gpt-4o-mini")
 
     # 驗證
+    system_prompt = mock_completion.call_args.kwargs["messages"][0]["content"]
+    assert "Requirement Analysis Playbook" in system_prompt
+    assert "timing_requirement" in system_prompt
+    assert "memory_requirement" in system_prompt
     assert state.pending_proposal["missing_field"] == "inputs"
     assert state.pending_proposal["schema_version"] == "pm-proposal-v1"
     assert state.pending_proposal["source"] == "llm"

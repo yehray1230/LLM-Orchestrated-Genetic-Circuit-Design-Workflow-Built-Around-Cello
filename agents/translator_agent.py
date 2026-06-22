@@ -27,7 +27,7 @@ def _translate_single_proposal(
     api_key: str | None,
     model_name: str,
     api_base: str | None = None,
-    rag_context: str = "",
+    skill_context: str = "",
     feedback: str = "",
     temperature: float = 0.1,
     is_exploitation: bool = False,
@@ -47,10 +47,10 @@ Rules:
     if is_exploitation:
         system_prompt += "\nMODE: EXPLOITATION. Do NOT change the logical architecture. Only modify part assignments or constraints to improve scoring based on the feedback.\n"
 
-    if rag_context:
+    if skill_context:
         system_prompt += (
-            f"\n=== Historical Design Rules & Constraints ===\n"
-            f"{rag_context}\n"
+            f"\n=== Logic Design Skill Context ===\n"
+            f"{skill_context}\n"
         )
         
     system_prompt += (
@@ -113,7 +113,7 @@ def call_translator(
     **kwargs,
 ) -> DesignState:
     state.verilog_codes = []
-    rag_context = state.rag_context or ""
+    skill_context = getattr(state, "skill_context", "") or state.rag_context or ""
     
     node = None
     if state.current_node_id and state.current_node_id in state.tree_nodes:
@@ -145,7 +145,7 @@ def call_translator(
             api_key,
             model_name,
             api_base,
-            rag_context=rag_context,
+            skill_context=skill_context,
             feedback=feedback,
             temperature=temperature,
             is_exploitation=is_exploitation

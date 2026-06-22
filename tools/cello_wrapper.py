@@ -220,6 +220,8 @@ class CelloWrapper:
                     cwd=temp_path,
                     capture_output=True,
                     text=True,
+                    encoding="utf-8",
+                    errors="replace",
                     timeout=self.timeout_seconds,
                     check=False,
                 )
@@ -539,6 +541,8 @@ def _to_wsl_path(path: Path | None) -> str:
             ["wsl", "wslpath", "-u", path_str],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=2,
             check=False
         )
