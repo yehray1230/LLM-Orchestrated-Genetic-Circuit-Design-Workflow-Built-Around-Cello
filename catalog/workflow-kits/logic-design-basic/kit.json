@@ -1,0 +1,144 @@
+{
+  "id": "logic-design-basic",
+  "name": "Logic Design Basic",
+  "schema_version": "workflow-kit-v1",
+  "version": "1.0.0",
+  "summary": "Runs the core Reflexion workflow for turning a natural-language genetic-circuit request into computational candidate designs with Verilog, mapping, simulation, benchmark review, and repair.",
+  "entrypoint": "workflows.reflexion_controller.run_reflexion_workflow",
+  "agents": [
+    "pm-agent",
+    "builder-agent",
+    "translator-agent",
+    "data-miner-agent",
+    "critic-agent",
+    "consolidator-agent",
+    "skill-extractor-agent"
+  ],
+  "tools": [
+    "skill_retriever",
+    "cello_wrapper",
+    "batch_ode_simulator",
+    "benchmark_suite.evaluate_candidate"
+  ],
+  "stages": [
+    {
+      "id": "pre-design-elicitation",
+      "name": "Pre-design elicitation",
+      "agent": "pm-agent",
+      "optional": true,
+      "summary": "Completes chassis, input, output, logic relation, and copy-number fields before the core workflow."
+    },
+    {
+      "id": "logic-proposal",
+      "name": "Logic proposal",
+      "agent": "builder-agent",
+      "summary": "Generates Cello-oriented Boolean logic proposals and draft Verilog candidates."
+    },
+    {
+      "id": "verilog-translation",
+      "name": "Verilog translation",
+      "agent": "translator-agent",
+      "summary": "Translates logic proposals into Cello-compatible combinational Verilog."
+    },
+    {
+      "id": "cello-mapping",
+      "name": "Cello mapping",
+      "tool": "cello_wrapper",
+      "summary": "Runs configured Cello mapping or explicit mock fallback topology generation."
+    },
+    {
+      "id": "kinetic-context",
+      "name": "Kinetic context",
+      "agent": "data-miner-agent",
+      "optional": true,
+      "summary": "Adds host-aware kinetic parameter context for downstream ODE screening."
+    },
+    {
+      "id": "ode-simulation",
+      "name": "ODE simulation",
+      "tool": "batch_ode_simulator",
+      "summary": "Screens candidate dynamics with the reduced resource-aware simulation path."
+    },
+    {
+      "id": "benchmark-review",
+      "name": "Benchmark review",
+      "tool": "benchmark_suite.evaluate_candidate",
+      "summary": "Applies weighted heuristic scoring for functional, burden, robustness, temporal, orthogonality, and Cello-assignment signals."
+    },
+    {
+      "id": "critic-repair-routing",
+      "name": "Critic repair routing",
+      "agent": "critic-agent",
+      "summary": "Approves candidates or routes LOGIC_ERROR and PART_ERROR feedback into repair/exploitation branches."
+    },
+    {
+      "id": "result-consolidation",
+      "name": "Result consolidation",
+      "agent": "consolidator-agent",
+      "summary": "Promotes the selected node-level result into the global design state."
+    },
+    {
+      "id": "skill-memory-extraction",
+      "name": "Skill memory extraction",
+      "agent": "skill-extractor-agent",
+      "optional": true,
+      "summary": "Captures successful or failed workflow traces as reusable design memory."
+    }
+  ],
+  "inputs": [
+    "user_intent",
+    "host_organism",
+    "structured_spec",
+    "compute_budget",
+    "scoring_profile",
+    "simulation_settings"
+  ],
+  "outputs": [
+    "structured_spec",
+    "logic_proposals",
+    "verilog_codes",
+    "candidate_topologies",
+    "best_topology",
+    "benchmark_report",
+    "critic_feedbacks",
+    "failed_attempts",
+    "extracted_skills"
+  ],
+  "default_settings": {
+    "compute_budget": 3,
+    "search_modes": [
+      "Exploration",
+      "Repair",
+      "Exploitation"
+    ],
+    "requires_cello_command": false,
+    "allows_mock_cello": true,
+    "data_mining_optional": true,
+    "skill_extraction_optional": true
+  },
+  "sample_prompts": [
+    "Activate GFP only when IPTG is present and aTc is absent.",
+    "Design an E. coli reporter circuit that turns on mCherry when arabinose or salicylate is present.",
+    "Create a low-burden GFP logic gate for A AND NOT B with medium copy number."
+  ],
+  "claim_level": "computational_candidate",
+  "requires_expert_review": true,
+  "risk_notes": [
+    "Outputs are computational candidates and are not experimentally validated genetic circuits.",
+    "Mock Cello output can support UI and workflow tests but must not be interpreted as successful biological part mapping.",
+    "ODE and benchmark scores are screening heuristics rather than calibrated wet-lab measurements."
+  ],
+  "success_criteria": [
+    "Structured specification is complete enough for combinational logic design.",
+    "At least one Verilog candidate passes local Cello-compatibility checks.",
+    "A best topology is selected with benchmark and critic feedback recorded.",
+    "Run artifacts preserve failure and repair context for reproducibility."
+  ],
+  "tags": [
+    "workflow-kit",
+    "logic-design",
+    "reflexion",
+    "cello",
+    "simulation"
+  ]
+}

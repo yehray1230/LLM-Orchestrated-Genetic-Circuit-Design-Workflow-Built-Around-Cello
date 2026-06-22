@@ -29,10 +29,28 @@ The current prototype can:
   運行簡化的資源感知 ODE 模擬以進行早期動態篩選。
 - Estimate coarse signals such as dynamic margin, resource occupancy, robustness under perturbation, and gate-complexity burden.
   估算粗略的訊號，如動態邊際、資源佔用、微擾下的魯棒性以及邏輯閘複雜度造成的負載。
+- Summarize selected ODE trajectory readouts, burden proxies, steady-state status, uncertainty metadata, coverage gaps, and suggested next checks when a stored trace is available.
+  在保存的軌跡可用時，彙整選定的 ODE 軌跡讀數、負載代理指標、穩態狀態、不確定性後設資料、覆蓋缺口與建議的下一步檢查。
 - Surface failure modes such as logic mismatch, weak simulated robustness, excessive complexity, or likely Cello/part-assignment problems.
   顯現失敗模式，如邏輯不匹配、模擬的魯棒性微弱、過度複雜，或可能存在的 Cello/元件分配問題。
-- Support optional external Cello execution when a real Cello command and compatible UCF/library are configured.
-  在配置了真實的 Cello 指令與相容的 UCF/庫時，支援可選的外部 Cello 執行。
+- Support optional external Cello execution when a real Cello command and compatible UCF/library are configured, while explicitly labeling mock, failed, and externally mapped Cello outputs.
+  在配置了真實的 Cello 指令與相容的 UCF/庫時，支援可選的外部 Cello 執行，同時明確標示 mock、失敗與外部映射完成的 Cello 輸出。
+- Analyze sequence-level features for quality control, reporting restriction sites, Type IIS sites, homopolymers, repeats, and IUPAC validation.
+  分析序列層級的特徵以進行品質控制，報告限制酶切位點、Type IIS 位點、同聚物、重複序列以及進行 IUPAC 驗證。
+- Generate synonymous CDS codon-optimized revisions for E. coli host profiles while preserving protein sequences.
+  針對大腸桿菌（E. coli）宿主設定檔生成同義的 CDS 密碼子優化版本，同時保留蛋白質序列。
+- Rank host-optimization candidate designs using predefined strategies (high_expression, low_burden, balanced).
+  使用預定義的策略（高表達、低負載、平衡）對宿主優化候選設計進行排序。
+- Summarize user-provided experimental calibration measurements.
+  彙整使用者提供的實驗校準測量數據。
+- Calculate Gibson/Seamless assembly overlap $T_m$ and check Golden Gate circular product re-cutting using Biopython and pydna.
+  使用 Biopython 與 pydna 計算 Gibson/Seamless 組裝 overlap 的 $T_m$ 以及檢查 Golden Gate 圓形產物的再切除位點。
+- Detect C-terminal active degradation tags (LVA/LAV/ASV) and couple them to ODE simulation degradation rates.
+  偵測 C-terminal 的活性降解標籤（LVA/LAV/ASV）並將其與 ODE 模擬中的降解速率進行耦合。
+- Parse characterized gate parameters ($y_{\text{min}}, y_{\text{max}}, K_d, n$) from Cello UCF and map them to ODE Hill kinetics.
+  從 Cello UCF 解析表徵門控參數（$y_{\text{min}}, y_{\text{max}}, K_d, n$）並將其映射至 ODE 希爾動力學。
+- Perform log-normal perturbation of plasmid copy numbers preserving arithmetic mean during Monte Carlo robustness analysis.
+  在 Monte Carlo 魯棒性分析中對質體複製數進行保留算術平均數的對數常態微擾。
 
 These capabilities are useful for research prototyping, workflow design, and early candidate triage.
 
@@ -62,8 +80,12 @@ The current prototype cannot:
   證明宿主相容性、生物安全或法規符合性。
 - Select experimentally characterized parts reliably unless appropriate data are provided.
   除非提供適當的數據，否則無法可靠地選擇經實驗表徵的元件。
-- Account for all relevant biological mechanisms, such as host growth, copy number, burden-growth feedback, RNA folding, codon usage, protein maturation, and toxicity feedback.
-  考量所有相關的生物學機制，例如宿主生長、複製數、負載-生長反饋、RNA 折疊、密碼子使用偏好、蛋白質成熟以及毒性反饋。
+- Account for all relevant biological mechanisms, such as detailed/dynamic host growth, dynamic copy-number variation, experimental toxicity calibration, RNA folding, and codon-pair bias. Note: E. coli synonymous codon optimization, simplified copy-number scaling, first-order protein maturation delay, ribosome-coupled growth dilution, Cello UCF characterized Hill parameters, degradation tag rates, and log-normal copy-number perturbation are now modeled.
+  考量所有相關的生物學機制，例如詳細/動態的宿主生長、動態複製數變異、實驗毒性校準、RNA 折疊以及密碼子對偏好。註：目前已建模大腸桿菌同義密碼子優化、簡化質體複製數縮放、一階蛋白質成熟延遲、與游離核糖體耦合的生長稀釋、Cello UCF 表徵 Hill 參數、降解標籤速率以及複製數對數常態微擾。
+- Optimize promoter/RBS strength, RNA folding, codon-pair bias, chromosomal context, or real expression balance during codon optimization.
+  在密碼子優化過程中優化啟動子/RBS 強度、RNA 折疊、密碼子對偏好、染色體環境或真實的表達平衡。
+- Fit a dynamic host-cell model or automatically recalibrate the ODE simulator using experimental measurements.
+  利用實驗測量值擬合動態宿主細胞模型，或自動重新校準 ODE 模擬器。
 
 These limitations are expected for the current stage of the project. The system should be treated as a computational design-assistance prototype, not as an automated biological-design platform.
 
@@ -90,6 +112,15 @@ These are appropriate ways to describe the project:
 > External Cello mapping is only available when a real Cello command and compatible UCF/library are configured.
 > 僅在配置了真實的 Cello 指令與相容的 UCF/庫時，外部 Cello 映射才可用。
 
+> Mock Cello output may be used for workflow testing, but should be labeled as mock-only and not described as real part assignment.
+> Mock Cello 輸出可用於工作流測試，但應標示為 mock-only，且不應描述為真實元件分配。
+
+> The system evaluates sequence constraints and offers E. coli codon-optimization revisions for translated protein conservation.
+> 該系統評估序列約束，並提供大腸桿菌密碼子優化版本以保留翻譯的蛋白質序列。
+
+> The host-optimization ranking provides heuristic computational trade-offs, not calibrated biological guarantees.
+> 宿主優化排序提供啟發式的計算權衡，而非生物學保證。
+
 ## 4. Claims to Avoid
 
 These statements would overstate the current system:
@@ -111,8 +142,17 @@ These statements would overstate the current system:
 > The ODE simulation predicts real cellular expression quantitatively.
 > ODE 模擬定量預測真實的細胞表達。
 
+> ODE readouts such as peak output or time to peak are calibrated experimental measurements.
+> ODE 讀數（例如最大輸出或達峰時間）是經校準的實驗量測。
+
 > The project has validated a biological logic gate without construction and measurement.
 > 該專案在沒有構建與測量的情況下驗證了生物邏輯閘。
+
+> Synonymous codon optimization guarantees high expression, structural stability, or biological function.
+> 同義密碼子優化能保證高表達、結構穩定性或生物學功能。
+
+> Experimental calibration data automatically fits a validated dynamic host model.
+> 實驗校準數據會自動擬合經過驗證的動態宿主模型。
 
 ## 5. Evidence Needed for Stronger Claims/做出更強宣稱所需的證據
 
@@ -154,5 +194,46 @@ For presentations, emails, or early research conversations, the safest concise d
 
 對於簡報、電子郵件或早期研究對話，最安全且簡明的描述是：
 
-> This is a multi-agent computational design-assistance prototype that translates natural-language regulatory logic intent into candidate genetic-circuit representations, then ranks and critiques those candidates using simplified simulation and heuristic evaluation.
-> 這是一個多智能體計算輔助設計原型，可將自然語言調節邏輯意圖翻譯為候選基因電路表徵，然後使用簡化模擬和啟發式評估對這些候選方案進行排序與評論。
+> This is an LLM-orchestrated computational design-assistance workflow built around Cello that translates natural-language regulatory logic intent into candidate genetic-circuit representations, then ranks and critiques those candidates using simplified simulation and heuristic evaluation.
+> 這是一個圍繞 Cello 構建且由 LLM 編排的計算輔助設計工作流，可將自然語言調節邏輯意圖翻譯為候選基因電路表徵，然後使用簡化模擬和啟發式評估對這些候選方案進行排序與評論。
+# Current Design and Export Boundaries (2026-06-06)
+# 目前設計與匯出邊界（2026-06-06）
+
+The project now produces richer design artifacts, but the following distinctions remain mandatory:
+
+專案目前可以產生更完整的設計 artifacts，但仍必須維持以下區分：
+
+- A conceptual `DesignIR` part is not a characterized biological part.
+- 概念性 `DesignIR` 元件不等同於經實驗表徵的生物元件。
+- A parsed Cello assignment is evidence that a supported artifact associated a logic node with a part identifier; it is not independent experimental validation.
+- 解析出的 Cello assignment 代表支援的 artifact 將 logic node 與 part identifier 關聯，不代表獨立實驗驗證。
+- `demo-cello-library@1.0.0` is for demonstration and testing. Its sequences are illustrative.
+- `demo-cello-library@1.0.0` 僅供展示與測試，其序列為 illustrative。
+- Replacement validation checks target structural and type constraints. Detailed cloning junctions, restriction sites, and E. coli codon usage are checked in separate assembly planning and sequence analysis stages, but expression balance, toxicity, or biosafety are not biological guarantees.
+- 元件替換驗證主要針對結構與類型限制。詳細的 cloning junctions、限制酶切位點與大腸桿菌密碼子使用偏好會在獨立的組裝計畫與序列分析階段進行檢查，但表現平衡、毒性或生物安全並非生物學上的保證。
+- An immutable revision records a computational change history; it does not prove that the revision is better experimentally.
+- 不可變版本記錄計算上的變更歷史，不證明新版本在實驗上更好。
+- `DesignDiff` reports differences in available fields and scores. It is not an expert recommendation or causal analysis.
+- `DesignDiff` 回報可用欄位與分數差異，不是專家建議或因果分析。
+- BOM is an inventory artifact, not a purchase order, assembly protocol, or proof of availability.
+- BOM 是清單 artifact，不是採購單、組裝 protocol 或可取得性證明。
+- GenBank export represents the sequences currently stored in DesignIR. It does not add backbone, origin, marker, cloning scars, or missing host context.
+- GenBank 匯出表示 DesignIR 目前保存的序列，不會補入 backbone、origin、marker、cloning scar 或缺失的宿主情境。
+- SBOL3 export is a machine-readable representation. A syntactically structured SBOL document does not imply biological validity.
+- SBOL3 匯出是機器可讀表示；具結構的 SBOL 文件不代表生物學有效。
+
+Safe wording:
+
+安全描述：
+
+> The system can produce traceable computational design representations and standard exchange artifacts for review.
+>
+> 系統可以產生可追溯的計算設計表示與標準交換 artifacts，供後續審查。
+
+Avoid:
+
+應避免：
+
+> The exported GenBank or SBOL file is an assembly-ready validated plasmid.
+>
+> 匯出的 GenBank 或 SBOL 檔案是可直接組裝且已驗證的質體。

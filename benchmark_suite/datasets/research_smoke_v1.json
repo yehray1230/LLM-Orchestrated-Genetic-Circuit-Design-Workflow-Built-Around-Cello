@@ -1,0 +1,90 @@
+{
+  "schema_version": "1.0",
+  "dataset_id": "research_smoke_v1",
+  "version": "1.0.0",
+  "name": "Research evaluation smoke benchmark",
+  "description": "Synthetic, deterministic fixtures for validating score direction, evidence sensitivity, and comparison/report infrastructure.",
+  "license": "project-fixture",
+  "provenance": {
+    "kind": "synthetic_fixture",
+    "wet_lab_validated": false,
+    "created_for": "v1.8 research evaluation infrastructure"
+  },
+  "cases": [
+    {
+      "case_id": "well_supported_candidate",
+      "name": "Well-supported computational candidate",
+      "tags": ["positive", "evidence-rich"],
+      "source": {"type": "synthetic_fixture"},
+      "candidate": {
+        "functional_score": 0.95,
+        "kinetic_score": 0.88,
+        "robustness_score": 0.90,
+        "plausibility_score": 0.92,
+        "orthogonality_score": 0.90,
+        "cello_assignment_score": 0.88,
+        "cello_buildable": true,
+        "rise_time": 120,
+        "evidence_quality": 0.95,
+        "data_completeness": 0.95
+      },
+      "expected": {"grade": "Excellent", "min_score": 0.80}
+    },
+    {
+      "case_id": "logic_failure_candidate",
+      "name": "Logic failure despite moderate metadata",
+      "tags": ["negative", "logic"],
+      "source": {"type": "synthetic_fixture"},
+      "candidate": {
+        "functional_score": 0.10,
+        "kinetic_score": 0.65,
+        "robustness_score": 0.60,
+        "plausibility_score": 0.70,
+        "orthogonality_score": 0.65,
+        "cello_assignment_score": 0.55,
+        "cello_buildable": true,
+        "rise_time": 170,
+        "evidence_quality": 0.60,
+        "data_completeness": 0.85
+      },
+      "expected": {"max_score": 0.70}
+    },
+    {
+      "case_id": "unsupported_claim_candidate",
+      "name": "Strong claimed metrics with missing evidence",
+      "tags": ["negative", "evidence"],
+      "source": {"type": "synthetic_fixture"},
+      "candidate": {
+        "functional_score": 0.92,
+        "kinetic_score": 0.85,
+        "robustness_score": 0.85,
+        "plausibility_score": 0.85,
+        "orthogonality_score": 0.80,
+        "cello_assignment_score": 0.75,
+        "cello_buildable": true,
+        "rise_time": 140,
+        "evidence_quality": 0.05,
+        "data_completeness": 0.55
+      },
+      "expected": {"max_score": 0.80}
+    },
+    {
+      "case_id": "incomplete_unmapped_candidate",
+      "name": "Incomplete and unmapped candidate",
+      "tags": ["negative", "incomplete", "unmapped"],
+      "source": {"type": "synthetic_fixture"},
+      "candidate": {
+        "functional_score": 0.45,
+        "kinetic_score": 0.30,
+        "robustness_score": 0.25,
+        "plausibility_score": 0.50,
+        "orthogonality_score": 0.15,
+        "cello_assignment_score": 0.0,
+        "cello_buildable": false,
+        "evidence_quality": 0.10,
+        "data_completeness": 0.25
+      },
+      "expected": {"grade": "Fail", "max_score": 0.60}
+    }
+  ]
+}

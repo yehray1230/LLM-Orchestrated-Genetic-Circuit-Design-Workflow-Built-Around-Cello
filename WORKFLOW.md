@@ -127,8 +127,21 @@ Only this mode should be discussed as actual Cello execution.
 
 只有此模式才應被作為實際的 Cello 執行來討論。
 
-## 3. End-to-End Run Sequence
-## 3. 端到端運行順序
+## 3. Pre-Design Elicitation (PMAgent)
+## 3. 設計前置引導 (PMAgent)
+
+Before running the core reflexion sequence, the user interacts with the `PMAgent` to build a structured design specification:
+1. **Dialogue autocompletion**: If the intent lacks chassis, inputs, outputs, or logic relation, the PMAgent suggests biological defaults with reasons in a one-click flow.
+2. **Visual Preview**: The UI displays a high-level circuit flowchart generated from the specification using Mermaid blocks.
+3. **Reactive reset**: Any intent text change in the sidebar automatically resets the PM dialogue and current specification, keeping the elicitation workspace synchronized.
+
+在運行核心 Reflexion 序列之前，使用者與 `PMAgent` 進行對話，共同建立結構化的設計規格：
+1. **對話式自動補完**：若意圖缺少宿主、輸入、輸出或邏輯關係，PMAgent 會以一鍵式流程建議生物學預設值與理由。
+2. **視覺化預覽**：UI 會以 Mermaid 流程圖即時繪製規格對應的高階信號流向。
+3. **自動重設**：若在側邊欄修改了需求意圖文字，系統會自動重設 PM 對話與已確認規格，使引導工作區同步更新。
+
+## 4. End-to-End Run Sequence
+## 4. 端到端運行順序
 
 The main function is:
 
@@ -154,8 +167,8 @@ A typical run proceeds as follows:
    從 `active_frontier` 取出下一個節點。
 4. Select search behavior based on `search_mode`.
    根據 `search_mode` 選擇搜尋行為。
-5. Retrieve skill/RAG context when configured.
-   若有配置，檢索技能/RAG 上下文。
+5. Load logic design skill context when configured: the canonical logic skill catalog is injected in full compact form, while extracted design memories are retrieved by query.
+   若有配置，載入邏輯設計知識上下文：canonical logic skill 目錄會以精簡全量形式注入，萃取出的設計記憶才依查詢檢索。
 6. Run `BuilderAgent` unless the node is in `Exploitation` mode.
    運行 `BuilderAgent`（除非節點處於 `Exploitation` 模式）。
 7. Run `TranslatorAgent` to generate Cello-compatible Verilog.
@@ -179,8 +192,8 @@ A typical run proceeds as follows:
 16. Continue until approval, exhaustion, or pause.
     繼續運行，直到批准、預算用盡或暫停。
 
-## 4. Inputs
-## 4. 輸入項
+## 5. Inputs
+## 5. 輸入項
 
 Important user-facing inputs include:
 
@@ -211,8 +224,8 @@ This should be interpreted as a request for a candidate regulatory-logic design,
 
 這應被解讀為對候選調節邏輯設計的請求，而非完整的質體規範。
 
-## 5. Search Modes
-## 5. 搜尋模式
+## 6. Search Modes
+## 6. 搜尋模式
 
 The workflow uses three modes:
 
@@ -228,8 +241,8 @@ The workflow uses three modes:
 
 `Exploration` 使用較高溫度的 Builder 配置。`Repair` 和 `Exploitation` 使用較低溫度的行為以進行針對性的修改。
 
-## 6. Outputs
-## 6. 輸出項
+## 7. Outputs
+## 7. 輸出項
 
 The workflow records outputs in both `DesignState` and `SearchNode`.
 
@@ -255,8 +268,8 @@ These outputs are intended for inspection and iteration. They are not equivalent
 
 這些輸出旨在供檢查和迭代使用。它們不等同於最終確定的生物設計套件。
 
-## 7. How to Read Results
-## 7. 如何解讀結果
+## 8. How to Read Results
+## 8. 如何解讀結果
 
 ### `weighted_total_score`
 ### `weighted_total_score`
@@ -372,8 +385,8 @@ Use this record to explain what the workflow learned or why it changed direction
 
 使用此記錄來解釋工作流學到了什麼，或者為什麼改變了方向。
 
-## 8. Repair and Routing Behavior
-## 8. 修復與路由行為
+## 9. Repair and Routing Behavior
+## 9. 修復與路由行為
 
 The Critic assigns one of four error types:
 
@@ -390,8 +403,8 @@ Repeated failures can exhaust the budget or trigger a human-input pause.
 
 重複的失敗可能會用盡預算或觸發人工輸入暫停。
 
-## 9. Human Intervention Points
-## 9. 人工介入點
+## 10. Human Intervention Points
+## 10. 人工介入點
 
 The workflow can pause when:
 
@@ -416,6 +429,10 @@ When this happens, the state may include:
 - `pause_reason`
 - `human_feedback_prompt`
 
+When the workflow pauses, instead of presenting raw technical logs, the system calls `PMAgent` to translate logs into Traditional Chinese and render three interactive option buttons (Option A/B/C) with automatic constraints and budget updates.
+
+當工作流暫停時，系統不再直接呈現生硬的技術日誌，而是呼叫 `PMAgent` 將日誌翻譯成白話繁體中文，並為使用者提供三個可直接點選的折衷決策選項（選項 A/B/C），點擊即可自動套用限制並重啟設計。
+
 Useful human feedback includes:
 
 有用的人工反饋包括：
@@ -431,8 +448,8 @@ Useful human feedback includes:
 - whether external Cello/UCF configuration is available.
   外部 Cello/UCF 配置是否可用。
 
-## 10. Common Failure Modes
-## 10. 常見失敗模式
+## 11. Common Failure Modes
+## 11. 常見失敗模式
 
 | Failure / 失敗 | Typical Cause / 典型原因 | How to Interpret / 如何解讀 |
 | --- | --- | --- |
@@ -447,8 +464,8 @@ Useful human feedback includes:
 | Budget exceeded | Search used all allowed iterations. <br> 搜尋使用了所有允許的迭代次數。 | Needs human constraints or more budget. <br> 需要人工約束或更多預算。 |
 | Fallback-only score | Data needed for stronger checks is missing. <br> 缺少更強檢查所需的數據。 | Treat score as weak evidence. <br> 將該分數視為微弱的證據。 |
 
-## 11. Practical Interpretation Example
-## 11. 實際解讀範例
+## 12. Practical Interpretation Example
+## 12. 實際解讀範例
 
 If a candidate has:
 
@@ -484,8 +501,54 @@ The appropriate interpretation is:
 > The candidate is weak under the current benchmark, and the simulated ON/OFF separation collapses under perturbation. The workflow should repair or reject it.
 > 該候選方案在目前的基準下表現微弱，且模擬的 ON/OFF 分離在微擾下塌陷。工作流應該對其進行修復或拒絕。
 
-## 12. Related Documents
-## 12. 相關文件
+## 13. Sequence and Host Optimization Workflow
+
+The v2 optimization workflow is a deterministic post-design workflow for
+sequence-backed designs. It complements the agent Reflexion loop; it does not
+replace expert experimental design review.
+
+The integrated endpoint is:
+
+```text
+POST /api/v2/designs/{design_id}/optimization-workflow
+```
+
+It runs the following stages:
+
+1. Sequence analysis through `tools/sequence_analyzer.py`.
+2. CDS codon-optimization revision through `tools/sequence_optimization.py`.
+3. Host-optimization candidate ranking through `tools/host_optimization.py`.
+4. Combined readiness reporting through `benchmark_suite/readiness_evaluator.py`.
+
+The sequence-analysis stage reports IUPAC validity, CDS frame/start/stop
+checks, internal stop codons, GC and window GC, homopolymers, repeats, common
+restriction sites, Type IIS sites, host annotations, and checksums.
+
+The sequence-optimization stage currently creates conservative *E. coli* CDS
+codon-optimization revisions. It preserves the translated protein sequence and
+records provenance, before/after analysis, diff information, and readiness
+evidence. It does not optimize promoters, RBSs, RNA folding, codon-pair bias,
+or real expression balance.
+
+The host-optimization stage ranks computational candidate families:
+
+| Candidate family | Intent | Main trade-off |
+| --- | --- | --- |
+| `high_expression` | Prioritize stronger output signal | May increase burden and toxicity risk |
+| `low_burden` | Prioritize lower host burden | May reduce absolute output |
+| `balanced` | Balance expression, burden, sequence quality, and stability | Not a single biological optimum |
+
+The calibration endpoint stores and summarizes user-supplied measurements:
+
+```text
+POST /api/v2/host-optimization/calibrations
+```
+
+Calibration summaries report coverage, means, and recommendations. They do not
+yet fit a validated host-cell model or automatically recalibrate the ODE model.
+
+## 14. Related Documents
+## 14. 相關文件
 
 - [README.md](README.md): high-level project overview.
   [README.md](README.md)：高階專案概述。
@@ -497,3 +560,43 @@ The appropriate interpretation is:
   [MODEL_ASSUMPTIONS.md](MODEL_ASSUMPTIONS.md)：ODE 假設與未建模的生物機制。
 - [LIMITATION.md](LIMITATION.md): safe claims, non-goals, and evidence needed for stronger claims.
   [LIMITATION.md](LIMITATION.md)：安全宣稱、非目標以及做出更強宣稱所需的證據。
+# Current Design Review and Export Workflow (2026-06-06)
+# 目前設計檢視與匯出流程（2026-06-06）
+
+After candidate generation and evaluation, the current UI performs the following additional steps:
+
+候選生成與評估後，目前 UI 會執行以下額外步驟：
+
+1. Convert the selected topology into `DesignIR`.
+   將選定 topology 轉換為 `DesignIR`。
+2. Present Logic, Regulatory, DNA Construct, and Parts views.
+   顯示 Logic、Regulatory、DNA Construct 與 Parts 視圖。
+3. If external Cello artifacts contain a supported JSON assignment structure, apply parsed assignments and available sequences to matching DesignIR nodes.
+   若外部 Cello artifact 含支援的 JSON assignment 結構，將解析出的 assignment 與可用序列套用至對應 DesignIR node。
+4. Validate proposed replacement parts against type, host, gate role, sequence, and evidence constraints.
+   依類型、宿主、gate role、序列與證據限制驗證替換元件。
+5. Create a new immutable revision when the user applies a valid replacement.
+   使用者套用有效替換時建立新的不可變版本。
+6. Compare any two candidates with `DesignDiff`.
+   使用 `DesignDiff` 比較任兩個候選。
+7. Export the selected candidate or current immutable revision.
+   匯出選定候選或目前的不可變版本。
+
+## Export Decision Rules
+## 匯出判定規則
+
+| Format | Incomplete design | Sequence requirement | Intended use |
+| --- | --- | --- | --- |
+| BOM CSV | Allowed | None | Audit, inventory, review, and handoff |
+| GenBank | Blocked when construct sequences are incomplete | Every construct part must have valid IUPAC DNA | Sequence-aware downstream tools |
+| SBOL3 Turtle | Allowed with warnings | Optional | Structured exchange of conceptual or sequence-backed designs |
+
+| 格式 | 不完整設計 | 序列要求 | 主要用途 |
+| --- | --- | --- | --- |
+| BOM CSV | 允許 | 無 | 稽核、清單、審查與交接 |
+| GenBank | construct 序列不完整時阻擋 | 每個 construct 元件都必須有有效 IUPAC DNA | 需要序列的下游工具 |
+| SBOL3 Turtle | 允許，但會警告 | 可選 | 交換概念性或具有序列的設計 |
+
+The Export tab prefers an immutable revised design stored in the current session; otherwise it exports the DesignIR generated from the selected topology.
+
+Export 分頁會優先匯出目前 session 中的不可變修訂設計；若沒有修訂，則匯出由選定 topology 產生的 DesignIR。

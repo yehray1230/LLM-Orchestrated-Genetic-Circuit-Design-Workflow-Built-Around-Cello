@@ -17,7 +17,22 @@ try:
 except Exception:  # pragma: no cover
     pd = None
 
+from schemas.design_diff import compare_designs
+from schemas.design_ir import DesignIR, topology_to_design_ir
+from schemas.design_operations import replace_part_immutable, validate_replacement
 from schemas.state import DesignState, SearchNode
+from agents.pm_agent import call_pm_agent
+from mcp_server.ode_explainer import explain_ode_topology
+from tools.part_library import PartLibrary
+from exporters.bom_exporter import export_bom_csv
+from exporters.genbank_exporter import export_genbank
+from exporters.sbol3_exporter import export_sbol3_turtle
+from exporters.plasmid_assembler import export_plasmid_genbank
+from ui.external_import import (
+    ensure_external_import_state,
+    render_external_import_sidebar,
+    render_external_import_workspace,
+)
 
 
 MODE_COLORS = {
@@ -62,6 +77,73 @@ ERROR_LABELS = {
     "BOTH": "邏輯與元件問題",
 }
 
+SCORE_COMPONENTS = [
+    {
+        "key": "functional",
+        "label": "Functional",
+        "weight": 0.22,
+        "aliases": ["functional_score", "semantic_faithfulness_score"],
+        "evidence": "檢查需求、truth table、布林邏輯與 Verilog 是否一致。",
+        "caveat": "功能一致不代表 promoter、repressor 或宿主條件已被實驗驗證。",
+    },
+    {
+        "key": "kinetic",
+        "label": "Kinetic",
+        "weight": 0.15,
+        "aliases": ["kinetic_score", "dynamic_margin"],
+        "evidence": "根據 ODE 動態訊號、dynamic margin 或輸出反應品質估計。",
+        "caveat": "ODE 是簡化模型，參數來源與宿主情境會影響可信度。",
+    },
+    {
+        "key": "static_plausibility",
+        "label": "Static plausibility",
+        "weight": 0.08,
+        "aliases": ["static_plausibility_score"],
+        "evidence": "檢查拓樸結構、重複元件、邏輯深度與明顯結構風險。",
+        "caveat": "結構合理仍不等於序列層級或 cloning strategy 已完成。",
+    },
+    {
+        "key": "metabolic_burden",
+        "label": "Metabolic burden",
+        "weight": 0.15,
+        "aliases": ["metabolic_burden_score"],
+        "evidence": "以 gate count、資源佔用與調控複雜度估計負擔。",
+        "caveat": "這是早期篩選訊號，不是實測 growth burden。",
+    },
+    {
+        "key": "robustness",
+        "label": "Robustness",
+        "weight": 0.15,
+        "aliases": ["robustness_score"],
+        "evidence": "檢查參數擾動或雜訊條件下輸出是否穩定。",
+        "caveat": "若未執行 Monte Carlo 或缺少參數分布，可信度較有限。",
+    },
+    {
+        "key": "temporal",
+        "label": "Temporal",
+        "weight": 0.05,
+        "aliases": ["temporal_score"],
+        "evidence": "檢查反應時間、rise time 或時間序列表現。",
+        "caveat": "時間尺度仍需以實驗量測或文獻參數校準。",
+    },
+    {
+        "key": "orthogonality",
+        "label": "Orthogonality",
+        "weight": 0.10,
+        "aliases": ["orthogonality_score"],
+        "evidence": "估計元件是否可能具有低交互干擾或符合 Cello 約束。",
+        "caveat": "正交性通常需要實際 part library 與交互作用資料支持。",
+    },
+    {
+        "key": "cello_assignment",
+        "label": "Cello assignment",
+        "weight": 0.10,
+        "aliases": ["cello_assignment_score"],
+        "evidence": "檢查是否取得 Cello mapping 或可用 part assignment。",
+        "caveat": "mock mapping 只能代表流程可跑，不能視為真實可建構結果。",
+    },
+]
+
 
 def main() -> None:
     if st is None:
@@ -76,12 +158,31 @@ def main() -> None:
     state = st.session_state.design_state
     _render_sidebar(state)
 
+    # Detect user intent changes and trigger state reset
+    current_intent = state.user_intent.strip()
+    last_intent = st.session_state.get("last_seen_intent", "").strip()
+    if current_intent != last_intent:
+        state.pm_stage = "elicitation"
+        state.structured_spec = {}
+        state.pm_chat_history = []
+        state.pending_proposal = {}
+        state.tree_nodes = {}
+        state.active_frontier = []
+        state.best_topology = None
+        state.is_completed = False
+        state.requires_human_input = False
+        state.iteration_count = 0
+        state.last_error = None
+        st.session_state.last_seen_intent = current_intent
+        st.session_state.pm_show_custom_input = False
+
+
     st.markdown(
         """
         <div class="app-header">
             <div>
                 <h1>基因電路設計器</h1>
-                <p>將自然語言需求轉換為 Cello 相容基因電路，整合樹狀搜尋、圖譜 RAG 與評審回饋修正。</p>
+                <p>將自然語言需求轉換為 Cello 相容基因電路，整合樹狀搜尋、邏輯設計知識與評審回饋修正。</p>
             </div>
         </div>
         """,
@@ -90,15 +191,33 @@ def main() -> None:
 
     _render_status_strip(state)
     _render_human_loop_panel(state)
+    render_external_import_workspace(st, _generated_designs_for_comparison(state))
 
-    work_col, inspector_col = st.columns([1.45, 1], gap="large")
-    with work_col:
-        _render_pipeline(state)
-        _render_chart_overview(state)
-        _render_tree_workspace(state)
+    if getattr(state, "pm_stage", "elicitation") == "elicitation":
+        _render_pm_elicitation_dashboard(state)
+    else:
+        work_col, inspector_col = st.columns([1.45, 1], gap="large")
+        with work_col:
+            _render_pipeline(state)
+            _render_chart_overview(state)
+            _render_tree_workspace(state)
 
-    with inspector_col:
-        _render_inspector(state)
+        with inspector_col:
+            _render_inspector(state)
+
+
+
+def _generated_designs_for_comparison(state: DesignState) -> list[DesignIR]:
+    designs = []
+    for index, topology in enumerate(state.candidate_topologies, start=1):
+        designs.append(
+            topology_to_design_ir(
+                topology,
+                host_organism=state.host_organism,
+                design_id=f"generated_{index}",
+            )
+        )
+    return designs
 
 
 def _inject_styles() -> None:
@@ -301,6 +420,132 @@ def _inject_styles() -> None:
                 font-weight: 700;
                 margin-top: 0.55rem;
             }
+            .explain-grid {
+                display: grid;
+                gap: 0.65rem;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                margin: 0.55rem 0 0.8rem 0;
+            }
+            .explain-card {
+                background: #ffffff;
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                min-height: 92px;
+                padding: 0.85rem;
+            }
+            .explain-card.warning {
+                background: #fffbeb;
+                border-color: #fde68a;
+            }
+            .explain-card.success {
+                background: #f0fdf4;
+                border-color: #bbf7d0;
+            }
+            .explain-label {
+                color: #64748b;
+                font-size: 0.72rem;
+                font-weight: 760;
+                text-transform: uppercase;
+            }
+            .explain-value {
+                color: #0f172a;
+                font-size: 0.96rem;
+                font-weight: 760;
+                margin-top: 0.28rem;
+            }
+            .explain-text {
+                color: #475569;
+                font-size: 0.82rem;
+                margin-top: 0.3rem;
+            }
+            .score-row {
+                background: #ffffff;
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                margin-bottom: 0.55rem;
+                padding: 0.75rem;
+            }
+            .score-row-head {
+                align-items: center;
+                display: flex;
+                gap: 0.55rem;
+                justify-content: space-between;
+            }
+            .score-row-title {
+                color: #0f172a;
+                font-size: 0.9rem;
+                font-weight: 760;
+            }
+            .score-row-score {
+                color: #0f172a;
+                font-size: 0.82rem;
+                font-weight: 760;
+                white-space: nowrap;
+            }
+            .score-bar {
+                background: #e2e8f0;
+                border-radius: 999px;
+                height: 0.45rem;
+                margin-top: 0.5rem;
+                overflow: hidden;
+            }
+            .score-bar-fill {
+                background: #2563eb;
+                height: 100%;
+            }
+            .timeline-item {
+                border-left: 3px solid #cbd5e1;
+                margin: 0 0 0.65rem 0.3rem;
+                padding: 0.05rem 0 0.55rem 0.8rem;
+            }
+            .timeline-item.current {
+                border-left-color: #2563eb;
+            }
+            .timeline-title {
+                color: #0f172a;
+                font-size: 0.9rem;
+                font-weight: 760;
+            }
+            .timeline-meta {
+                color: #64748b;
+                font-size: 0.76rem;
+                margin-top: 0.18rem;
+            }
+            .timeline-body {
+                color: #334155;
+                font-size: 0.82rem;
+                margin-top: 0.32rem;
+            }
+            .cello-claim {
+                border-radius: 8px;
+                font-size: 0.84rem;
+                margin: 0.65rem 0;
+                padding: 0.72rem 0.82rem;
+            }
+            .cello-claim.mock {
+                background: #fff7ed;
+                border: 1px solid #fed7aa;
+                color: #7c2d12;
+            }
+            .cello-claim.failed {
+                background: #fef2f2;
+                border: 1px solid #fecaca;
+                color: #7f1d1d;
+            }
+            .cello-claim.real {
+                background: #ecfdf5;
+                border: 1px solid #a7f3d0;
+                color: #064e3b;
+            }
+            .cello-claim.unknown {
+                background: #f8fafc;
+                border: 1px solid #cbd5e1;
+                color: #334155;
+            }
+            .cello-claim-title {
+                font-weight: 760;
+                margin-bottom: 0.2rem;
+            }
         </style>
         """,
         unsafe_allow_html=True,
@@ -314,10 +559,16 @@ def _ensure_session_state() -> None:
         st.session_state.selected_node_id = None
     if "ui_options" not in st.session_state:
         st.session_state.ui_options = {
+            "enable_skill_context": True,
             "enable_rag": True,
             "enable_ode": True,
             "enable_tree_search": True,
             "enable_cache": True,
+            "cello_command": "",
+            "ucf_path": "",
+            "part_library_path": "",
+            "sensor_path": "",
+            "device_path": "",
         }
     if "llm_config" not in st.session_state:
         st.session_state.llm_config = {
@@ -330,6 +581,7 @@ def _ensure_session_state() -> None:
         st.session_state.run_message = None
     if "show_tutorial" not in st.session_state:
         st.session_state.show_tutorial = False
+    ensure_external_import_state(st.session_state)
 
 
 def _render_tutorial() -> None:
@@ -345,7 +597,7 @@ def _render_tutorial() -> None:
                 這是一個將自然語言轉換為基因電路的自動化工具。以下是簡單的使用步驟：
                 
                 1. **輸入需求**：在左側的「設計需求」框中，用自然語言描述想要的基因電路功能（例如：A 和 B 同時存在時輸出 Y）。
-                2. **設定參數**：選擇宿主生物、調整計算預算，並開關 RAG、ODE 模擬等功能。
+                2. **設定參數**：選擇宿主生物、調整計算預算，並開關邏輯設計知識、ODE 模擬等功能。
                 3. **執行生成**：
                    - **示範模式**：點擊「執行示範迭代」或「執行示範搜尋」，體驗系統流程。
                    - **自備金鑰**：於「自備金鑰模型設定」輸入 API Key 後，點擊「執行自備金鑰工作流程」。
@@ -362,7 +614,7 @@ def _render_tutorial() -> None:
             "**📖 系統使用導覽**\n\n"
             "歡迎使用基因電路設計器！以下是簡單的使用步驟：\n\n"
             "1. **輸入需求**：在左側的「設計需求」框中，用自然語言描述想要的基因電路功能。\n"
-            "2. **設定參數**：選擇宿主生物、調整計算預算，並開關 RAG、ODE 模擬等功能。\n"
+            "2. **設定參數**：選擇宿主生物、調整計算預算，並開關邏輯設計知識、ODE 模擬等功能。\n"
             "3. **執行生成**：點擊「執行示範迭代」體驗系統流程，或於設定 API Key 後「執行自備金鑰工作流程」。\n"
             "4. **檢視與分析**：在右側「結果檢視器」切換分頁，查看邏輯提案、Verilog、拓樸與評審回饋。\n"
             "5. **下載狀態**：點擊左側底部的「匯出狀態 JSON」保存您的設計進度。"
@@ -401,12 +653,17 @@ def _render_sidebar(state: DesignState) -> None:
 
         st.subheader("工作流程選項")
         options = st.session_state.ui_options
-        options["enable_rag"] = st.toggle("圖譜 RAG", value=options["enable_rag"])
+        if "enable_skill_context" not in options:
+            options["enable_skill_context"] = options.get("enable_rag", True)
+        options["enable_skill_context"] = st.toggle("邏輯設計知識", value=options["enable_skill_context"])
+        options["enable_rag"] = options["enable_skill_context"]
         options["enable_ode"] = st.toggle("ODE 模擬", value=options["enable_ode"])
         options["enable_tree_search"] = st.toggle("多代理樹狀搜尋", value=options["enable_tree_search"])
         options["enable_cache"] = st.toggle("快取", value=options["enable_cache"])
 
         _render_byok_controls()
+        _render_cello_controls()
+        render_external_import_sidebar(st)
 
         st.subheader("執行")
         if st.button("執行示範迭代", type="primary", use_container_width=True):
@@ -537,6 +794,37 @@ def _render_byok_controls() -> None:
         )
 
 
+def _render_cello_controls() -> None:
+    options = st.session_state.ui_options
+    with st.expander("Cello/UCF 物理映射設定", expanded=False):
+        options["cello_command"] = st.text_input(
+            "Cello CLI/Docker 指令",
+            value=options.get("cello_command", ""),
+            placeholder="留空則使用 Mock 模擬映射",
+            help="例如：wsl podman run --rm -i -v {wsl_temp_dir}:/root/input ...",
+        )
+        options["ucf_path"] = st.text_input(
+            "UCF 限制檔案路徑",
+            value=options.get("ucf_path", ""),
+            placeholder="例如：C:\\Cello\\Eco1C1G1T1.UCF.json",
+        )
+        options["part_library_path"] = st.text_input(
+            "自訂元件庫 JSON 路徑",
+            value=options.get("part_library_path", ""),
+            placeholder="留空則使用預設 real sequences 元件庫",
+        )
+        options["sensor_path"] = st.text_input(
+            "Sensor 輸入檔案路徑 (選填)",
+            value=options.get("sensor_path", ""),
+            placeholder="例如：C:\\Cello\\Eco1C1G1T1.input.json",
+        )
+        options["device_path"] = st.text_input(
+            "Device 輸出檔案路徑 (選填)",
+            value=options.get("device_path", ""),
+            placeholder="例如：C:\\Cello\\Eco1C1G1T1.output.json",
+        )
+
+
 def _render_run_message() -> None:
     message = st.session_state.get("run_message")
     if not message:
@@ -554,7 +842,73 @@ def _render_human_loop_panel(state: DesignState) -> None:
     if not state.requires_human_input:
         return
 
+    # Trigger PM Agent to translate raw error to friendly options if in hitl_dialogue stage
+    if state.requires_human_input:
+        if getattr(state, "pm_stage", None) != "hitl_dialogue" or not getattr(state, "pending_proposal", None) or "options" not in state.pending_proposal:
+            state.pm_stage = "hitl_dialogue"
+            config = st.session_state.get("llm_config", {})
+            api_key = config.get("api_key", "").strip() or None
+            model_name = config.get("model_name", "gpt-4o-mini").strip()
+            api_base = config.get("api_base", "").strip() or None
+            call_pm_agent(state, api_key=api_key, model_name=model_name, api_base=api_base)
+
+    if getattr(state, "pm_stage", None) == "hitl_dialogue" and getattr(state, "pending_proposal", None) and "options" in state.pending_proposal:
+        proposal = state.pending_proposal
+        err_summary = proposal.get("error_summary_cn", "系統遇到設計瓶頸")
+        ui_msg = proposal.get("ui_message", "請問您希望如何調整？")
+        selected_node = _selected_node(state)
+        
+        st.markdown(
+            f"""
+            <div class="hitl-panel" style="border-left:5px solid #ea580c;">
+                <h2 style="color:#ea580c;">需要人工介入 (設計經理協同)</h2>
+                <p><strong>問題說明：</strong>{_escape_html(err_summary)}</p>
+                <p style="margin-top:10px;"><strong>經理建議：</strong>{_escape_html(ui_msg)}</p>
+                <div class="hitl-meta">目前節點：{_escape_html(selected_node.node_id if selected_node else "無")}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        if state.human_constraints:
+            with st.expander("已套用的人工限制", expanded=False):
+                for constraint in state.human_constraints:
+                    st.write(f"- {constraint}")
+
+        for opt in proposal["options"]:
+            opt_id = opt.get("option_id", "A")
+            label = opt.get("label", "")
+            action = opt.get("action", "Repair")
+            constraints = opt.get("constraints", [])
+            extra_budget = opt.get("extra_budget", 2)
+            
+            if st.button(f"👉 {opt_id}: {label}", key=f"pm_opt_{opt_id}", use_container_width=True, type="primary" if opt_id == "A" else "secondary"):
+                state.human_constraints.extend(constraints)
+                if extra_budget:
+                    state.compute_budget += extra_budget
+                if action == "Accept_Fallback":
+                    _select_best_fallback(state)
+                    state.is_completed = state.best_topology is not None
+                else:
+                    _create_guided_child(state, "Repair")
+                
+                state.requires_human_input = False
+                state.pm_stage = "engine_running"
+                state.pause_reason = None
+                state.human_feedback_prompt = None
+                state.pending_proposal = {}
+                st.session_state.run_message = ("success", f"已套用設計經理方案 {opt_id}。請繼續執行下一輪搜尋。")
+                st.rerun()
+
+        if st.button("✏️ 切換為傳統手動輸入表單", use_container_width=True):
+            state.pm_stage = "engine_running"
+            state.pending_proposal = {}
+            st.rerun()
+        return
+
+    # Fallback to normal human-loop panel if no options found
     selected_node = _selected_node(state)
+
     prompt = state.human_feedback_prompt or state.latest_critic_feedback or "系統需要更多限制或偏好，才能安全地繼續搜尋。"
     reason_label = _pause_reason_label(state.pause_reason)
     best_score = _best_score(state)
@@ -673,9 +1027,10 @@ def _create_guided_child(state: DesignState, search_mode: str) -> None:
 def _render_pipeline(state: DesignState) -> None:
     st.markdown('<div class="section-title">工作流程進度</div>', unsafe_allow_html=True)
     current_step = _current_step(state)
+    skill_context = getattr(state, "skill_context", "") or state.rag_context
     steps = [
         ("需求", bool(state.user_intent.strip()), "自然語言目標"),
-        ("RAG 檢索", bool(state.rag_context), "歷史規則"),
+        ("設計知識", bool(skill_context), "Motif 與記憶"),
         ("設計生成器", bool(state.logic_proposals), "邏輯提案"),
         ("轉譯器", bool(state.verilog_codes), "Cello Verilog"),
         ("Cello 映射", bool(state.candidate_topologies), "拓樸候選"),
@@ -782,7 +1137,7 @@ def _render_tree_workspace(state: DesignState) -> None:
 
 
 def _render_search_path_panel(state: DesignState, selected_node_id: str) -> None:
-    st.markdown('<div class="section-title">搜尋路徑與分支原因</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">決策紀錄與搜尋路徑</div>', unsafe_allow_html=True)
     summary = _search_next_step_summary(state)
     if summary["level"] == "success":
         st.success(summary["text"])
@@ -791,18 +1146,42 @@ def _render_search_path_panel(state: DesignState, selected_node_id: str) -> None
     else:
         st.info(summary["text"])
 
-    dot = _build_search_tree_dot(state, selected_node_id)
-    if dot:
-        st.graphviz_chart(dot, use_container_width=True)
-
     path = _search_path_to_node(state, selected_node_id)
     if not path:
         st.info("目前沒有可顯示的搜尋路徑。")
         return
 
-    st.caption("目前路徑")
+    st.caption("關鍵決策時間線")
+    _render_decision_timeline(state, path)
+
+    dot = _build_search_tree_dot(state, selected_node_id)
+    if dot:
+        with st.expander("完整搜尋樹", expanded=False):
+            st.graphviz_chart(dot, use_container_width=True)
+
+    with st.expander("節點細節", expanded=False):
+        st.caption("目前路徑")
+        for depth, node in enumerate(path):
+            _render_path_node_card(state, node, depth)
+
+
+def _render_decision_timeline(state: DesignState, path: list[SearchNode]) -> None:
     for depth, node in enumerate(path):
-        _render_path_node_card(state, node, depth)
+        step = _decision_step_for_node(state, node, depth)
+        current_class = " current" if node.node_id == state.current_node_id else ""
+        st.markdown(
+            f"""
+            <div class="timeline-item{current_class}">
+                <div class="timeline-title">{_escape_html(step["title"])}</div>
+                <div class="timeline-meta">{_escape_html(step["meta"])}</div>
+                <div class="timeline-body"><strong>做了什麼：</strong>{_escape_html(step["action"])}</div>
+                <div class="timeline-body"><strong>為什麼：</strong>{_escape_html(step["reason"])}</div>
+                <div class="timeline-body"><strong>結果：</strong>{_escape_html(step["result"])}</div>
+                <div class="timeline-body"><strong>下一步：</strong>{_escape_html(step["next"])}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
 
 def _render_path_node_card(state: DesignState, node: SearchNode, depth: int) -> None:
@@ -845,9 +1224,12 @@ def _render_inspector(state: DesignState) -> None:
         )
         return
 
-    proposal_tab, verilog_tab, topology_tab, ode_tab, charts_tab, critic_tab, rag_tab, raw_tab = st.tabs(
-        ["提案", "Verilog", "拓樸", "ODE 模擬", "圖表", "評審", "RAG 內容", "原始狀態"]
+    explanation_tab, proposal_tab, verilog_tab, topology_tab, compare_tab, ode_tab, charts_tab, critic_tab, skill_tab, raw_tab = st.tabs(
+        ["解釋", "提案", "Verilog", "拓樸", "比較", "ODE 模擬", "圖表", "評審", "設計知識", "原始狀態"]
     )
+
+    with explanation_tab:
+        _render_explanation_tab(node, state)
 
     with proposal_tab:
         proposals = node.logic_proposals or state.logic_proposals
@@ -876,6 +1258,9 @@ def _render_inspector(state: DesignState) -> None:
         else:
             st.info("目前尚無拓樸候選。")
 
+    with compare_tab:
+        _render_design_comparison_tab(node, state)
+
     with ode_tab:
         _render_ode_simulation_tab(node, state)
 
@@ -898,16 +1283,553 @@ def _render_inspector(state: DesignState) -> None:
         if node.last_error:
             st.error(node.last_error)
 
-    with rag_tab:
-        if state.rag_context:
-            st.text_area("檢索內容", value=state.rag_context, height=260)
+    with skill_tab:
+        skill_context = getattr(state, "skill_context", "") or state.rag_context
+        if skill_context:
+            st.text_area("Skill Context", value=skill_context, height=260)
         else:
-            st.info("目前尚未檢索 RAG 內容。")
+            st.info("目前尚未載入邏輯設計知識。")
 
     with raw_tab:
         st.json(asdict(node))
         with st.expander("完整 DesignState"):
             st.json(asdict(state))
+
+
+def _render_explanation_tab(node: SearchNode, state: DesignState) -> None:
+    topology = node.best_topology or state.best_topology or _best_topology_from_list(node.candidate_topologies or state.candidate_topologies)
+    if topology is None:
+        st.info("目前還沒有可解釋的候選拓樸。請先執行一次示範迭代或自備金鑰工作流程。")
+        return
+
+    interpretation = _overall_interpretation(topology, node)
+    strengths, limiting = _rank_score_components(topology)
+    caveats = _topology_caveats(topology, node)
+    next_action = _recommended_next_action(topology, node, caveats, limiting)
+
+    st.markdown(
+        f"""
+        <div class="explain-grid">
+            <div class="explain-card success">
+                <div class="explain-label">整體判讀</div>
+                <div class="explain-value">{_escape_html(interpretation["title"])}</div>
+                <div class="explain-text">{_escape_html(interpretation["body"])}</div>
+            </div>
+            <div class="explain-card warning">
+                <div class="explain-label">下一步建議</div>
+                <div class="explain-value">{_escape_html(next_action["title"])}</div>
+                <div class="explain-text">{_escape_html(next_action["body"])}</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    score = _metric_value(topology, "score")
+    mapping_status = str(topology.get("mapping_status", "unknown"))
+    source = str(topology.get("source", "unknown"))
+    cols = st.columns(4)
+    cols[0].metric("總分", _format_metric(score))
+    cols[1].metric("等級", _score_grade(score))
+    cols[2].metric("Mapping", mapping_status)
+    cols[3].metric("來源", source)
+    _render_cello_claim_notice(topology)
+
+    st.caption("主要加分證據")
+    if strengths:
+        for item in strengths[:2]:
+            st.success(f"{item['label']}：{item['score']:.2f}。{item['evidence']}")
+    else:
+        st.info("目前缺少 component score；系統只能根據總分與候選拓樸欄位做粗略判讀。")
+
+    st.caption("主要限制與拖累項目")
+    if limiting:
+        for item in limiting[:2]:
+            reason = _component_limiting_reason(item, topology)
+            st.warning(f"{item['label']}：{item['score']:.2f}。{reason}")
+    else:
+        st.info("目前沒有明顯拖累項目，或尚未提供足夠 component score。")
+
+    if caveats:
+        st.caption("這個分數不能證明什麼")
+        for caveat in caveats[:4]:
+            st.info(caveat)
+
+    _render_component_score_overview(topology)
+
+    with st.expander("完整 component score 解釋", expanded=False):
+        for component in _score_component_items(topology):
+            _render_score_component_row(component, topology)
+
+    path = _search_path_to_node(state, node.node_id)
+    if path:
+        with st.expander("對應的設計決策紀錄", expanded=False):
+            _render_decision_timeline(state, path)
+
+
+def _render_component_score_overview(topology: dict[str, Any]) -> None:
+    items = _score_component_items(topology)
+    if not items:
+        return
+    if pd is None:
+        return
+    rows = [
+        {
+            "component": item["label"],
+            "score": item["score"],
+            "weighted_contribution": round(item["score"] * item["weight"], 3),
+        }
+        for item in items
+    ]
+    chart_df = pd.DataFrame(rows).set_index("component")
+    left, right = st.columns(2, gap="medium")
+    with left:
+        st.caption("Component score")
+        st.bar_chart(chart_df[["score"]], use_container_width=True)
+    with right:
+        st.caption("加權貢獻")
+        st.bar_chart(chart_df[["weighted_contribution"]], use_container_width=True)
+
+
+def _render_score_component_row(component: dict[str, Any], topology: dict[str, Any]) -> None:
+    score = max(0.0, min(1.0, float(component["score"])))
+    width = int(round(score * 100))
+    st.markdown(
+        f"""
+        <div class="score-row">
+            <div class="score-row-head">
+                <div class="score-row-title">{_escape_html(component["label"])}</div>
+                <div class="score-row-score">{score:.2f} · weight {component["weight"]:.0%}</div>
+            </div>
+            <div class="score-bar"><div class="score-bar-fill" style="width:{width}%;"></div></div>
+            <div class="explain-text"><strong>證據：</strong>{_escape_html(component["evidence"])}</div>
+            <div class="explain-text"><strong>限制：</strong>{_escape_html(component["caveat"])}</div>
+            <div class="explain-text"><strong>修正含意：</strong>{_escape_html(_component_limiting_reason(component, topology))}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _render_cello_claim_notice(topology: dict[str, Any]) -> None:
+    notice = _cello_claim_notice(topology)
+    st.markdown(
+        f"""
+        <div class="cello-claim {notice["level"]}">
+            <div class="cello-claim-title">{_escape_html(notice["title"])}</div>
+            <div>{_escape_html(notice["message"])}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _render_design_workspace(index: int, topology: dict[str, Any]) -> None:
+    design = topology_to_design_ir(
+        topology,
+        host_organism=str(topology.get("host_organism", "Escherichia coli")),
+        design_id=f"candidate_{int(topology.get('verilog_index', index)) + 1}",
+    )
+    st.markdown("#### Design workspace")
+    _render_design_maturity(design)
+
+    logic_tab, regulatory_tab, construct_tab, parts_tab, export_tab = st.tabs(
+        ["Logic", "Regulatory", "DNA Construct", "Parts", "Export"]
+    )
+    with logic_tab:
+        st.caption("Computational logic derived from the candidate Verilog.")
+        st.code(design.logic_expression, language="text")
+        graph = _verilog_to_gate_graph(str(topology.get("verilog", "") or ""))
+        if graph["ok"]:
+            st.graphviz_chart(str(graph["dot"]), use_container_width=True)
+        else:
+            st.warning(str(graph["message"]))
+
+    with regulatory_tab:
+        st.caption(
+            "Conceptual biological interpretation. Nodes are functions and placeholders until a real part library is mapped."
+        )
+        if design.interactions:
+            st.graphviz_chart(_build_regulatory_graph_dot(design), use_container_width=True)
+        else:
+            st.info("No regulatory interactions could be inferred from this candidate.")
+
+    with construct_tab:
+        st.caption("Conceptual 5' to 3' transcriptional units. This is not yet an assembly-ready plasmid.")
+        _render_construct_view(design)
+        for warning in design.warnings:
+            st.warning(warning)
+
+    with parts_tab:
+        _render_part_library_view(design)
+
+    with export_tab:
+        revised = st.session_state.get(f"design_revision_{design.design_id}")
+        export_design = revised if isinstance(revised, DesignIR) else design
+        _render_design_exports(export_design)
+
+    with st.expander("DesignIR data", expanded=False):
+        st.json(design.to_dict())
+
+
+def _render_design_maturity(design: DesignIR) -> None:
+    labels = {
+        "logic": "Logic",
+        "regulatory_model": "Regulatory model",
+        "part_mapping": "Part mapping",
+        "sequences": "Sequences",
+        "assembly_ready": "Assembly ready",
+    }
+    colors = {
+        "available": ("#dcfce7", "#166534"),
+        "external_mapping": ("#dcfce7", "#166534"),
+        "conceptual": ("#fef3c7", "#92400e"),
+        "missing": ("#fee2e2", "#991b1b"),
+        "no": ("#fee2e2", "#991b1b"),
+    }
+    badges = []
+    for key, label in labels.items():
+        status = design.validation_status.get(key, "unknown")
+        background, foreground = colors.get(status, ("#e2e8f0", "#334155"))
+        badges.append(
+            f'<span style="display:inline-block;margin:0 0.35rem 0.35rem 0;'
+            f'padding:0.28rem 0.55rem;border-radius:999px;background:{background};'
+            f'color:{foreground};font-size:0.78rem;font-weight:650;">'
+            f'{_escape_html(label)}: {_escape_html(status.replace("_", " "))}</span>'
+        )
+    st.markdown("".join(badges), unsafe_allow_html=True)
+
+
+def _build_regulatory_graph_dot(design: DesignIR) -> str:
+    part_map = {part.id: part for part in design.parts}
+    lines = [
+        "digraph RegulatoryGraph {",
+        '  graph [rankdir=LR, bgcolor="transparent", pad="0.2", nodesep="0.4", ranksep="0.7"];',
+        '  node [fontname="Arial", fontsize=10, style="rounded,filled", shape=box];',
+    ]
+    colors = {
+        "sensor": ("#dbeafe", "#60a5fa"),
+        "promoter": ("#fef3c7", "#f59e0b"),
+        "RBS": ("#ede9fe", "#8b5cf6"),
+        "CDS": ("#dcfce7", "#22c55e"),
+        "terminator": ("#fee2e2", "#ef4444"),
+    }
+    used_ids = {edge.source for edge in design.interactions} | {edge.target for edge in design.interactions}
+    for part_id in sorted(used_ids):
+        part = part_map.get(part_id)
+        if part is None:
+            continue
+        fill, border = colors.get(part.part_type, ("#f1f5f9", "#94a3b8"))
+        label = _dot_escape(f"{part.name}\\n{part.part_type}")
+        lines.append(
+            f'  {_dot_id(part.id)} [label="{label}", fillcolor="{fill}", color="{border}"];'
+        )
+    for edge in design.interactions:
+        edge_color = "#dc2626" if edge.interaction_type == "repression" else "#2563eb"
+        arrow = "tee" if edge.interaction_type == "repression" else "normal"
+        label = _dot_escape(edge.interaction_type)
+        lines.append(
+            f'  {_dot_id(edge.source)} -> {_dot_id(edge.target)} '
+            f'[label="{label}", color="{edge_color}", arrowhead="{arrow}"];'
+        )
+    lines.append("}")
+    return "\n".join(lines)
+
+
+def _render_construct_view(design: DesignIR) -> None:
+    part_map = {part.id: part for part in design.parts}
+    part_colors = {
+        "promoter": ("#fef3c7", "#92400e"),
+        "RBS": ("#ede9fe", "#5b21b6"),
+        "CDS": ("#dcfce7", "#166534"),
+        "terminator": ("#fee2e2", "#991b1b"),
+        "sensor": ("#dbeafe", "#1e40af"),
+    }
+    if not design.constructs:
+        st.info("No transcriptional units could be inferred.")
+        return
+
+    for construct in design.constructs:
+        blocks = []
+        for part_id in construct.parts:
+            part = part_map.get(part_id)
+            if part is None:
+                continue
+            background, foreground = part_colors.get(part.part_type, ("#f1f5f9", "#334155"))
+            blocks.append(
+                f'<div title="{_escape_html(part.role)}" style="min-width:105px;padding:0.65rem 0.75rem;'
+                f'border-radius:0.5rem;background:{background};color:{foreground};'
+                f'border:1px solid {foreground}33;text-align:center;">'
+                f'<div style="font-size:0.68rem;text-transform:uppercase;opacity:0.75;">'
+                f'{_escape_html(part.part_type)}</div>'
+                f'<div style="font-weight:700;">{_escape_html(part.name)}</div></div>'
+            )
+        joined = '<div style="font-size:1.2rem;color:#64748b;">&#8594;</div>'.join(blocks)
+        st.markdown(
+            f'<div style="margin:0.6rem 0 1rem;padding:0.85rem;border:1px solid #e2e8f0;'
+            f'border-radius:0.75rem;background:#ffffff;">'
+            f'<div style="font-weight:700;margin-bottom:0.6rem;">5&#8242; '
+            f'{_escape_html(construct.name)} 3&#8242;</div>'
+            f'<div style="display:flex;align-items:center;gap:0.35rem;overflow-x:auto;">{joined}</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+
+def _render_part_library_view(design: DesignIR) -> None:
+    if not design.parts:
+        st.info("No parts are available.")
+        return
+    labels = [f"{part.name} ({part.part_type})" for part in design.parts]
+    selected_label = st.selectbox(
+        "Inspect component",
+        labels,
+        key=f"part_inspector_{design.design_id}",
+    )
+    part = design.parts[labels.index(selected_label)]
+    cols = st.columns(3)
+    cols[0].metric("Type", part.part_type)
+    cols[1].metric("Evidence", part.confidence)
+    cols[2].metric("Sequence", "available" if part.sequence else "missing")
+    st.markdown(f"**Role:** {_escape_html(part.role)}")
+    st.markdown(f"**Why selected:** {_escape_html(part.rationale)}")
+    st.markdown(f"**Host context:** {_escape_html(', '.join(part.host_compatibility) or 'not specified')}")
+    st.markdown(f"**Upstream:** {_escape_html(', '.join(dict.fromkeys(part.upstream)) or 'none')}")
+    st.markdown(f"**Downstream:** {_escape_html(', '.join(dict.fromkeys(part.downstream)) or 'none')}")
+    if part.sequence:
+        st.code(part.sequence, language="text")
+    else:
+        st.info("No DNA sequence has been assigned. This component is a design placeholder.")
+
+    with st.expander("Replacement validation", expanded=False):
+        library = PartLibrary.demo()
+        candidates = library.compatible_parts(
+            part_type=part.part_type,
+            host_organism=part.host_compatibility[0] if part.host_compatibility else None,
+            gate_type=(
+                str(part.assignment.metadata.get("gate_type") or "")
+                if part.assignment
+                else None
+            ),
+        )
+        if not candidates:
+            st.info("No type- and host-compatible parts are available in the demonstration library.")
+            return
+        replacement_labels = [f"{item.name} ({item.id})" for item in candidates]
+        replacement_label = st.selectbox(
+            "Replacement candidate",
+            replacement_labels,
+            key=f"replacement_{design.design_id}_{part.id}",
+        )
+        replacement = candidates[replacement_labels.index(replacement_label)]
+        validation = validate_replacement(
+            design,
+            target_part_id=part.id,
+            replacement_part_id=replacement.id,
+            library=library,
+        )
+        for error in validation.errors:
+            st.error(error)
+        for warning in validation.warnings:
+            st.warning(warning)
+        if validation.valid:
+            st.success("Replacement passed structural validation.")
+            if st.button(
+                "Create immutable revision",
+                key=f"apply_replacement_{design.design_id}_{part.id}",
+            ):
+                result = replace_part_immutable(
+                    design,
+                    target_part_id=part.id,
+                    replacement_part_id=replacement.id,
+                    library=library,
+                )
+                if result.design:
+                    st.session_state[f"design_revision_{design.design_id}"] = result.design
+        revised = st.session_state.get(f"design_revision_{design.design_id}")
+        if isinstance(revised, DesignIR):
+            st.caption(
+                f"Created {revised.revision.revision_id}: {revised.revision.summary}"
+            )
+            st.json(revised.revision.changes)
+
+
+def _render_design_exports(design: DesignIR) -> None:
+    st.caption(
+        f"Exporting {design.design_id}, revision {design.revision.revision_id}. "
+        "BOM and SBOL can describe incomplete designs; GenBank requires complete construct sequences."
+    )
+
+    # 選擇骨架選項
+    backbone_choice = st.selectbox(
+        "Select Plasmid Backbone for assembly / 選擇載體骨架進行質體重組",
+        ["None (Linear Constructs)", "pUC19 (High copy, AmpR)", "p15A (Medium copy, KanR)"],
+        index=0,
+        key=f"backbone_select_{design.design_id}_{design.revision.revision_id}"
+    )
+
+    bom = export_bom_csv(design)
+    sbol = export_sbol3_turtle(design)
+
+    st.download_button(
+        "Download BOM CSV",
+        data=bom.content,
+        file_name=bom.filename,
+        mime=bom.media_type,
+        key=f"bom_download_{design.design_id}_{design.revision.revision_id}",
+        use_container_width=True,
+    )
+    for warning in bom.warnings:
+        st.warning(warning)
+
+    if backbone_choice == "None (Linear Constructs)":
+        genbank = export_genbank(design)
+        if genbank.ok:
+            st.download_button(
+                "Download GenBank",
+                data=genbank.content,
+                file_name=genbank.filename,
+                mime=genbank.media_type,
+                key=f"genbank_download_{design.design_id}_{design.revision.revision_id}",
+                use_container_width=True,
+            )
+        else:
+            st.error("GenBank export is blocked because construct sequences are incomplete.")
+            for error in genbank.errors:
+                st.caption(error)
+    else:
+        # 進行質體拼接導出
+        plasmid = export_plasmid_genbank(design, backbone_choice)
+        if plasmid.ok:
+            st.download_button(
+                "Download Plasmid GenBank",
+                data=plasmid.content,
+                file_name=plasmid.filename,
+                mime=plasmid.media_type,
+                key=f"plasmid_download_{design.design_id}_{design.revision.revision_id}",
+                use_container_width=True,
+            )
+            for warning in plasmid.warnings:
+                st.warning(warning)
+        else:
+            st.error("Plasmid GenBank export is blocked.")
+            for error in plasmid.errors:
+                st.caption(error)
+
+    st.download_button(
+        "Download SBOL3 Turtle",
+        data=sbol.content,
+        file_name=sbol.filename,
+        mime=sbol.media_type,
+        key=f"sbol_download_{design.design_id}_{design.revision.revision_id}",
+        use_container_width=True,
+    )
+    for warning in sbol.warnings[:8]:
+        st.warning(warning)
+
+
+def _render_design_comparison_tab(node: SearchNode, state: DesignState) -> None:
+    topologies = node.candidate_topologies or state.candidate_topologies
+    if len(topologies) < 2:
+        st.info("At least two candidates are required for DesignDiff.")
+        return
+
+    labels = [_topology_candidate_label(index, item) for index, item in enumerate(topologies)]
+    left_col, right_col = st.columns(2)
+    with left_col:
+        left_label = st.selectbox(
+            "Left candidate",
+            labels,
+            index=0,
+            key=f"compare_left_{node.node_id}",
+        )
+    with right_col:
+        right_label = st.selectbox(
+            "Right candidate",
+            labels,
+            index=1,
+            key=f"compare_right_{node.node_id}",
+        )
+    left_index = labels.index(left_label)
+    right_index = labels.index(right_label)
+    if left_index == right_index:
+        st.warning("Choose two different candidates.")
+        return
+
+    left_topology = topologies[left_index]
+    right_topology = topologies[right_index]
+    left_design = topology_to_design_ir(
+        left_topology,
+        host_organism=state.host_organism,
+        design_id=f"candidate_{left_index + 1}",
+    )
+    right_design = topology_to_design_ir(
+        right_topology,
+        host_organism=state.host_organism,
+        design_id=f"candidate_{right_index + 1}",
+    )
+    metric_keys = [
+        "score",
+        "gate_count",
+        "dynamic_margin",
+        "metabolic_burden_score",
+        "robustness_score",
+        "orthogonality_score",
+        "cello_assignment_score",
+    ]
+    left_metrics = {key: left_topology.get(key) for key in metric_keys}
+    right_metrics = {key: right_topology.get(key) for key in metric_keys}
+    diff = compare_designs(
+        left_design,
+        right_design,
+        left_metrics=left_metrics,
+        right_metrics=right_metrics,
+    )
+    st.markdown(f"**Summary:** {_escape_html(diff.summary)}")
+    st.info(diff.recommendation)
+
+    metric_rows = [
+        {
+            "metric": change.metric,
+            "left": change.left,
+            "right": change.right,
+            "delta": change.delta,
+        }
+        for change in diff.metric_changes
+    ]
+    if metric_rows:
+        st.caption("Metric differences")
+        st.dataframe(metric_rows, use_container_width=True, hide_index=True)
+
+    validation_rows = [
+        {
+            "validation": change.metric,
+            "left": change.left,
+            "right": change.right,
+        }
+        for change in diff.validation_changes
+    ]
+    if validation_rows:
+        st.caption("Design maturity differences")
+        st.dataframe(validation_rows, use_container_width=True, hide_index=True)
+
+    if diff.part_changes:
+        st.caption("Part differences")
+        for change in diff.part_changes:
+            with st.expander(f"{change.change_type}: {change.part_id}"):
+                left_part, right_part = st.columns(2)
+                with left_part:
+                    st.markdown("**Left**")
+                    st.json(change.before or {})
+                with right_part:
+                    st.markdown("**Right**")
+                    st.json(change.after or {})
+    else:
+        st.success("No material part differences were detected.")
+
+    if diff.construct_changes:
+        st.caption("Construct order differences")
+        st.json(diff.construct_changes)
 
 
 def _render_topology_card(index: int, topology: dict[str, Any], best_topology: dict[str, Any] | None) -> None:
@@ -931,11 +1853,9 @@ def _render_topology_card(index: int, topology: dict[str, Any], best_topology: d
         if is_best:
             st.success("目前分數最高或已選定的最佳拓樸。")
 
-        graph = _verilog_to_gate_graph(str(topology.get("verilog", "") or ""))
-        if graph["ok"]:
-            st.graphviz_chart(str(graph["dot"]), use_container_width=True)
-        else:
-            st.warning(str(graph["message"]))
+        _render_cello_claim_notice(topology)
+
+        _render_design_workspace(index, topology)
 
         if _is_failed_mapping(status) and topology.get("mapping_error_summary"):
             st.error(str(topology["mapping_error_summary"]))
@@ -958,6 +1878,7 @@ def _render_ode_simulation_tab(node: SearchNode, state: DesignState) -> None:
     selected_index = labels.index(selected_label)
     topology = topologies[selected_index]
     trace = topology.get("ode_trace")
+    _render_ode_explanation(topology)
 
     status = str(topology.get("ode_status", "unknown"))
     if status == "disabled":
@@ -991,6 +1912,55 @@ def _render_ode_simulation_tab(node: SearchNode, state: DesignState) -> None:
 
     with st.expander("ODE trace 原始資料", expanded=False):
         st.json(trace)
+
+
+def _render_ode_explanation(topology: dict[str, Any]) -> None:
+    explanation = explain_ode_topology(topology)
+    st.caption("ODE 解釋摘要")
+    st.info(str(explanation.get("summary", "目前沒有 ODE 解釋摘要。")))
+
+    readouts = explanation.get("key_readouts", {})
+    burden = explanation.get("burden_readouts", {})
+    stability = explanation.get("stability_readouts", {})
+    if isinstance(readouts, dict) and readouts:
+        cols = st.columns(4)
+        cols[0].metric("Peak output", _format_metric(readouts.get("peak_output_protein")))
+        cols[1].metric("Time to peak", _format_metric(readouts.get("time_to_peak")))
+        cols[2].metric("Final output", _format_metric(readouts.get("final_output_protein")))
+        cols[3].metric("Steady state", str(readouts.get("steady_state_reached", "unknown")))
+    if isinstance(burden, dict) and burden:
+        cols = st.columns(4)
+        cols[0].metric("Max mRNA", _format_metric(burden.get("max_total_mrna")))
+        cols[1].metric("Max protein", _format_metric(burden.get("max_total_protein")))
+        cols[2].metric("Max RNAP", _format_metric(burden.get("max_rnap_occupancy")))
+        cols[3].metric("Burden risk", str(burden.get("burden_risk_level", "unknown")))
+    if isinstance(stability, dict) and stability:
+        cols = st.columns(4)
+        cols[0].metric("Uncertainty", "是" if stability.get("uncertainty_evaluated") else "否")
+        cols[1].metric("MC runs", _format_metric(stability.get("monte_carlo_runs")))
+        cols[2].metric("MC fail rate", _format_metric(stability.get("monte_carlo_failure_rate")))
+        cols[3].metric("Output CV", _format_metric(stability.get("output_cv")))
+
+    interpretation = explanation.get("interpretation", [])
+    warnings = explanation.get("coverage_warnings", [])
+    next_checks = explanation.get("next_checks", [])
+    interpretation_items = interpretation[:4] if isinstance(interpretation, list) else []
+    warning_items = warnings[:3] if isinstance(warnings, list) else []
+    next_check_items = next_checks[:3] if isinstance(next_checks, list) else []
+    left, right = st.columns(2, gap="medium")
+    with left:
+        st.caption("生物學判讀")
+        for item in interpretation_items:
+            st.write(f"- {item}")
+    with right:
+        st.caption("覆蓋缺口與下一步")
+        for item in warning_items:
+            st.warning(str(item))
+        for item in next_check_items:
+            st.write(f"- {item}")
+
+    with st.expander("ODE 解釋完整資料", expanded=False):
+        st.json(explanation)
 
 
 def _render_ode_metric_summary(topology: dict[str, Any]) -> None:
@@ -1028,6 +1998,221 @@ def _topology_candidate_label(index: int, topology: dict[str, Any]) -> str:
     status = topology.get("ode_status", topology.get("mapping_status", "unknown"))
     score_text = f" · score {float(score):.2f}" if isinstance(score, int | float) else ""
     return f"候選 {candidate_number}{score_text} · {status}"
+
+
+def _best_topology_from_list(topologies: list[dict[str, Any]]) -> dict[str, Any] | None:
+    if not topologies:
+        return None
+    return max(topologies, key=lambda item: float(item.get("score", -9999)))
+
+
+def _overall_interpretation(topology: dict[str, Any], node: SearchNode) -> dict[str, str]:
+    score = _metric_value(topology, "score")
+    grade = _score_grade(score)
+    if score is None:
+        return {
+            "title": "尚無足夠分數資料",
+            "body": "目前只能檢視候選拓樸與評審回饋，尚不能穩定比較候選品質。",
+        }
+    if node.is_approved or score >= 0.80:
+        return {
+            "title": f"{grade}：可作為優先審查候選",
+            "body": "此候選在目前計算檢查下表現較好，適合作為後續人工審查或真實 Cello/UCF 驗證的起點。",
+        }
+    if score >= 0.60:
+        return {
+            "title": f"{grade}：可保留但仍需修正",
+            "body": "此候選已有部分設計證據支持，但仍存在明顯拖累項目，建議依限制項目建立修正分支。",
+        }
+    return {
+        "title": f"{grade}：目前不宜直接採用",
+        "body": "此候選在目前評估中風險偏高，較適合用來診斷失敗原因，而不是作為最終設計。",
+    }
+
+
+def _score_grade(score: float | None) -> str:
+    if score is None:
+        return "無資料"
+    if score >= 0.80:
+        return "Excellent"
+    if score >= 0.60:
+        return "Pass"
+    return "Fail"
+
+
+def _rank_score_components(topology: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    items = _score_component_items(topology)
+    strengths = sorted([item for item in items if item["score"] >= 0.70], key=lambda item: item["score"], reverse=True)
+    limiting = sorted([item for item in items if item["score"] < 0.70], key=lambda item: item["score"])
+    if not limiting and items:
+        limiting = sorted(items, key=lambda item: item["score"])[:2]
+    return strengths, limiting
+
+
+def _score_component_items(topology: dict[str, Any]) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    for component in SCORE_COMPONENTS:
+        score = _component_score(topology, component)
+        if score is None:
+            continue
+        item = dict(component)
+        item["score"] = max(0.0, min(1.0, float(score)))
+        items.append(item)
+    return items
+
+
+def _component_score(topology: dict[str, Any], component: dict[str, Any]) -> float | None:
+    benchmark_report = topology.get("benchmark_report")
+    if not isinstance(benchmark_report, dict):
+        benchmark_report = {}
+    for key in [component["key"], *component.get("aliases", [])]:
+        value = topology.get(key, benchmark_report.get(key))
+        normalized = _score_like_value(value)
+        if normalized is not None:
+            return normalized
+    return None
+
+
+def _score_like_value(value: Any) -> float | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    if not isinstance(value, int | float):
+        return None
+    number = float(value)
+    if not math.isfinite(number):
+        return None
+    if number > 1.0:
+        if number <= 100.0:
+            return number / 100.0
+        return None
+    return number
+
+
+def _metric_value(topology: dict[str, Any], key: str) -> float | None:
+    value = topology.get(key)
+    if isinstance(value, int | float) and not isinstance(value, bool) and math.isfinite(float(value)):
+        return float(value)
+    benchmark_report = topology.get("benchmark_report")
+    if isinstance(benchmark_report, dict):
+        report_value = benchmark_report.get(key)
+        if isinstance(report_value, int | float) and not isinstance(report_value, bool) and math.isfinite(float(report_value)):
+            return float(report_value)
+    return None
+
+
+def _component_limiting_reason(component: dict[str, Any], topology: dict[str, Any]) -> str:
+    key = component["key"]
+    gate_count = topology.get("gate_count")
+    mapping_status = str(topology.get("mapping_status", "unknown"))
+    ode_status = str(topology.get("ode_status", "unknown"))
+    if key == "metabolic_burden":
+        if isinstance(gate_count, int | float):
+            return f"可能受到 gate count = {gate_count} 或調控層級較多影響；可嘗試降低 gate depth 或移除冗餘 gate。"
+        return "可能受到 gate count 或資源佔用影響；可嘗試簡化拓樸。"
+    if key == "cello_assignment":
+        return f"目前 mapping 狀態為 {mapping_status}；若是 mock 或 unmapped，建議使用真實 UCF/Cello 重新檢查。"
+    if key == "kinetic":
+        margin = topology.get("dynamic_margin")
+        margin_text = f"dynamic margin = {margin}" if margin is not None else f"ODE 狀態為 {ode_status}"
+        return f"{margin_text}；可調整元件參數、降低負擔或重新選擇拓樸。"
+    if key == "robustness":
+        return "穩健性不足時，建議提高 ON/OFF separation，並用 Monte Carlo 擾動檢查參數敏感度。"
+    if key == "orthogonality":
+        return "正交性不足時，建議替換可能交互干擾的 promoter/repressor pair，或使用更完整的 part library。"
+    if key == "functional":
+        return "功能分數偏低時，應先回到需求解析、truth table 與 Verilog 是否一致。"
+    if key == "static_plausibility":
+        return "結構合理性偏低時，建議檢查重複元件、過深邏輯與不必要的中間訊號。"
+    if key == "temporal":
+        return "時間表現不足時，建議檢查 rise time、response delay 與輸出是否達穩態。"
+    return "建議依此 component 的低分原因建立修正分支。"
+
+
+def _topology_caveats(topology: dict[str, Any], node: SearchNode) -> list[str]:
+    caveats = [
+        "總分代表目前計算檢查下的相對可信度，不代表已完成濕實驗驗證。",
+    ]
+    caveats.append(_cello_claim_notice(topology)["message"])
+    source = str(topology.get("source", "")).lower()
+    mapping_status = str(topology.get("mapping_status", "")).lower()
+    if "mock" in source or "mock" in mapping_status or source == "demo_cello_wrapper":
+        caveats.append("目前包含 mock/demo mapping；不能把它解讀為真實 Cello part assignment 成功。")
+    if topology.get("ode_status") in {None, "disabled", "unknown"}:
+        caveats.append("ODE 模擬尚未提供完整動態證據；kinetic 與 robustness 判讀需要保守。")
+    if node.error_type != "NONE":
+        caveats.append(f"評審仍標記 {ERROR_LABELS.get(node.error_type, node.error_type)}，表示設計仍有待修正的風險。")
+    if not topology.get("cello_buildable", False) and _metric_value(topology, "cello_assignment_score") is not None:
+        caveats.append("尚未標記為 Cello buildable；若要宣稱可建構，需要真實 UCF 與外部 Cello 檢查。")
+    return caveats
+
+
+def _cello_claim_notice(topology: dict[str, Any]) -> dict[str, str]:
+    source = str(topology.get("source", "")).lower()
+    mode = str(topology.get("cello_mode", "")).lower()
+    claim_level = str(topology.get("cello_claim_level", "")).lower()
+    status = str(topology.get("mapping_status", "unknown")).lower()
+    warning = str(topology.get("cello_warning", "") or "").strip()
+    if mode == "mock" or "mock" in source or source == "demo_cello_wrapper" or claim_level == "mock_only":
+        return {
+            "level": "mock",
+            "title": "Cello 警示：目前是 mock/demo mapping",
+            "message": warning
+            or "此結果只代表流程可執行，不能解讀為真實 Cello part assignment，也不能宣稱 biological buildability。",
+        }
+    if status in {"mapping_failed", "failed", "unmapped", "error", "unknown", ""} or claim_level == "external_mapping_failed":
+        return {
+            "level": "failed",
+            "title": "Cello 警示：尚未取得可用 mapping",
+            "message": warning
+            or "目前沒有可用的 Cello mapping；請避免宣稱此候選已完成元件指派或可建構。",
+        }
+    if mode == "external" or source == "external_cello_wrapper" or claim_level == "externally_mapped":
+        return {
+            "level": "real",
+            "title": "Cello 狀態：已執行外部 Cello",
+            "message": warning
+            or "外部 Cello 已完成 mapping；仍需確認 UCF/library、序列層級限制與專家審查後，才能提出更強的生物實作宣稱。",
+        }
+    return {
+        "level": "unknown",
+        "title": "Cello 狀態：來源不明",
+        "message": "此候選缺少 Cello mode/claim metadata；建議檢查 source、mapping_status 與 artifacts 後再解讀。",
+    }
+
+
+def _recommended_next_action(
+    topology: dict[str, Any],
+    node: SearchNode,
+    caveats: list[str],
+    limiting: list[dict[str, Any]],
+) -> dict[str, str]:
+    source = str(topology.get("source", "")).lower()
+    mapping_status = str(topology.get("mapping_status", "unknown")).lower()
+    if "mock" in source or "mock" in mapping_status or source == "demo_cello_wrapper":
+        return {
+            "title": "用真實 Cello/UCF 重新驗證",
+            "body": "目前結果適合展示 workflow 與設計推理，但若要面向生物實作審查，下一步應接上真實 part library。",
+        }
+    if limiting:
+        first = limiting[0]
+        return {
+            "title": f"優先修正 {first['label']}",
+            "body": _component_limiting_reason(first, topology),
+        }
+    if node.is_approved:
+        return {
+            "title": "保留此候選並進行人工審查",
+            "body": "此候選已通過目前門檻；下一步可檢查序列層級限制、part availability 與實驗設計。",
+        }
+    if caveats:
+        return {
+            "title": "先釐清主要 caveat",
+            "body": caveats[0],
+        }
+    return {
+        "title": "繼續搜尋替代拓樸",
+        "body": "目前沒有明確單一修正方向，可增加預算或建立探索分支比較更多候選。",
+    }
 
 
 def _topology_metrics_html(topology: dict[str, Any]) -> str:
@@ -1083,11 +2268,27 @@ def _render_topology_charts(node: SearchNode, state: DesignState) -> None:
 
 
 def _run_demo_iteration(state: DesignState) -> None:
+    # Auto-complete PM Stage if running engine directly
+    if getattr(state, "pm_stage", "elicitation") == "elicitation":
+        fallbacks = {
+            "chassis": "Escherichia coli",
+            "inputs": [{"name": "IPTG", "sensor_promoter": "pLac", "type": "input_sensor"}],
+            "outputs": [{"name": "sfGFP", "type": "reporter_gene"}],
+            "logic_relation": "sfGFP = IPTG",
+            "copy_number": 15
+        }
+        for k, v in fallbacks.items():
+            if k not in state.structured_spec:
+                state.structured_spec[k] = v
+        state.pm_stage = "completed"
+        state.pending_proposal = {}
+
     options = st.session_state.ui_options
     if not state.tree_nodes:
         root = SearchNode(node_id="root", search_mode="Exploration")
         state.tree_nodes[root.node_id] = root
         state.active_frontier = [root.node_id]
+
 
     if not state.active_frontier or state.used_budget >= state.compute_budget:
         _select_best_fallback(state)
@@ -1098,8 +2299,9 @@ def _run_demo_iteration(state: DesignState) -> None:
     state.current_node_id = current_node_id
 
     mode = node.search_mode
-    if options["enable_rag"] and mode in {"Exploration", "Repair"}:
-        state.rag_context = _demo_rag_context(state.user_intent, mode)
+    if options["enable_skill_context"] and mode in {"Exploration", "Repair"}:
+        state.skill_context = _demo_skill_context(state.user_intent, mode)
+        state.rag_context = state.skill_context
 
     if mode != "Exploitation":
         node.logic_proposals = _demo_proposals(state, node)
@@ -1140,6 +2342,22 @@ def _run_byok_workflow(state: DesignState) -> None:
     if not state.user_intent.strip():
         st.session_state.run_message = ("warning", "請先輸入設計需求再執行自備金鑰工作流程。")
         return
+
+    # Auto-complete PM Stage if running engine directly
+    if getattr(state, "pm_stage", "elicitation") == "elicitation":
+        fallbacks = {
+            "chassis": "Escherichia coli",
+            "inputs": [{"name": "IPTG", "sensor_promoter": "pLac", "type": "input_sensor"}],
+            "outputs": [{"name": "sfGFP", "type": "reporter_gene"}],
+            "logic_relation": "sfGFP = IPTG",
+            "copy_number": 15
+        }
+        for k, v in fallbacks.items():
+            if k not in state.structured_spec:
+                state.structured_spec[k] = v
+        state.pm_stage = "completed"
+        state.pending_proposal = {}
+
     if not config.get("api_key", "").strip():
         st.session_state.run_message = ("warning", "請在自備金鑰模型設定中輸入 API key。")
         return
@@ -1192,11 +2410,17 @@ def _run_byok_workflow(state: DesignState) -> None:
             state=state,
             builder=BuilderAgent(api_key=api_key, model_name=model_name, api_base=api_base),
             translator=TranslatorRunner(api_key=api_key, model_name=model_name, api_base=api_base),
-            cello_wrapper=CelloWrapper(),
+            cello_wrapper=CelloWrapper(
+                cello_command=options.get("cello_command") or None,
+                ucf_path=options.get("ucf_path") or None,
+                part_library_path=options.get("part_library_path") or None,
+                sensor_path=options.get("sensor_path") or None,
+                device_path=options.get("device_path") or None,
+            ),
             batch_ode_simulator=BatchODESimulator() if options["enable_ode"] else _NoOpODESimulator(),
             critic=CriticAgent(api_key=api_key, model_name=model_name, api_base=api_base),
             consolidator=ConsolidatorAgent(),
-            skill_retriever=SkillRetriever.from_json_file(include_extracted=True) if options["enable_rag"] else None,
+            skill_retriever=SkillRetriever.from_json_file(include_extracted=True) if options["enable_skill_context"] else None,
             data_miner=DataMinerAgent() if options["enable_ode"] else None,
             skill_extractor=SkillExtractorAgent(
                 vault_dir="outputs/obsidian_skills",
@@ -1282,10 +2506,21 @@ def _demo_topologies(node: SearchNode, enable_ode: bool) -> list[dict[str, Any]]
         score = min(0.96, 0.58 + mode_bonus + index * 0.08 + len(node.critic_feedbacks) * 0.03)
         topology = {
             "source": "demo_cello_wrapper",
+            "cello_mode": "mock",
+            "cello_claim_level": "mock_only",
+            "cello_warning": "示範模式使用 demo/mock Cello 輸出，只能說明 workflow 與可解釋性，不能宣稱真實元件 mapping 或可建構。",
             "verilog_index": index,
             "mapping_status": "mapped",
             "gate_count": 2 + index,
             "score": round(score, 3),
+            "functional_score": round(min(0.98, 0.78 + index * 0.05 + mode_bonus), 3),
+            "kinetic_score": round(min(0.95, 0.62 + index * 0.07 + mode_bonus), 3),
+            "static_plausibility_score": round(max(0.45, 0.86 - index * 0.08), 3),
+            "metabolic_burden_score": round(max(0.35, 0.82 - index * 0.12), 3),
+            "robustness_score": round(min(0.94, 0.66 + index * 0.05 + mode_bonus), 3),
+            "temporal_score": round(min(0.9, 0.70 + index * 0.03), 3),
+            "orthogonality_score": round(max(0.42, 0.76 - index * 0.04 + mode_bonus / 2), 3),
+            "cello_assignment_score": round(min(0.88, 0.54 + index * 0.08 + mode_bonus), 3),
             "verilog": code,
         }
         if enable_ode:
@@ -1398,10 +2633,10 @@ def _select_best_fallback(state: DesignState) -> None:
         st.session_state.selected_node_id = best_node.node_id
 
 
-def _demo_rag_context(intent: str, mode: str) -> str:
+def _demo_skill_context(intent: str, mode: str) -> str:
     return "\n".join(
         [
-            f"模式感知檢索：{MODE_LABELS.get(mode, mode)}",
+            f"模式感知設計知識：{MODE_LABELS.get(mode, mode)}",
             "優先使用 Cello 相容的組合邏輯：primitive gates、wire、assign。",
             "避免 always blocks、registers、clocks、latches、memories 與 delay syntax。",
             f"需求關鍵字：{', '.join(intent.lower().split()[:8]) or '未提供'}",
@@ -1676,6 +2911,82 @@ def _branch_reason_for_node(state: DesignState, node_id: str) -> str:
     return f"{ERROR_LABELS.get(parent.error_type, parent.error_type)} -> {MODE_LABELS.get(node.search_mode, node.search_mode)}"
 
 
+def _decision_step_for_node(state: DesignState, node: SearchNode, depth: int) -> dict[str, str]:
+    mode = MODE_LABELS.get(node.search_mode, node.search_mode)
+    status = STATUS_LABELS.get(node.status, node.status)
+    score = "無資料" if not math.isfinite(node.score) else f"{node.score:.2f}"
+    title = f"第 {depth + 1} 輪：{_decision_title(node)}"
+    meta = f"{node.node_id} · {mode} · {status} · score {score}"
+    reason = _branch_reason_for_node(state, node.node_id)
+    action = _decision_action(node)
+    result = _decision_result(node)
+    next_step = _decision_next_step(state, node)
+    return {
+        "title": title,
+        "meta": meta,
+        "action": action,
+        "reason": reason,
+        "result": result,
+        "next": next_step,
+    }
+
+
+def _decision_title(node: SearchNode) -> str:
+    if node.search_mode == "Repair":
+        return "依評審回饋修正設計"
+    if node.search_mode == "Exploitation":
+        return "保留邏輯並最佳化元件"
+    if node.parent_id:
+        return "重新探索替代設計"
+    return "建立初始設計假設"
+
+
+def _decision_action(node: SearchNode) -> str:
+    proposal_count = len(node.logic_proposals)
+    verilog_count = len(node.verilog_codes)
+    topology_count = len(node.candidate_topologies)
+    if node.search_mode == "Repair":
+        return f"建立修正分支，產生 {proposal_count} 個邏輯提案、{verilog_count} 個 Verilog 候選與 {topology_count} 個拓樸候選。"
+    if node.search_mode == "Exploitation":
+        return f"沿用較可接受的邏輯方向，嘗試改善 mapping、負擔或動態表現，並評估 {topology_count} 個拓樸候選。"
+    return f"從自然語言需求建立初始設計假設，產生 {proposal_count} 個邏輯提案與 {topology_count} 個拓樸候選。"
+
+
+def _decision_result(node: SearchNode) -> str:
+    best = node.best_topology
+    feedback = _summarize_feedback(node.critic_feedbacks[-1] if node.critic_feedbacks else "", limit=150)
+    if best:
+        candidate = int(best.get("verilog_index", 0)) + 1
+        score = _format_metric(best.get("score", node.score if math.isfinite(node.score) else None))
+        mapping = best.get("mapping_status", "unknown")
+        base = f"候選 {candidate} 目前最佳，分數 {score}，mapping 狀態為 {mapping}。"
+    else:
+        base = "目前尚未形成可排名的最佳拓樸。"
+    if feedback:
+        return f"{base} 評審摘要：{feedback}"
+    return base
+
+
+def _decision_next_step(state: DesignState, node: SearchNode) -> str:
+    if node.is_approved:
+        return "保留此候選作為目前最佳結果，並進入人工審查或匯出階段。"
+    if node.status == "Needs_Human_Input" or state.requires_human_input and node.node_id == state.current_node_id:
+        return "等待人工補充限制或接受 fallback，避免系統在不明確條件下繼續搜尋。"
+    if node.children_ids:
+        child_labels = []
+        for child_id in node.children_ids[:3]:
+            child = state.tree_nodes.get(child_id)
+            child_labels.append(MODE_LABELS.get(child.search_mode, child.search_mode) if child else child_id)
+        return f"已建立後續分支：{', '.join(child_labels)}。"
+    if node.error_type == "LOGIC_ERROR":
+        return "建議建立修正分支，先收斂 truth table 與布林需求。"
+    if node.error_type == "PART_ERROR":
+        return "建議建立元件最佳化分支，優先處理 mapping、負擔或正交性。"
+    if state.active_frontier:
+        return f"下一個待處理節點是 {state.active_frontier[0]}。"
+    return "若尚未滿意目前候選，可增加預算或補充人工限制後繼續搜尋。"
+
+
 def _search_next_step_summary(state: DesignState) -> dict[str, str]:
     if state.requires_human_input:
         return {"level": "warning", "text": "工作流程正在等待人工回饋。請先處理上方的人工介入面板，再繼續執行搜尋。"}
@@ -1757,9 +3068,10 @@ def _summarize_feedback(feedback: str, limit: int = 110) -> str:
 
 
 def _current_step(state: DesignState) -> int:
+    skill_context = getattr(state, "skill_context", "") or state.rag_context
     checks = [
         bool(state.user_intent.strip()),
-        bool(state.rag_context),
+        bool(skill_context),
         bool(state.logic_proposals),
         bool(state.verilog_codes),
         bool(state.candidate_topologies),
@@ -1805,7 +3117,223 @@ def _child_id(parent_id: str, mode: str) -> str:
     return f"{parent_id}_{mode}_{uuid.uuid4().hex[:4]}"
 
 
+def _generate_mermaid_from_spec(spec: dict[str, Any]) -> str:
+    if not spec:
+        return ""
+    lines = ["graph LR"]
+    inputs = spec.get("inputs", [])
+    outputs = spec.get("outputs", [])
+    logic = spec.get("logic_relation", "")
+    chassis = spec.get("chassis", "Unknown Host")
+    
+    # 建立 Logic Engine 節點
+    logic_label = f"\"🧬 {chassis} 電路核心<br/>規格: {logic}\"" if logic else f"\"🧬 {chassis} 電路核心\""
+    lines.append(f"    Logic[{logic_label}]")
+    
+    # 建立 Inputs 連結
+    for index, inp in enumerate(inputs):
+        name = inp.get("name", f"Input_{index}")
+        promoter = inp.get("sensor_promoter", "")
+        label = f"\"{name} (感測器: {promoter})\"" if promoter else f"\"{name}\""
+        lines.append(f"    In_{index}[{label}] --> Logic")
+        
+    # 建立 Outputs 連結
+    for index, out in enumerate(outputs):
+        name = out.get("name", f"Output_{index}")
+        label = f"\"{name} (報告基因)\""
+        lines.append(f"    Logic --> Out_{index}[{label}]")
+        
+    # 美化樣式
+    lines.append("    style Logic fill:#f1f5f9,stroke:#334155,stroke-width:2px")
+    for index in range(len(inputs)):
+        lines.append(f"    style In_{index} fill:#eff6ff,stroke:#2563eb,stroke-width:1px")
+    for index in range(len(outputs)):
+        lines.append(f"    style Out_{index} fill:#ecfdf5,stroke:#059669,stroke-width:2px")
+        
+    return "\n".join(lines)
+
+
+def _render_pm_elicitation_dashboard(state: DesignState) -> None:
+    st.markdown(
+        """
+        <div style="padding:15px; background-color:#f8fafc; border-radius:8px; border:1px solid #e2e8f0; margin-bottom:20px;">
+            <h3 style="margin:0 0 5px 0; color:#1e293b;">🧬 基因電路設計經理 (Bio-Design PM)</h3>
+            <p style="margin:0; font-size:14px; color:#64748b;">
+                我們將透過簡單的對話確認您的設計規格（Chassis, Inputs, Outputs, Logic 等）。
+                PM Agent 會自動尋找生物學上的推薦預設值，以提高後續評分並防範模擬錯誤。
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    field_status = state.pending_proposal.get("field_status") if state.pending_proposal else []
+    if not field_status and state.structured_spec:
+        ordered_fields = ["chassis", "inputs", "outputs", "logic_relation", "copy_number"]
+        field_status = [
+            {
+                "field": field,
+                "label": field.replace("_", " ").title(),
+                "status": "confirmed" if field in state.structured_spec else "pending",
+                "value": state.structured_spec.get(field),
+            }
+            for field in ordered_fields
+        ]
+    if field_status:
+        cols = st.columns(len(field_status))
+        for col, item in zip(cols, field_status):
+            status = item.get("status", "pending")
+            icon = "✅" if status == "confirmed" else "🔵" if status == "current" else "·"
+            col.metric(
+                f"{icon} {item.get('label', item.get('field', 'Field'))}",
+                "完成" if status == "confirmed" else "確認中" if status == "current" else "待補",
+            )
+
+    # 1. 檢查是否有輸入 Intent
+    if not state.user_intent.strip():
+        st.info("💡 請在左側側邊欄的「設計需求」中輸入您的初步意圖（例如：『我需要一個溫敏型啟動子，高溫時啟動 GFP』），隨後 PM Agent 將為您補完其他規格。")
+        if st.button("⚡ 略過對話，直接以大腸桿菌預設值啟動設計", use_container_width=True):
+            state.structured_spec = {
+                "chassis": "Escherichia coli",
+                "inputs": [{"name": "IPTG", "sensor_promoter": "pLac", "type": "input_sensor"}],
+                "outputs": [{"name": "sfGFP", "type": "reporter_gene"}],
+                "logic_relation": "sfGFP = IPTG",
+                "copy_number": 15
+            }
+            state.pm_stage = "completed"
+            st.session_state.run_message = ("success", "已略過前置對話，已載入預設規格。")
+            st.rerun()
+        return
+
+    # 2. 如果沒有 pending_proposal，嘗試初始化
+    if not state.pending_proposal:
+        config = st.session_state.get("llm_config", {})
+        api_key = config.get("api_key", "").strip() or None
+        model_name = config.get("model_name", "gpt-4o-mini").strip()
+        api_base = config.get("api_base", "").strip() or None
+        
+        # 顯示載入中
+        with st.spinner("設計經理正在分析意圖並規劃生物學預設推薦..."):
+            call_pm_agent(state, api_key=api_key, model_name=model_name, api_base=api_base)
+        st.rerun()
+
+    # 3. 呈現對話歷史
+    if not state.pm_chat_history:
+        state.pm_chat_history.append({
+            "role": "assistant",
+            "content": f"你好！我是您的設計經理。我看到您的意圖是：『{state.user_intent}』。為了保證後續的電路模擬與評分能順利成功，我會逐步向您提議規格設定，您只需確認或修改即可。"
+        })
+
+    chat_container = st.container(height=280, border=True)
+    with chat_container:
+        for msg in state.pm_chat_history:
+            with st.chat_message(msg["role"]):
+                st.write(msg["content"])
+
+    # 4. 如果有等待確認 copy_number
+    if state.pending_proposal and "missing_field" in state.pending_proposal:
+        proposal = state.pending_proposal
+        missing_field = proposal["missing_field"]
+        proposed_value = proposal["proposed_value"]
+        reason = proposal.get("proposal_reason", "無特定理由")
+        ui_msg = proposal.get("ui_message", f"我為您推薦了 {missing_field} 欄位的預設值，請問您同意嗎？")
+        source = proposal.get("source", "unknown")
+        confidence = proposal.get("confidence", "unknown")
+        
+        st.markdown(
+            f"""
+            <div class="hitl-panel" style="margin-top:15px; margin-bottom:15px; border-left:5px solid #2563eb; background-color:#f1f5f9;">
+                <h4 style="margin:0 0 5px 0; color:#2563eb; font-size:16px;">💡 設計經理推薦方案 ({missing_field.upper()})</h4>
+                <p style="margin:0 0 5px 0; font-size:12px; color:#64748b;">來源：{_escape_html(str(source))} · 信心：{_escape_html(str(confidence))}</p>
+                <p style="margin:0 0 5px 0; font-size:14px;"><strong>推薦預設：</strong><code>{json.dumps(proposed_value, ensure_ascii=False)}</code></p>
+                <p style="margin:0 0 5px 0; font-size:14px; color:#475569;"><strong>推薦原因：</strong>{reason}</p>
+                <div style="margin-top:8px; font-weight:bold; font-size:14px; color:#1e293b;">{ui_msg}</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("👍 同意推薦並繼續", type="primary", use_container_width=True):
+                # 寫入規格
+                state.structured_spec[missing_field] = proposed_value
+                # 對話紀錄
+                state.pm_chat_history.append({"role": "user", "content": f"同意使用推薦值：{json.dumps(proposed_value, ensure_ascii=False)}"})
+                state.pm_chat_history.append({"role": "assistant", "content": f"已儲存 {missing_field} 設定。"})
+                # 清除提案，以便下一步尋找新的缺失項
+                state.pending_proposal = {}
+                
+                config = st.session_state.get("llm_config", {})
+                api_key = config.get("api_key", "").strip() or None
+                model_name = config.get("model_name", "gpt-4o-mini").strip()
+                api_base = config.get("api_base", "").strip() or None
+                call_pm_agent(state, api_key=api_key, model_name=model_name, api_base=api_base)
+                st.rerun()
+
+        with col2:
+            if st.button("✏️ 自訂修改此項", use_container_width=True):
+                st.session_state.pm_show_custom_input = True
+
+        if st.session_state.get("pm_show_custom_input"):
+            st.markdown("---")
+            custom_input = st.text_input(
+                f"自訂 {missing_field} 設定:",
+                value=json.dumps(proposed_value, ensure_ascii=False) if not isinstance(proposed_value, (list, dict)) else ""
+            )
+            c_col1, c_col2 = st.columns([1, 4])
+            with c_col1:
+                if st.button("確認套用", type="primary", use_container_width=True):
+                    try:
+                        parsed_val = json.loads(custom_input)
+                    except Exception:
+                        if "," in custom_input:
+                            parsed_val = [x.strip() for x in custom_input.split(",")]
+                        else:
+                            parsed_val = custom_input
+                    
+                    state.structured_spec[missing_field] = parsed_val
+                    state.pm_chat_history.append({"role": "user", "content": f"我想要改為：{custom_input}"})
+                    state.pm_chat_history.append({"role": "assistant", "content": f"已自訂 {missing_field} 為: {json.dumps(parsed_val, ensure_ascii=False)}。"})
+                    state.pending_proposal = {}
+                    st.session_state.pm_show_custom_input = False
+                    
+                    config = st.session_state.get("llm_config", {})
+                    api_key = config.get("api_key", "").strip() or None
+                    model_name = config.get("model_name", "gpt-4o-mini").strip()
+                    api_base = config.get("api_base", "").strip() or None
+                    call_pm_agent(state, api_key=api_key, model_name=model_name, api_base=api_base)
+                    st.rerun()
+
+    # 呈現電路視覺化流程圖預覽
+    if state.structured_spec:
+        st.markdown("---")
+        st.subheader("📊 當前規格電路流程圖 (高階預覽)")
+        mermaid_code = _generate_mermaid_from_spec(state.structured_spec)
+        st.markdown(f"```mermaid\n{mermaid_code}\n```")
+
+    # 提供直接啟動選項
+    st.markdown("---")
+
+    if st.button("⚡ 結束對話，將剩餘項目套用預設值並直接啟動設計", use_container_width=True):
+        fallbacks = {
+            "chassis": "Escherichia coli",
+            "inputs": [{"name": "IPTG", "sensor_promoter": "pLac", "type": "input_sensor"}],
+            "outputs": [{"name": "sfGFP", "type": "reporter_gene"}],
+            "logic_relation": "sfGFP = IPTG",
+            "copy_number": 15
+        }
+        for k, v in fallbacks.items():
+            if k not in state.structured_spec:
+                state.structured_spec[k] = v
+        state.pm_stage = "completed"
+        state.pending_proposal = {}
+        st.session_state.run_message = ("success", "已略過剩餘對話，規格已齊全，可開始執行設計。")
+        st.rerun()
+
+
 def _escape_html(value: str) -> str:
+    value = str(value)
     return (
         value.replace("&", "&amp;")
         .replace("<", "&lt;")
@@ -1816,3 +3344,4 @@ def _escape_html(value: str) -> str:
 
 if __name__ == "__main__":
     main()
+

@@ -2,20 +2,7 @@ from __future__ import annotations
 
 import json
 import sys
-import types
 from pathlib import Path
-
-litellm_stub = types.ModuleType("litellm")
-litellm_stub.completion = lambda **_: None
-litellm_exceptions_stub = types.ModuleType("litellm.exceptions")
-for name in ["AuthenticationError", "RateLimitError", "BadRequestError", "APIError"]:
-    setattr(litellm_exceptions_stub, name, type(name, (Exception,), {}))
-litellm_caching_stub = types.ModuleType("litellm.caching")
-litellm_caching_stub.Cache = lambda **_: object()
-litellm_stub.exceptions = litellm_exceptions_stub
-sys.modules.setdefault("litellm", litellm_stub)
-sys.modules.setdefault("litellm.exceptions", litellm_exceptions_stub)
-sys.modules.setdefault("litellm.caching", litellm_caching_stub)
 
 from agents.builder_agent import call_builder
 from agents.skill_extractor_agent import SkillExtractorAgent
@@ -72,15 +59,56 @@ def test_oracle_returns_error_without_verilog(tmp_path: Path) -> None:
 
 def test_skill_retriever_loads_json_and_returns_motif_snippets() -> None:
     retriever = SkillRetriever.from_json_file("邏輯設計skill.json")
+    raw_skills = json.loads(Path("邏輯設計skill.json").read_text(encoding="utf-8"))
 
     xor = retriever.retrieve_skills("xor boolean decomposition", k=2)
     nor = retriever.retrieve_skills("nor promoter gate", k=2)
+    empty_query = retriever.retrieve_skills("", k=2)
 
-    assert len(retriever.skills) == 13
+    assert len(retriever.skills) == 16
+    assert len(retriever.core_skills) == 16
+    assert all(record.get("skill_name") for record in raw_skills)
+    assert all(record.get("motif_name") for record in raw_skills)
+    assert retriever.memory_skills == []
+    assert "Canonical logic skill catalog" in xor
     assert "XOR_GATE" in xor
+    assert "BAND_PASS_FILTER" in xor
+    assert "CELLO_COMPATIBILITY_POLICY" in xor
+    assert "DESIGN_REPAIR_PLAYBOOK" in xor
+    assert "REQUIREMENT_ANALYSIS_PLAYBOOK" in xor
     assert "NOR_GATE" in nor
     assert "Boolean template" in xor
-    assert retriever.retrieve_skills("", k=2) == ""
+    assert "Canonical logic skill catalog" in empty_query
+
+
+def test_skill_retriever_retrieves_extracted_memory_separately(tmp_path: Path) -> None:
+    memory_path = tmp_path / "extracted.jsonl"
+    memory_path.write_text(
+        json.dumps(
+            {
+                "title": "Avoid unstable XOR mapping",
+                "summary": "Use a simpler NOR decomposition after repeated mapping failures.",
+                "memory_kind": "avoid",
+                "confidence_score": 0.9,
+                "tags": ["failure/part-error", "mapping/failed"],
+                "search_text": "xor mapping failure recovery",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    retriever = SkillRetriever.from_json_file(
+        "邏輯設計skill.json",
+        include_extracted=True,
+        extracted_path=memory_path,
+    )
+
+    result = retriever.retrieve_skills("xor mapping failure", mode="Repair", k=2)
+
+    assert len(retriever.core_skills) == 16
+    assert len(retriever.memory_skills) == 1
+    assert "Canonical logic skill catalog" in result
+    assert "Avoid unstable XOR mapping" in result
 
 
 def test_skill_retriever_default_path_is_repo_relative(monkeypatch, tmp_path: Path) -> None:
@@ -88,7 +116,7 @@ def test_skill_retriever_default_path_is_repo_relative(monkeypatch, tmp_path: Pa
 
     retriever = SkillRetriever.from_json_file()
 
-    assert len(retriever.skills) == 13
+    assert len(retriever.skills) == 16
 
 
 def test_core_text_files_are_valid_utf8_without_replacement_characters() -> None:
@@ -399,6 +427,51 @@ def test_metabolic_scorer_handles_file_read_failure(tmp_path: Path) -> None:
     assert result.complexity_penalty == 1.0
 
 
+def test_metabolic_scorer_dynamic_gate_limit() -> None:
+    # 1. Without truth table: should fallback to DEFAULT_IDEAL_GATE_LIMIT = 3
+    result_default = MetabolicBurdenEvaluator().evaluate({"gate_count": 4})
+    assert result_default.details["ideal_gate_limit"] == 3
+    # gate count 4 > limit 3 -> penalized
+    assert result_default.metabolic_burden_score < 1.0
+
+    # 2. With 2-input truth table: dynamic limit = max(3, 2*2 + 1) = 5
+    candidate_2_inputs = {
+        "gate_count": 4,
+        "truth_table": [
+            {"A": 0, "B": 0, "Y": 0},
+            {"A": 1, "B": 1, "Y": 1}
+        ]
+    }
+    result_2_inputs = MetabolicBurdenEvaluator().evaluate(candidate_2_inputs)
+    assert result_2_inputs.details["ideal_gate_limit"] == 5
+    # gate count 4 <= limit 5 -> no penalty
+    assert result_2_inputs.metabolic_burden_score == 1.0
+
+    # 3. With 3-input truth table: dynamic limit = max(3, 2*3 + 1) = 7
+    candidate_3_inputs = {
+        "gate_count": 6,
+        "truth_table_or_logic_matrix": [
+            {"In1": 0, "In2": 0, "In3": 0, "output": 0}
+        ]
+    }
+    result_3_inputs = MetabolicBurdenEvaluator().evaluate(candidate_3_inputs)
+    assert result_3_inputs.details["ideal_gate_limit"] == 7
+    # gate count 6 <= limit 7 -> no penalty
+    assert result_3_inputs.metabolic_burden_score == 1.0
+
+    # 4. Verification that explicit override via candidate metadata is respected
+    candidate_override = {
+        "gate_count": 4,
+        "ideal_gate_limit": 2,
+        "truth_table": [
+            {"A": 0, "B": 0, "Y": 0}
+        ]
+    }
+    result_override = MetabolicBurdenEvaluator().evaluate(candidate_override)
+    assert result_override.details["ideal_gate_limit"] == 2
+    assert result_override.metabolic_burden_score < 1.0
+
+
 def test_builder_prompt_includes_retrieved_skills_and_apply_instruction(monkeypatch) -> None:
     captured = {}
 
@@ -416,9 +489,9 @@ def test_builder_prompt_includes_retrieved_skills_and_apply_instruction(monkeypa
     result = call_builder(state, api_key=None, model_name="mock", skill_retriever=Retriever())
 
     assert result.last_error is None
-    assert "Retrieved Design Memory" in captured["system_prompt"]
+    assert "Logic Design Skill Context" in captured["system_prompt"]
     assert "Motif: XOR_GATE" in captured["system_prompt"]
-    assert "Apply reusable successful patterns" in captured["system_prompt"]
+    assert "Use these motif definitions as design constraints" in captured["system_prompt"]
 
 
 def test_cello_wrapper_mock_mode_is_unchanged() -> None:
@@ -429,6 +502,9 @@ def test_cello_wrapper_mock_mode_is_unchanged() -> None:
 
     topology = result.candidate_topologies[0]
     assert topology["source"] == "mock_cello_wrapper"
+    assert topology["cello_mode"] == "mock"
+    assert topology["cello_claim_level"] == "mock_only"
+    assert "workflow placeholder" in topology["cello_warning"]
     assert topology["mapping_status"] == "unmapped"
     assert topology["orthogonality_score"] == 1.0
     assert topology["cello_assignment_score"] == 0.0
@@ -449,6 +525,8 @@ def test_cello_wrapper_external_failure_becomes_mapping_failed_topology() -> Non
 
     assert result.last_error is None
     assert topology["mapping_status"] == "MAPPING_FAILED"
+    assert topology["cello_mode"] == "external"
+    assert topology["cello_claim_level"] == "external_mapping_failed"
     assert topology["error_type"] == "PART_ERROR"
     assert topology["cello_buildable"] is False
     assert topology["mapping_error_category"] == "UCF_INCOMPATIBLE"
@@ -464,10 +542,56 @@ def test_cello_wrapper_external_success_marks_topology_buildable() -> None:
     topology = result.candidate_topologies[0]
 
     assert topology["mapping_status"] == "mapped"
+    assert topology["cello_mode"] == "external"
+    assert topology["cello_claim_level"] == "externally_mapped"
     assert topology["cello_buildable"] is True
     assert topology["cello_assignment_score"] == 0.92
     assert topology["orthogonality_score"] == 1.0
     assert topology["toxicity"] == 0.08
+
+
+def test_cello_wrapper_persists_output_directory_manifest(tmp_path: Path) -> None:
+    state = DesignState()
+    state.verilog_codes = ["module c(input A, output Y); assign Y = A; endmodule"]
+    command = [
+        sys.executable,
+        "-c",
+        (
+            "import json, pathlib, sys; "
+            "out=pathlib.Path(sys.argv[1]); "
+            "(out/'nested').mkdir(parents=True, exist_ok=True); "
+            "(out/'nested'/'assignment.json').write_text("
+            "json.dumps({'gate':'Y','part':'TetR'}), encoding='utf-8'); "
+            "print('Gate Assignment Score: 90')"
+        ),
+        "{output_dir}",
+    ]
+
+    result = CelloWrapper(
+        cello_command=command,
+        artifact_dir=tmp_path / "cello_artifacts",
+        timeout_seconds=5,
+    ).run(state)
+    topology = result.candidate_topologies[0]
+    manifest_path = Path(topology["cello_artifact_manifest_path"])
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+    assert manifest_path.exists()
+    assert manifest["status"] == "mapped"
+    assert manifest["return_code"] == 0
+    assert {item["relative_path"] for item in manifest["files"]} >= {
+        "output/nested/assignment.json",
+        "stdout.log",
+        "stderr.log",
+        "candidate_0.v",
+    }
+    assignment_entry = next(
+        item for item in manifest["files"]
+        if item["relative_path"] == "output/nested/assignment.json"
+    )
+    assert assignment_entry["size_bytes"] > 0
+    assert len(assignment_entry["sha256"]) == 64
+    assert Path(assignment_entry["absolute_path"]).exists()
 
 
 def test_cello_wrapper_timeout_becomes_mapping_failed_topology() -> None:

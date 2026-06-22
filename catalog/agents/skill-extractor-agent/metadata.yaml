@@ -1,0 +1,32 @@
+id: skill-extractor-agent
+name: Skill Extractor Agent
+schema_version: agent-metadata-v1
+module: agents.skill_extractor_agent
+entrypoint: SkillExtractorAgent
+role: workflow_memory_extraction
+summary: Converts successful and failed workflow traces into reusable design-memory records.
+inputs:
+  - user_intent
+  - tree_nodes
+  - best_topology
+  - failed_attempts
+  - critic_feedbacks
+outputs:
+  - extracted_skills
+  - skill_memory_records
+tools:
+  - obsidian_writer
+  - vector_db
+  - jsonl_memory_store
+claim_level: workflow_memory
+requires_expert_review: true
+risk_notes:
+  - Extracted memories can encode heuristic or failed-design lessons and should not be treated as validated biological knowledge.
+  - Memory records may require curation before reuse in future design runs.
+failure_modes:
+  - Capturing a false positive design as success memory.
+  - Missing key failure context.
+tags:
+  - agent
+  - memory
+  - reflexion

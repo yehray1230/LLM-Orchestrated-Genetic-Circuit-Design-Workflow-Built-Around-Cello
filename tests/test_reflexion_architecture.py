@@ -1,20 +1,6 @@
 from __future__ import annotations
 
 import json
-import sys
-import types
-
-litellm_stub = types.ModuleType("litellm")
-litellm_stub.completion = lambda **_: None
-litellm_exceptions_stub = types.ModuleType("litellm.exceptions")
-for name in ["AuthenticationError", "RateLimitError", "BadRequestError", "APIError"]:
-    setattr(litellm_exceptions_stub, name, type(name, (Exception,), {}))
-litellm_caching_stub = types.ModuleType("litellm.caching")
-litellm_caching_stub.Cache = lambda **_: object()
-litellm_stub.exceptions = litellm_exceptions_stub
-sys.modules.setdefault("litellm", litellm_stub)
-sys.modules.setdefault("litellm.exceptions", litellm_exceptions_stub)
-sys.modules.setdefault("litellm.caching", litellm_caching_stub)
 
 from agents.builder_agent import BuilderAgent, call_builder
 from agents.critic_agent import (
@@ -432,6 +418,46 @@ def test_critic_forces_builder_feedback_for_cello_ucf_violation(monkeypatch) -> 
     assert "orthogonality_score" in captured["system_prompt"]
     assert "cello_buildable" in captured["user_content"]
     assert CELLO_UCF_GUIDANCE in feedback
+
+
+def test_critic_allows_mock_cello_buildability_failure(monkeypatch) -> None:
+    response = {
+        "reasoning": "Cello assignment is mock, but logic is correct and acceptable.",
+        "score": 0.85,
+        "benchmark_summary": "mock workflow scaffold",
+        "is_approved": True,
+        "error_type": "NONE",
+        "routing_target": "Consolidator",
+        "recoverable": True,
+        "requires_human_input": False,
+        "feedback": "Mock Cello is acceptable.",
+    }
+    monkeypatch.setattr("agents.critic_agent.call_llm", lambda **_: json.dumps(response))
+
+    state = DesignState(user_intent="A and not B")
+    state.current_node_id = "root"
+    state.tree_nodes["root"] = SearchNode(
+        node_id="root",
+        logic_proposals=["Y = A AND NOT B"],
+        best_topology={
+            "score": 0.85,
+            "mapping_status": "unmapped",
+            "cello_mode": "mock",
+            "cello_claim_level": "mock_only",
+            "benchmark_report": {
+                "score": 0.85,
+                "orthogonality_score": 1.0,
+                "cello_assignment_score": 0.0,
+                "cello_buildable": False,
+                "cello_mode": "mock",
+                "cello_claim_level": "mock_only",
+            },
+        },
+    )
+
+    result = CriticAgent(api_key=None, model_name="mock").run(state)
+    assert result.tree_nodes["root"].is_approved is True
+    assert result.tree_nodes["root"].error_type == "NONE"
 
 
 def test_critic_forces_precise_feedback_for_low_semantic_faithfulness(monkeypatch) -> None:

@@ -1,0 +1,33 @@
+id: translator-agent
+name: Translator Agent
+schema_version: agent-metadata-v1
+module: agents.translator_agent
+entrypoint: call_translator
+role: verilog_translation
+summary: Converts structured logic proposals into validated Cello-compatible combinational Verilog.
+inputs:
+  - logic_proposals
+  - current_topology
+  - skill_context
+  - critic_feedbacks
+outputs:
+  - verilog_codes
+  - last_error
+tools:
+  - litellm
+  - verilog_static_checks
+downstream_agents:
+  - data-miner-agent
+claim_level: cello_compatible_candidate
+requires_expert_review: true
+risk_notes:
+  - Verilog syntax compatibility does not imply successful Cello part mapping.
+  - Cello-compatible output is still a computational design artifact.
+failure_modes:
+  - Missing complete Verilog module.
+  - Sequential or delayed Verilog constructs.
+  - No combinational primitive or assign statement.
+tags:
+  - agent
+  - verilog
+  - cello

@@ -1,0 +1,303 @@
+{
+  "agent_count": 7,
+  "agents": [
+    {
+      "claim_level": "computational_candidate",
+      "downstream_agents": [
+        "translator-agent"
+      ],
+      "entrypoint": "BuilderAgent",
+      "failure_modes": [
+        "Invalid Boolean interpretation.",
+        "Unsupported Cello construct.",
+        "Logic proposal ignores structured specification."
+      ],
+      "id": "builder-agent",
+      "inputs": [
+        "user_intent",
+        "structured_spec",
+        "skill_context",
+        "latest_critic_feedback"
+      ],
+      "module": "agents.builder_agent",
+      "name": "Builder Agent",
+      "outputs": [
+        "logic_proposals",
+        "verilog_drafts",
+        "translator_directives"
+      ],
+      "requires_expert_review": true,
+      "risk_notes": [
+        "Produces candidate logic designs, not experimentally validated biological circuits.",
+        "Must avoid sequential logic unless the user explicitly requests non-combinational behavior."
+      ],
+      "role": "logic_design",
+      "schema_version": "agent-metadata-v1",
+      "source_path": "catalog\\agents\\builder-agent\\metadata.yaml",
+      "summary": "Generates three Cello-oriented Boolean circuit proposals and draft Verilog candidates.",
+      "tags": [
+        "agent",
+        "boolean-logic",
+        "design-generation"
+      ],
+      "tools": [
+        "skill_retriever",
+        "llm"
+      ]
+    },
+    {
+      "claim_level": "computational_candidate",
+      "downstream_agents": [
+        "skill-extractor-agent"
+      ],
+      "entrypoint": "ConsolidatorAgent",
+      "failure_modes": [
+        "Missing current node.",
+        "No selected best topology to promote."
+      ],
+      "id": "consolidator-agent",
+      "inputs": [
+        "current_node_id",
+        "tree_nodes"
+      ],
+      "module": "agents.consolidator_agent",
+      "name": "Consolidator Agent",
+      "outputs": [
+        "best_topology",
+        "is_approved",
+        "error_type",
+        "critic_feedbacks"
+      ],
+      "requires_expert_review": true,
+      "risk_notes": [
+        "Consolidates current workflow state and does not independently validate correctness."
+      ],
+      "role": "result_consolidation",
+      "schema_version": "agent-metadata-v1",
+      "source_path": "catalog\\agents\\consolidator-agent\\metadata.yaml",
+      "summary": "Copies the selected node-level result and review state back into the global design state.",
+      "tags": [
+        "agent",
+        "consolidation",
+        "workflow-state"
+      ],
+      "tools": []
+    },
+    {
+      "claim_level": "computational_candidate",
+      "downstream_agents": [
+        "builder-agent",
+        "consolidator-agent"
+      ],
+      "entrypoint": "CriticAgent",
+      "failure_modes": [
+        "Misclassifying a part issue as a logic issue.",
+        "Ignoring low-confidence simulation or mapping evidence.",
+        "Failing to pause for human input when semantics are ambiguous."
+      ],
+      "id": "critic-agent",
+      "inputs": [
+        "best_topology",
+        "benchmark_report",
+        "candidate_topologies",
+        "failed_attempts"
+      ],
+      "module": "agents.critic_agent",
+      "name": "Critic Agent",
+      "outputs": [
+        "critic_feedbacks",
+        "error_type",
+        "is_approved",
+        "requires_human_input"
+      ],
+      "requires_expert_review": true,
+      "risk_notes": [
+        "Approval means passing project heuristics, not wet-lab validation.",
+        "Scores and thresholds are decision aids rather than biological guarantees."
+      ],
+      "role": "candidate_review",
+      "schema_version": "agent-metadata-v1",
+      "source_path": "catalog\\agents\\critic-agent\\metadata.yaml",
+      "summary": "Reviews benchmark and topology signals to classify errors, request repair, or approve a candidate.",
+      "tags": [
+        "agent",
+        "review",
+        "repair-loop"
+      ],
+      "tools": [
+        "benchmark_report_interpreter",
+        "llm"
+      ]
+    },
+    {
+      "claim_level": "simulation_screening",
+      "downstream_agents": [
+        "critic-agent"
+      ],
+      "entrypoint": "DataMinerAgent",
+      "failure_modes": [
+        "Missing kinetic parameter coverage.",
+        "Unit normalization error.",
+        "Over-reliance on conservative defaults."
+      ],
+      "id": "data-miner-agent",
+      "inputs": [
+        "candidate_topologies",
+        "host_organism",
+        "logic_proposals",
+        "verilog_codes"
+      ],
+      "module": "agents.data_miner_agent",
+      "name": "Data Miner Agent",
+      "outputs": [
+        "candidate_topologies",
+        "biokinetic_context"
+      ],
+      "requires_expert_review": true,
+      "risk_notes": [
+        "Conservative defaults are screening assumptions, not calibrated measurements.",
+        "Retrieved parameter records may be incomplete or host-mismatched."
+      ],
+      "role": "kinetic_context_enrichment",
+      "schema_version": "agent-metadata-v1",
+      "source_path": "catalog\\agents\\data-miner-agent\\metadata.yaml",
+      "summary": "Adds host-aware biokinetic parameter context to candidate topologies before simulation and scoring.",
+      "tags": [
+        "agent",
+        "kinetics",
+        "simulation"
+      ],
+      "tools": [
+        "vector_retriever",
+        "unit_conversion"
+      ]
+    },
+    {
+      "claim_level": "planning_only",
+      "downstream_agents": [
+        "builder-agent"
+      ],
+      "entrypoint": "call_pm_agent",
+      "failure_modes": [
+        "Missing or ambiguous chassis, input, output, or logic relation.",
+        "Over-interpreting a dynamic behavior request as combinational logic."
+      ],
+      "id": "pm-agent",
+      "inputs": [
+        "user_intent",
+        "pm_chat_history",
+        "structured_spec"
+      ],
+      "module": "agents.pm_agent",
+      "name": "PM Agent",
+      "outputs": [
+        "structured_spec",
+        "pending_proposal",
+        "human_feedback_prompt"
+      ],
+      "requires_expert_review": true,
+      "risk_notes": [
+        "Suggests biological defaults but does not prove biological feasibility.",
+        "User-facing defaults must remain distinguishable from explicit user requirements."
+      ],
+      "role": "specification_elicitation",
+      "schema_version": "agent-metadata-v1",
+      "source_path": "catalog\\agents\\pm-agent\\metadata.yaml",
+      "summary": "Builds and completes a structured design specification from a natural-language circuit request.",
+      "tags": [
+        "agent",
+        "elicitation",
+        "human-in-the-loop"
+      ],
+      "tools": [
+        "litellm"
+      ]
+    },
+    {
+      "claim_level": "workflow_memory",
+      "downstream_agents": [],
+      "entrypoint": "SkillExtractorAgent",
+      "failure_modes": [
+        "Capturing a false positive design as success memory.",
+        "Missing key failure context."
+      ],
+      "id": "skill-extractor-agent",
+      "inputs": [
+        "user_intent",
+        "tree_nodes",
+        "best_topology",
+        "failed_attempts",
+        "critic_feedbacks"
+      ],
+      "module": "agents.skill_extractor_agent",
+      "name": "Skill Extractor Agent",
+      "outputs": [
+        "extracted_skills",
+        "skill_memory_records"
+      ],
+      "requires_expert_review": true,
+      "risk_notes": [
+        "Extracted memories can encode heuristic or failed-design lessons and should not be treated as validated biological knowledge.",
+        "Memory records may require curation before reuse in future design runs."
+      ],
+      "role": "workflow_memory_extraction",
+      "schema_version": "agent-metadata-v1",
+      "source_path": "catalog\\agents\\skill-extractor-agent\\metadata.yaml",
+      "summary": "Converts successful and failed workflow traces into reusable design-memory records.",
+      "tags": [
+        "agent",
+        "memory",
+        "reflexion"
+      ],
+      "tools": [
+        "obsidian_writer",
+        "vector_db",
+        "jsonl_memory_store"
+      ]
+    },
+    {
+      "claim_level": "cello_compatible_candidate",
+      "downstream_agents": [
+        "data-miner-agent"
+      ],
+      "entrypoint": "call_translator",
+      "failure_modes": [
+        "Missing complete Verilog module.",
+        "Sequential or delayed Verilog constructs.",
+        "No combinational primitive or assign statement."
+      ],
+      "id": "translator-agent",
+      "inputs": [
+        "logic_proposals",
+        "current_topology",
+        "skill_context",
+        "critic_feedbacks"
+      ],
+      "module": "agents.translator_agent",
+      "name": "Translator Agent",
+      "outputs": [
+        "verilog_codes",
+        "last_error"
+      ],
+      "requires_expert_review": true,
+      "risk_notes": [
+        "Verilog syntax compatibility does not imply successful Cello part mapping.",
+        "Cello-compatible output is still a computational design artifact."
+      ],
+      "role": "verilog_translation",
+      "schema_version": "agent-metadata-v1",
+      "source_path": "catalog\\agents\\translator-agent\\metadata.yaml",
+      "summary": "Converts structured logic proposals into validated Cello-compatible combinational Verilog.",
+      "tags": [
+        "agent",
+        "verilog",
+        "cello"
+      ],
+      "tools": [
+        "litellm",
+        "verilog_static_checks"
+      ]
+    }
+  ],
+  "schema_version": "agent-registry-v1"
+}

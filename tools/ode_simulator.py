@@ -20,6 +20,13 @@ except ModuleNotFoundError:
     Memory = None
 
 from agents.data_miner_agent import DEFAULT_BIOKINETIC_PARAMETERS
+from schemas.simulation import (
+    SIMULATION_MODEL_VERSION,
+    SimulationResult,
+    parse_logic_value,
+    simulation_spec_from_topology,
+    stable_seed,
+)
 from schemas.state import DesignState
 
 
@@ -73,19 +80,231 @@ class WarmStartResourceSolver:
         return x + bound - total, derivative
 
 
+def _strip_verilog_comments(verilog: str) -> str:
+    without_block = re.sub(r"/\*.*?\*/", "", verilog, flags=re.DOTALL)
+    return re.sub(r"//.*", "", without_block)
+
+
+def _clean_signal_name(value: str) -> str:
+    value = re.sub(r"\b(?:input|output|wire|reg)\b", "", value, flags=re.IGNORECASE)
+    value = re.sub(r"\[[^\]]+\]", "", value)
+    match = re.search(r"[A-Za-z_]\w*", value.strip())
+    return match.group(0) if match else ""
+
+
+def _extract_verilog_signals(code: str) -> tuple[set[str], set[str], set[str]]:
+    signals: dict[str, set[str]] = {"input": set(), "output": set(), "wire": set()}
+    for keyword in signals:
+        for match in re.finditer(rf"\b{keyword}\b\s*(?:\[[^\]]+\]\s*)?([^;);]+)", code, flags=re.IGNORECASE):
+            declaration = re.split(r"\b(?:input|output|wire|module|endmodule)\b", match.group(1), flags=re.IGNORECASE)[0]
+            for name in re.split(r",", declaration):
+                signal = _clean_signal_name(name)
+                if signal:
+                    signals[keyword].add(signal)
+        for match in re.finditer(rf"\b{keyword}\b\s*(?:\[[^\]]+\]\s*)?([A-Za-z_]\w*)", code, flags=re.IGNORECASE):
+            signals[keyword].add(match.group(1))
+    return signals["input"], signals["output"], signals["wire"]
+
+
+def parse_verilog_netlist(verilog: str) -> tuple[dict[str, str], dict[str, tuple[str, list[str]]]]:
+    code = _strip_verilog_comments(verilog)
+    inputs, outputs, wires = _extract_verilog_signals(code)
+
+    signals = {}
+    for inp in inputs:
+        signals[inp] = "input"
+    for out in outputs:
+        signals[out] = "output"
+    for w in wires:
+        signals.setdefault(w, "wire")
+
+    deps = {}
+
+    # 1. Parse primitive gates
+    for gate, body in re.findall(
+        r"\b(and|or|not|nand|nor|xor|xnor|buf)\s+(?:[A-Za-z_]\w*\s*)?\(([^;]+?)\)\s*;",
+        code,
+        flags=re.IGNORECASE | re.DOTALL
+    ):
+        parts = [_clean_signal_name(p) for p in body.split(",") if p.strip()]
+        parts = [p for p in parts if p]
+        if len(parts) >= 2:
+            out_sig = parts[0]
+            in_sigs = parts[1:]
+            deps[out_sig] = (gate.lower(), in_sigs)
+            signals.setdefault(out_sig, "wire" if out_sig not in outputs else "output")
+            for sig in in_sigs:
+                if sig not in signals:
+                    signals[sig] = "wire"
+
+    # 2. Parse assign statements
+    for lhs, rhs in re.findall(
+        r"\bassign\s+([^=;]+?)\s*=\s*([^;]+?)\s*;",
+        code,
+        flags=re.IGNORECASE | re.DOTALL
+    ):
+        out_sig = _clean_signal_name(lhs)
+        if not out_sig:
+            continue
+        rhs_expr = rhs.strip()
+        rhs_expr_clean = re.sub(r"\s+", "", rhs_expr)
+
+        # NOR pattern
+        nor_match = re.match(r"^[~!]\(([^|)]+)(?:\|\||\|)([^|)]+)\)$", rhs_expr_clean)
+        if nor_match:
+            in1 = _clean_signal_name(nor_match.group(1))
+            in2 = _clean_signal_name(nor_match.group(2))
+            deps[out_sig] = ("nor", [in1, in2])
+            signals.setdefault(out_sig, "wire" if out_sig not in outputs else "output")
+            continue
+
+        # NAND pattern
+        nand_match = re.match(r"^[~!]\(([^&)]+)(?:&&|&)([^&)]+)\)$", rhs_expr_clean)
+        if nand_match:
+            in1 = _clean_signal_name(nand_match.group(1))
+            in2 = _clean_signal_name(nand_match.group(2))
+            deps[out_sig] = ("nand", [in1, in2])
+            signals.setdefault(out_sig, "wire" if out_sig not in outputs else "output")
+            continue
+
+        # NOT pattern
+        not_match = re.match(r"^[~!]([A-Za-z_]\w*)$", rhs_expr_clean)
+        if not_match:
+            in1 = _clean_signal_name(not_match.group(1))
+            deps[out_sig] = ("not", [in1])
+            signals.setdefault(out_sig, "wire" if out_sig not in outputs else "output")
+            continue
+
+        # AND pattern
+        and_match = re.match(r"^([A-Za-z_]\w*)(?:&&|&)([A-Za-z_]\w*)$", rhs_expr_clean)
+        if and_match:
+            in1 = _clean_signal_name(and_match.group(1))
+            in2 = _clean_signal_name(and_match.group(2))
+            deps[out_sig] = ("and", [in1, in2])
+            signals.setdefault(out_sig, "wire" if out_sig not in outputs else "output")
+            continue
+
+        # OR pattern
+        or_match = re.match(r"^([A-Za-z_]\w*)(?:\|\||\|)([A-Za-z_]\w*)$", rhs_expr_clean)
+        if or_match:
+            in1 = _clean_signal_name(or_match.group(1))
+            in2 = _clean_signal_name(or_match.group(2))
+            deps[out_sig] = ("or", [in1, in2])
+            signals.setdefault(out_sig, "wire" if out_sig not in outputs else "output")
+            continue
+
+        # Buffer pattern
+        buf_match = re.match(r"^([A-Za-z_]\w*)$", rhs_expr_clean)
+        if buf_match:
+            in1 = _clean_signal_name(buf_match.group(1))
+            deps[out_sig] = ("buf", [in1])
+            signals.setdefault(out_sig, "wire" if out_sig not in outputs else "output")
+            continue
+
+    for name in inputs:
+        signals[name] = "input"
+    for name in outputs:
+        signals[name] = "output"
+
+    return signals, deps
+
+
 @dataclass
 class ResourceAwareSimulation:
-    gene_count: int
+    signals: dict[str, str]
+    deps: dict[str, tuple[str, list[str]]]
     params: dict[str, float]
     solver: WarmStartResourceSolver
     resource_trace: list[dict[str, float]] = field(default_factory=list)
 
-    def rhs(self, _time: float, y: np.ndarray) -> np.ndarray:
-        n = self.gene_count
-        mrna = np.maximum(y[:n], 0.0)
-        protein = np.maximum(y[n:], 0.0)
+    def __post_init__(self):
+        self.dynamic_signals = [name for name in sorted(self.signals.keys()) if self.signals[name] in ("wire", "output")]
+        self.signal_idx = {name: idx for idx, name in enumerate(self.dynamic_signals)}
 
-        promoter_demand = np.full(n, self.params["promoter_resource_demand"])
+    def rhs(self, _time: float, y: np.ndarray) -> np.ndarray:
+        y = np.maximum(y, 0.0)
+        n = len(self.dynamic_signals)
+        mrna = y[:n]
+        protein_immature = y[n:2*n]
+        protein_mature = y[2*n:]
+
+        protein_env = {}
+        for name, sig_type in self.signals.items():
+            if sig_type == "input":
+                protein_env[name] = self.params.get(f"input_{name}", 0.0)
+            else:
+                idx = self.signal_idx.get(name)
+                protein_env[name] = protein_mature[idx] if idx is not None else 0.0
+
+        regulation = np.ones(n)
+        promoter_demand = np.zeros(n)
+        
+        kd_vec = np.zeros(n)
+        hill_vec = np.zeros(n)
+        leak_vec = np.zeros(n)
+        
+        default_kd = self.params["kd"]
+        default_hill = self.params["hill_coefficient"]
+        default_leak = self.params["leak_fraction"]
+        
+        for idx, name in enumerate(self.dynamic_signals):
+            kd_vec[idx] = self.params.get(f"kd_{name}", default_kd)
+            hill_vec[idx] = self.params.get(f"hill_coefficient_{name}", default_hill)
+            leak_vec[idx] = self.params.get(f"leak_fraction_{name}", default_leak)
+            
+        base_demand = self.params.get("promoter_resource_demand", max(1.0, self.params["km_rnap"] * 0.35))
+        copy_number = self.params.get("copy_number", 1.0)
+
+        for idx, name in enumerate(self.dynamic_signals):
+            gate_type, gate_inputs = self.deps.get(name, (None, []))
+            reg_val = 1.0
+
+            kd = max(kd_vec[idx], 1e-9)
+            hill = max(hill_vec[idx], 1.0)
+            leak = max(0.0, min(1.0, leak_vec[idx]))
+
+            if gate_type and gate_inputs:
+                gate_type = gate_type.lower()
+                if gate_type == "not" and len(gate_inputs) == 1:
+                    rep_p = protein_env.get(gate_inputs[0], 0.0)
+                    reg_val = leak + (1.0 - leak) / (1.0 + np.power(rep_p / kd, hill))
+                elif gate_type == "nor" and len(gate_inputs) >= 1:
+                    for inp in gate_inputs:
+                        rep_p = protein_env.get(inp, 0.0)
+                        reg_val *= (leak + (1.0 - leak) / (1.0 + np.power(rep_p / kd, hill)))
+                elif gate_type == "nand" and len(gate_inputs) >= 1:
+                    active_frac = 1.0
+                    for inp in gate_inputs:
+                        rep_p = protein_env.get(inp, 0.0)
+                        active_frac *= (np.power(rep_p, hill) / (np.power(kd, hill) + np.power(rep_p, hill)))
+                    reg_val = 1.0 - (1.0 - leak) * active_frac
+                elif gate_type == "and" and len(gate_inputs) >= 1:
+                    active_frac = 1.0
+                    for inp in gate_inputs:
+                        rep_p = protein_env.get(inp, 0.0)
+                        active_frac *= (np.power(rep_p, hill) / (np.power(kd, hill) + np.power(rep_p, hill)))
+                    reg_val = leak + (1.0 - leak) * active_frac
+                elif gate_type == "or" and len(gate_inputs) >= 1:
+                    inactive_frac = 1.0
+                    for inp in gate_inputs:
+                        rep_p = protein_env.get(inp, 0.0)
+                        inactive_frac *= (1.0 - (np.power(rep_p, hill) / (np.power(kd, hill) + np.power(rep_p, hill))))
+                    reg_val = leak + (1.0 - leak) * (1.0 - inactive_frac)
+                elif gate_type in ("buf", "bufif1", "bufif0") and len(gate_inputs) == 1:
+                    rep_p = protein_env.get(gate_inputs[0], 0.0)
+                    reg_val = leak + (1.0 - leak) * (np.power(rep_p, hill) / (np.power(kd, hill) + np.power(rep_p, hill)))
+                else:
+                    if len(gate_inputs) == 1:
+                        rep_p = protein_env.get(gate_inputs[0], 0.0)
+                        reg_val = leak + (1.0 - leak) / (1.0 + np.power(rep_p / kd, hill))
+                    else:
+                        for inp in gate_inputs:
+                            rep_p = protein_env.get(inp, 0.0)
+                            reg_val *= (leak + (1.0 - leak) / (1.0 + np.power(rep_p / kd, hill)))
+
+            regulation[idx] = reg_val
+            promoter_demand[idx] = base_demand * reg_val * copy_number
+
         rnap_free, rnap_occupancy = self.solver.solve_rnap(
             self.params["rnap_total"], promoter_demand, self.params["km_rnap"]
         )
@@ -95,15 +314,31 @@ class ResourceAwareSimulation:
 
         rnap_factor = rnap_free / (self.params["km_rnap"] + rnap_free)
         ribo_factor = ribo_free / (self.params["km_ribosome"] + ribo_free)
-        regulation = self._hill_regulation(protein)
+
+        mu_max = self.params.get("growth_rate_dilution", 0.0004)
+        ribo_total = self.params.get("ribosome_total", 20000.0)
+        mu = mu_max * (ribo_free / max(ribo_total, 1e-9))
+        k_mat = self.params.get("maturation_rate", 0.0011)
+
+        mrna_deg = np.zeros(n)
+        protein_deg = np.zeros(n)
+        default_mrna_deg = self.params["mrna_degradation_rate"]
+        default_protein_deg = self.params["protein_degradation_rate"]
+        for idx, name in enumerate(self.dynamic_signals):
+            mrna_deg[idx] = self.params.get(f"mrna_degradation_rate_{name}", default_mrna_deg)
+            protein_deg[idx] = self.params.get(f"protein_degradation_rate_{name}", default_protein_deg)
 
         d_mrna = (
-            self.params["transcription_rate"] * regulation * rnap_factor
-            - self.params["mrna_degradation_rate"] * mrna
+            self.params["transcription_rate"] * copy_number * regulation * rnap_factor
+            - (mrna_deg + mu) * mrna
         )
-        d_protein = (
+        d_protein_immature = (
             self.params["translation_rate"] * mrna * ribo_factor
-            - self.params["protein_degradation_rate"] * protein
+            - (protein_deg + k_mat + mu) * protein_immature
+        )
+        d_protein_mature = (
+            k_mat * protein_immature
+            - (protein_deg + mu) * protein_mature
         )
 
         self.resource_trace.append(
@@ -112,22 +347,10 @@ class ResourceAwareSimulation:
                 "ribosome_free": ribo_free,
                 "rnap_occupancy": rnap_occupancy,
                 "ribosome_occupancy": ribo_occupancy,
-                "burden_nM": float(np.sum(mrna) + np.sum(protein)),
+                "burden_nM": float(np.sum(mrna) + np.sum(protein_immature) + np.sum(protein_mature)),
             }
         )
-        return np.concatenate([d_mrna, d_protein])
-
-    def _hill_regulation(self, protein: np.ndarray) -> np.ndarray:
-        n = self.gene_count
-        regulation = np.ones(n)
-        if n <= 1:
-            return regulation
-        kd = max(self.params["kd"], 1e-9)
-        hill = max(self.params["hill_coefficient"], 1.0)
-        leak = _clamp01(self.params["leak_fraction"])
-        repressors = protein[:-1]
-        regulation[1:] = leak + (1.0 - leak) / (1.0 + np.power(repressors / kd, hill))
-        return regulation
+        return np.concatenate([d_mrna, d_protein_immature, d_protein_mature])
 
 
 class BatchODESimulator:
@@ -139,12 +362,14 @@ class BatchODESimulator:
         noise_fraction: float = 0.15,
         noise_level: float | None = None,
         cache_dir: str | None = None,
+        random_seed: int | None = None,
     ):
         self.simulation_time = simulation_time
         self.sample_count = sample_count
         self.monte_carlo_samples = max(1, int(monte_carlo_samples))
         selected_noise = noise_fraction if noise_level is None else noise_level
         self.noise_fraction = max(0.0, float(selected_noise))
+        self.random_seed = random_seed
         self._memory = Memory(cache_dir, verbose=0) if cache_dir and Memory is not None else None
         self._local_cache: dict[tuple, dict[str, Any]] = {}
 
@@ -158,10 +383,50 @@ class BatchODESimulator:
         state.candidate_topologies = topologies
         return state
 
+    def simulate_topology(self, topology: dict[str, Any]) -> dict[str, Any]:
+        selected = deepcopy(topology)
+        self._simulate_topology(selected, 0)
+        return selected
+
     def _simulate_topology(self, topology: dict[str, Any], index: int) -> None:
-        gene_count = _infer_gene_count(topology)
+        verilog = str(topology.get("verilog") or "")
+        signals, deps = parse_verilog_netlist(verilog)
+        dynamic_signals = [name for name in sorted(signals.keys()) if signals[name] in ("wire", "output")]
+        gene_count = len(dynamic_signals)
+
+        if gene_count == 0:
+            fallback_count = _infer_gene_count(topology)
+            signals = {f"G_{i}": "wire" for i in range(fallback_count)}
+            signals["G_0"] = "input"
+            signals[f"G_{fallback_count-1}"] = "output"
+            deps = {f"G_{i}": ("not", [f"G_{i-1}"]) for i in range(1, fallback_count)}
+            dynamic_signals = [name for name in sorted(signals.keys()) if signals[name] in ("wire", "output")]
+            gene_count = len(dynamic_signals)
+
+        output_signals = [name for name in sorted(signals.keys()) if signals[name] == "output"]
+        target_output = output_signals[0] if output_signals else (dynamic_signals[-1] if dynamic_signals else None)
+        target_idx = dynamic_signals.index(target_output) if target_output in dynamic_signals else -1
+        input_signals = [name for name in sorted(signals.keys()) if signals[name] == "input"]
+        spec = simulation_spec_from_topology(
+            topology,
+            simulation_time=self.simulation_time,
+            sample_count=self.sample_count,
+            monte_carlo_samples=self.monte_carlo_samples,
+            noise_fraction=self.noise_fraction,
+            input_signals=input_signals,
+            target_output=target_output,
+            random_seed=self.random_seed,
+        )
+
+        truth_table = topology.get("truth_table") or topology.get("truth_table_or_logic_matrix") or topology.get("logic_matrix") or []
+        if not isinstance(truth_table, list) or len(truth_table) == 0:
+            default_row = {inp: 1 for inp in input_signals}
+            default_row["Y"] = 1
+            truth_table = [default_row]
+
         biokinetic_parameters = topology.get("biokinetic_parameters", {})
         params = _flatten_parameters(biokinetic_parameters)
+        params["copy_number"] = spec.copy_number
         parameter_provenance = _parameter_provenance(biokinetic_parameters)
         params["promoter_resource_demand"] = max(1.0, params["km_rnap"] * 0.35)
         physical_assignment_metrics = _physical_assignment_metrics(topology)
@@ -175,6 +440,7 @@ class BatchODESimulator:
             self.sample_count,
             self.monte_carlo_samples,
             self.noise_fraction,
+            spec.configuration_hash,
         )
         cached = self._get_cached(cache_key)
         if cached is not None:
@@ -182,9 +448,66 @@ class BatchODESimulator:
             return
 
         t_eval = np.linspace(0.0, self.simulation_time, self.sample_count)
-        simulation, result = self._run_single_simulation(gene_count, params, t_eval)
+        all_row_metrics = []
+        on_values = []
+        off_values = []
+        best_result = None
+        best_resource_trace = None
+        best_final_val = -1.0
+        success = True
+        error_msg = ""
 
-        if result is None or not result.success:
+        first_row = truth_table[0] if truth_table else {}
+        output_key = None
+        for key in ("Y", "OUT", "OUTPUT", "Z", "output", "out"):
+            if key in first_row:
+                output_key = key
+                break
+        if not output_key:
+            other_keys = [k for k in first_row.keys() if k not in input_signals]
+            output_key = other_keys[0] if other_keys else None
+
+        for row in truth_table:
+            row_params = params.copy()
+            for inp in input_signals:
+                val = row.get(inp, row.get(inp.upper(), row.get(inp.lower(), 1)))
+                is_high = False
+                if isinstance(val, str):
+                    is_high = val.strip().lower() in ("1", "true", "yes", "high", "on")
+                else:
+                    is_high = bool(val)
+                row_params[f"input_{inp}"] = 200.0 if is_high else 0.0
+
+            simulation, result = self._run_single_simulation(signals, deps, row_params, t_eval)
+            if result is None or not result.success:
+                success = False
+                error_msg = getattr(result, "message", "ODE simulation failed.")
+                break
+
+            row_metrics = _simulation_metrics(result.y, simulation.resource_trace, row_params, target_idx)
+            all_row_metrics.append(row_metrics)
+
+            final_val = float(result.y[2 * gene_count + target_idx, -1]) if target_idx != -1 else 0.0
+            expected_out = parse_logic_value(row[output_key], True) if output_key is not None else True
+            if expected_out:
+                on_values.append(final_val)
+            else:
+                off_values.append(final_val)
+
+            if final_val > best_final_val or best_result is None:
+                best_final_val = final_val
+                best_result = result
+                best_resource_trace = simulation.resource_trace
+
+        if not success or best_result is None:
+            simulation_result = SimulationResult(
+                status="failed",
+                configuration_hash=spec.configuration_hash,
+                parameter_set_hash=spec.parameter_set_hash,
+                scenario_set_hash=spec.scenario_set_hash,
+                error=error_msg,
+                solver={"methods": spec.solver_methods},
+            )
             updates = {
                 "ode_status": "failed",
                 "kinetic_score": 0.0,
@@ -192,27 +515,61 @@ class BatchODESimulator:
                 "signal_to_noise_ratio": 0.0,
                 "monte_carlo_runs": self.monte_carlo_samples,
                 "score": 0.0,
+                "simulation_model_version": SIMULATION_MODEL_VERSION,
+                "simulation_spec": spec.to_dict(),
+                "simulation_result": simulation_result.to_dict(),
                 "benchmark_report": {
                     "score": 0.0,
                     "robustness_score": 0.0,
                     "signal_to_noise_ratio": 0.0,
                     "monte_carlo_runs": self.monte_carlo_samples,
                     **physical_assignment_metrics,
-                    "details": [{"metric": "kinetic", "status": "ode_failed"}],
+                    "details": [{"metric": "kinetic", "status": "ode_failed", "error": error_msg}],
                 },
             }
             topology.update(updates)
             self._set_cached(cache_key, updates)
             return
 
-        metrics = _simulation_metrics(result.y, simulation.resource_trace, params)
-        ode_trace = _simulation_trace(t_eval, result.y, simulation.resource_trace)
+        max_burden = max(m["max_burden_nM"] for m in all_row_metrics)
+        max_rnap_occ = max(m["rnap_occupancy_max"] for m in all_row_metrics)
+        max_ribo_occ = max(m["ribosome_occupancy_max"] for m in all_row_metrics)
+        min_rnap_free = min(m["rnap_free_min"] for m in all_row_metrics)
+        min_ribo_free = min(m["ribosome_free_min"] for m in all_row_metrics)
+        avg_cv = float(np.mean([m["output_cv"] for m in all_row_metrics]))
+        avg_snr = float(np.mean([m["signal_to_noise_ratio"] for m in all_row_metrics]))
+
+        min_on = min(on_values) if on_values else 0.0
+        max_off = max(off_values) if off_values else 0.0
+        dynamic_margin = min_on - max_off
+
+        metrics = {
+            "max_burden_nM": max_burden,
+            "output_cv": avg_cv,
+            "signal_to_noise_ratio": avg_snr,
+            "dynamic_margin": dynamic_margin,
+            "rnap_occupancy_max": max_rnap_occ,
+            "ribosome_occupancy_max": max_ribo_occ,
+            "rnap_free_min": min_rnap_free,
+            "ribosome_free_min": min_ribo_free,
+            "resource_capacity_factor": min(
+                1.0,
+                0.5 * params["rnap_total"] / DEFAULT_BIOKINETIC_PARAMETERS["rnap_total"]["value"]
+                + 0.5 * params["ribosome_total"] / DEFAULT_BIOKINETIC_PARAMETERS["ribosome_total"]["value"],
+            ),
+            "burden_penalty": _sigmoid_penalty(max_burden, params["burden_soft_limit"], 0.00018),
+            "toxicity_penalty": _sigmoid_penalty(max_burden, params["toxicity_threshold"], 0.00022),
+        }
+
+        ode_trace = _simulation_trace(t_eval, best_result.y, best_resource_trace, target_idx)
         if self.monte_carlo_samples > 1:
-            metrics.update(self._monte_carlo_metrics(gene_count, params, t_eval))
+            metrics.update(self._monte_carlo_metrics(signals, deps, params, t_eval, target_idx, input_signals, truth_table))
+
         kinetic_score = _kinetic_score(metrics)
         robustness_score = kinetic_score
         base_score = float(topology.get("score", 0.65 + index * 0.02))
         final_score = max(0.0, min(1.0, 0.35 * base_score + 0.65 * kinetic_score))
+
         resource_occupancy = {
             "rnap_max": metrics["rnap_occupancy_max"],
             "ribosome_max": metrics["ribosome_occupancy_max"],
@@ -239,6 +596,14 @@ class BatchODESimulator:
                     "failure_rate": metrics["monte_carlo_failure_rate"],
                 }
             )
+        simulation_result = SimulationResult(
+            status="simulated",
+            configuration_hash=spec.configuration_hash,
+            parameter_set_hash=spec.parameter_set_hash,
+            scenario_set_hash=spec.scenario_set_hash,
+            metrics=metrics,
+            solver={"methods": spec.solver_methods},
+        )
         updates = {
             "ode_status": "simulated",
             "gene_count": gene_count,
@@ -255,6 +620,9 @@ class BatchODESimulator:
             "parameter_provenance": parameter_provenance,
             "monte_carlo_samples": self.monte_carlo_samples,
             "monte_carlo_noise_fraction": self.noise_fraction,
+            "simulation_model_version": SIMULATION_MODEL_VERSION,
+            "simulation_spec": spec.to_dict(),
+            "simulation_result": simulation_result.to_dict(),
             "benchmark_report": {
                 "score": final_score,
                 "robustness_score": robustness_score,
@@ -272,16 +640,20 @@ class BatchODESimulator:
 
     def _run_single_simulation(
         self,
-        gene_count: int,
+        signals: dict[str, str],
+        deps: dict[str, tuple[str, list[str]]],
         params: dict[str, float],
         t_eval: np.ndarray,
+        initial_state: np.ndarray | None = None,
     ) -> tuple[ResourceAwareSimulation, Any]:
         solver = WarmStartResourceSolver(
             rnap_free=params["rnap_total"],
             ribosome_free=params["ribosome_total"],
         )
-        simulation = ResourceAwareSimulation(gene_count=gene_count, params=params, solver=solver)
-        initial_state = np.zeros(gene_count * 2)
+        simulation = ResourceAwareSimulation(signals=signals, deps=deps, params=params, solver=solver)
+        gene_count = len(simulation.dynamic_signals)
+        if initial_state is None:
+            initial_state = np.zeros(gene_count * 3)
         return simulation, self._integrate(simulation, initial_state, t_eval)
 
     def simulate_noisy_response(
@@ -290,43 +662,115 @@ class BatchODESimulator:
         noise_level: float | None = None,
         rng: np.random.Generator | None = None,
     ) -> dict[str, float | bool | str]:
-        gene_count = _infer_gene_count(topology)
+        verilog = str(topology.get("verilog") or "")
+        signals, deps = parse_verilog_netlist(verilog)
+        dynamic_signals = [name for name in sorted(signals.keys()) if signals[name] in ("wire", "output")]
+        gene_count = len(dynamic_signals)
+
+        if gene_count == 0:
+            fallback_count = _infer_gene_count(topology)
+            signals = {f"G_{i}": "wire" for i in range(fallback_count)}
+            signals["G_0"] = "input"
+            signals[f"G_{fallback_count-1}"] = "output"
+            deps = {f"G_{i}": ("not", [f"G_{i-1}"]) for i in range(1, fallback_count)}
+            dynamic_signals = [name for name in sorted(signals.keys()) if signals[name] in ("wire", "output")]
+            gene_count = len(dynamic_signals)
+
+        output_signals = [name for name in sorted(signals.keys()) if signals[name] == "output"]
+        target_output = output_signals[0] if output_signals else (dynamic_signals[-1] if dynamic_signals else None)
+        target_idx = dynamic_signals.index(target_output) if target_output in dynamic_signals else -1
+        input_signals = [name for name in sorted(signals.keys()) if signals[name] == "input"]
+
+        truth_table = topology.get("truth_table") or topology.get("truth_table_or_logic_matrix") or topology.get("logic_matrix") or []
+        if not isinstance(truth_table, list) or len(truth_table) == 0:
+            default_row = {inp: 1 for inp in input_signals}
+            default_row["Y"] = 1
+            truth_table = [default_row]
+
         params = _flatten_parameters(topology.get("biokinetic_parameters", {}))
+        params["copy_number"] = float(topology.get("copy_number", 1.0))
         params["promoter_resource_demand"] = max(1.0, params["km_rnap"] * 0.35)
+
         sample_params = _perturb_biokinetic_parameters(
             params,
             self.noise_fraction if noise_level is None else max(0.0, float(noise_level)),
             rng or np.random.default_rng(),
         )
+
+        on_values = []
+        off_values = []
+        first_row = truth_table[0] if truth_table else {}
+        output_key = None
+        for key in ("Y", "OUT", "OUTPUT", "Z", "output", "out"):
+            if key in first_row:
+                output_key = key
+                break
+        if not output_key:
+            other_keys = [k for k in first_row.keys() if k not in input_signals]
+            output_key = other_keys[0] if other_keys else None
+
         t_eval = np.linspace(0.0, self.simulation_time, self.sample_count)
-        simulation, result = self._run_single_simulation(gene_count, sample_params, t_eval)
-        if result is None or not result.success:
+        success = True
+        error_msg = ""
+
+        for row in truth_table:
+            row_params = sample_params.copy()
+            for inp in input_signals:
+                val = row.get(inp, row.get(inp.upper(), row.get(inp.lower(), 1)))
+                is_high = False
+                if isinstance(val, str):
+                    is_high = val.strip().lower() in ("1", "true", "yes", "high", "on")
+                else:
+                    is_high = bool(val)
+                row_params[f"input_{inp}"] = 200.0 if is_high else 0.0
+
+            simulation, result = self._run_single_simulation(signals, deps, row_params, t_eval)
+            if result is None or not result.success:
+                success = False
+                error_msg = getattr(result, "message", "ODE simulation failed.")
+                break
+
+            final_val = float(result.y[2 * gene_count + target_idx, -1]) if target_idx != -1 else 0.0
+            expected_out = parse_logic_value(row[output_key], True) if output_key is not None else True
+            if expected_out:
+                on_values.append(final_val)
+            else:
+                off_values.append(final_val)
+
+        if not success:
             return {
                 "success": False,
                 "on_value": 0.0,
                 "off_value": float("inf"),
-                "error": getattr(result, "message", "ODE simulation failed."),
+                "error": error_msg,
             }
-        protein = np.maximum(result.y[result.y.shape[0] // 2 :, :], 0.0)
-        output = protein[-1, :] if protein.size else np.zeros(result.y.shape[1])
-        off_window = max(1, min(len(output), int(math.ceil(len(output) * 0.1))))
-        on_value = float(output[-1]) if len(output) else 0.0
-        off_value = float(np.max(output[:off_window])) if len(output) else 0.0
-        metrics = _simulation_metrics(result.y, simulation.resource_trace, sample_params)
+
+        min_on = min(on_values) if on_values else 0.0
+        max_off = max(off_values) if off_values else 0.0
+
         return {
             "success": True,
-            "on_value": on_value,
-            "off_value": off_value,
-            "signal_to_noise_ratio": metrics["signal_to_noise_ratio"],
+            "on_value": min_on,
+            "off_value": max_off,
+            "signal_to_noise_ratio": min_on / max(max_off, 1e-9),
         }
 
     def _monte_carlo_metrics(
         self,
-        gene_count: int,
+        signals: dict[str, str],
+        deps: dict[str, tuple[str, list[str]]],
         params: dict[str, float],
         t_eval: np.ndarray,
+        target_idx: int,
+        input_signals: list[str],
+        truth_table: list[dict[str, Any]],
     ) -> dict[str, float]:
-        rng = np.random.default_rng(_stable_seed(gene_count, params, self.simulation_time, self.sample_count))
+        gene_count = len([s for s in signals if signals[s] in ("wire", "output")])
+        rng = np.random.default_rng(
+            self.random_seed
+            if self.random_seed is not None
+            else _stable_seed(gene_count, params, self.simulation_time, self.sample_count)
+        )
         terminal_outputs: list[float] = []
         failures = 0
         perturbable = [
@@ -340,7 +784,19 @@ class BatchODESimulator:
             "y_min",
             "ymax",
             "y_max",
+            "copy_number",
         ]
+
+        first_row = truth_table[0] if truth_table else {}
+        output_key = None
+        for key in ("Y", "OUT", "OUTPUT", "Z", "output", "out"):
+            if key in first_row:
+                output_key = key
+                break
+        if not output_key:
+            other_keys = [k for k in first_row.keys() if k not in input_signals]
+            output_key = other_keys[0] if other_keys else None
+
         for _ in range(self.monte_carlo_samples):
             sample_params = _perturb_biokinetic_parameters(
                 params,
@@ -348,12 +804,43 @@ class BatchODESimulator:
                 rng,
                 perturbable,
             )
-            simulation, result = self._run_single_simulation(gene_count, sample_params, t_eval)
-            if result is None or not result.success:
+
+            row_outputs = []
+            row_expected = []
+
+            for row in truth_table:
+                row_params = sample_params.copy()
+                for inp in input_signals:
+                    val = row.get(inp, row.get(inp.upper(), row.get(inp.lower(), 1)))
+                    is_high = False
+                    if isinstance(val, str):
+                        is_high = val.strip().lower() in ("1", "true", "yes", "high", "on")
+                    else:
+                        is_high = bool(val)
+                    row_params[f"input_{inp}"] = 200.0 if is_high else 0.0
+
+                simulation, result = self._run_single_simulation(signals, deps, row_params, t_eval)
+                if result is None or not result.success:
+                    continue
+
+                final_val = float(result.y[2 * gene_count + target_idx, -1]) if target_idx != -1 else 0.0
+                row_outputs.append(final_val)
+                expected_out = parse_logic_value(row[output_key], True) if output_key is not None else True
+                row_expected.append(expected_out)
+
+            if len(row_outputs) < len(truth_table):
                 failures += 1
                 continue
-            protein = np.maximum(result.y[result.y.shape[0] // 2 :, :], 0.0)
-            terminal_outputs.append(float(protein[-1, -1]) if protein.size else 0.0)
+
+            ons = [v for v, exp in zip(row_outputs, row_expected) if exp]
+            offs = [v for v, exp in zip(row_outputs, row_expected) if not exp]
+
+            if ons and offs:
+                if min(ons) <= max(offs):
+                    failures += 1
+
+            terminal_outputs.append(row_outputs[-1] if row_outputs else 0.0)
+
         mean_output = float(np.mean(terminal_outputs)) if terminal_outputs else 0.0
         cv = float(np.std(terminal_outputs)) / max(mean_output, 1e-9) if terminal_outputs else 1.0
         return {
@@ -449,13 +936,22 @@ def _perturb_biokinetic_parameters(
         "y_min",
         "ymax",
         "y_max",
+        "copy_number",
     ]
     for key in keys:
         if key not in sample_params:
             continue
         original = float(sample_params[key])
-        sigma = abs(original) * max(0.0, float(noise_level))
-        sample_params[key] = max(0.0, float(rng.normal(original, sigma)))
+        if key == "copy_number":
+            if original > 0.0:
+                cv = max(0.0, float(noise_level))
+                s = math.sqrt(math.log(1.0 + cv * cv))
+                sample_params[key] = original * math.exp(rng.normal(0.0, s) - 0.5 * s * s)
+            else:
+                sample_params[key] = 0.0
+        else:
+            sigma = abs(original) * max(0.0, float(noise_level))
+            sample_params[key] = max(0.0, float(rng.normal(original, sigma)))
     return sample_params
 
 
@@ -486,9 +982,15 @@ def _infer_gene_count(topology: dict[str, Any]) -> int:
     return max(1, primitive_count + assign_count)
 
 
-def _simulation_metrics(y: np.ndarray, trace: list[dict[str, float]], params: dict[str, float]) -> dict[str, float]:
-    protein = np.maximum(y[y.shape[0] // 2 :, :], 0.0)
-    output = protein[-1, :] if protein.size else np.zeros(y.shape[1])
+def _simulation_metrics(
+    y: np.ndarray,
+    trace: list[dict[str, float]],
+    params: dict[str, float],
+    target_idx: int,
+) -> dict[str, float]:
+    gene_count = y.shape[0] // 3
+    protein = np.maximum(y[2 * gene_count:, :], 0.0)
+    output = protein[target_idx, :] if (protein.size and target_idx != -1) else np.zeros(y.shape[1])
     output_mean = float(np.mean(output))
     output_std = float(np.std(output))
     burden_values = [entry["burden_nM"] for entry in trace] or [0.0]
@@ -497,37 +999,34 @@ def _simulation_metrics(y: np.ndarray, trace: list[dict[str, float]], params: di
     rnap_free = [entry["rnap_free"] for entry in trace] or [params["rnap_total"]]
     ribo_free = [entry["ribosome_free"] for entry in trace] or [params["ribosome_total"]]
     max_burden = float(max(burden_values))
-    dynamic_margin = output_mean / (1.0 + float(np.max(protein[:-1, :])) if protein.shape[0] > 1 else 1.0)
     return {
         "max_burden_nM": max_burden,
         "output_cv": output_std / max(output_mean, 1e-9),
         "signal_to_noise_ratio": output_mean / max(output_std, 1e-9),
-        "dynamic_margin": dynamic_margin,
         "rnap_occupancy_max": float(max(rnap_occupancies)),
         "ribosome_occupancy_max": float(max(ribo_occupancies)),
         "rnap_free_min": float(min(rnap_free)),
         "ribosome_free_min": float(min(ribo_free)),
-        "resource_capacity_factor": min(
-            1.0,
-            0.5 * params["rnap_total"] / DEFAULT_BIOKINETIC_PARAMETERS["rnap_total"]["value"]
-            + 0.5 * params["ribosome_total"] / DEFAULT_BIOKINETIC_PARAMETERS["ribosome_total"]["value"],
-        ),
-        "burden_penalty": _sigmoid_penalty(max_burden, params["burden_soft_limit"], 0.00018),
-        "toxicity_penalty": _sigmoid_penalty(max_burden, params["toxicity_threshold"], 0.00022),
     }
 
 
-def _simulation_trace(t_eval: np.ndarray, y: np.ndarray, trace: list[dict[str, float]]) -> dict[str, list[float]]:
-    midpoint = y.shape[0] // 2
+def _simulation_trace(
+    t_eval: np.ndarray,
+    y: np.ndarray,
+    trace: list[dict[str, float]],
+    target_idx: int,
+) -> dict[str, list[float]]:
+    midpoint = y.shape[0] // 3
     mrna = np.maximum(y[:midpoint, :], 0.0)
-    protein = np.maximum(y[midpoint:, :], 0.0)
-    output = protein[-1, :] if protein.size else np.zeros(y.shape[1])
+    protein_immature = np.maximum(y[midpoint:2*midpoint, :], 0.0)
+    protein_mature = np.maximum(y[2*midpoint:, :], 0.0)
+    output = protein_mature[target_idx, :] if (protein_mature.size and target_idx != -1) else np.zeros(y.shape[1])
     sampled_trace = _resample_resource_trace(trace, len(t_eval))
     return {
         "time": _round_series(t_eval),
         "output_protein": _round_series(output),
         "total_mrna": _round_series(np.sum(mrna, axis=0) if mrna.size else np.zeros(len(t_eval))),
-        "total_protein": _round_series(np.sum(protein, axis=0) if protein.size else np.zeros(len(t_eval))),
+        "total_protein": _round_series(np.sum(protein_immature + protein_mature, axis=0) if (protein_immature.size or protein_mature.size) else np.zeros(len(t_eval))),
         "rnap_occupancy": _round_series([entry.get("rnap_occupancy", 0.0) for entry in sampled_trace]),
         "ribosome_occupancy": _round_series([entry.get("ribosome_occupancy", 0.0) for entry in sampled_trace]),
     }
@@ -555,15 +1054,12 @@ def _kinetic_score(metrics: dict[str, float]) -> float:
     stability = 1.0 / (1.0 + metrics["output_cv"])
     if "monte_carlo_terminal_output_cv" in metrics:
         stability *= 1.0 / (1.0 + metrics["monte_carlo_terminal_output_cv"])
-    margin = _clamp01(metrics["dynamic_margin"] / 80.0)
     resource_penalty = 1.0 - 0.5 * (metrics["rnap_occupancy_max"] + metrics["ribosome_occupancy_max"])
     failure_penalty = 1.0 - metrics.get("monte_carlo_failure_rate", 0.0)
     score = (
-        0.25 * stability
-        + 0.20 * margin
-        + 0.25 * metrics["burden_penalty"]
-        + 0.20 * metrics["toxicity_penalty"]
-        + 0.10 * _clamp01(resource_penalty)
+        0.4 * stability
+        + 0.3 * metrics.get("burden_penalty", 1.0)
+        + 0.3 * _clamp01(resource_penalty)
     )
     return _clamp01(score * failure_penalty * (0.35 + 0.65 * metrics["resource_capacity_factor"]))
 
@@ -606,17 +1102,11 @@ def _physical_assignment_metrics(topology: dict[str, Any]) -> dict[str, float | 
         benchmark_report = {}
     return {
         "orthogonality_score": _coerce_float(
-            topology.get(
-                "orthogonality_score",
-                benchmark_report.get("orthogonality_score"),
-            ),
+            topology.get("orthogonality_score", benchmark_report.get("orthogonality_score")),
             1.0,
         ),
         "cello_assignment_score": _coerce_float(
-            topology.get(
-                "cello_assignment_score",
-                benchmark_report.get("cello_assignment_score"),
-            ),
+            topology.get("cello_assignment_score", benchmark_report.get("cello_assignment_score")),
             0.0,
         ),
         "cello_buildable": _coerce_bool(
@@ -643,8 +1133,11 @@ def _cache_key(
     sample_count: int,
     monte_carlo_samples: int,
     noise_fraction: float,
+    configuration_hash: str = "",
 ) -> tuple:
     return (
+        SIMULATION_MODEL_VERSION,
+        configuration_hash,
         str(topology.get("verilog", "")),
         int(topology.get("gate_count", gene_count)),
         index,
@@ -658,20 +1151,19 @@ def _cache_key(
 
 
 def _stable_seed(gene_count: int, params: dict[str, float], simulation_time: float, sample_count: int) -> int:
-    seed_text = repr(
-        (
-            gene_count,
-            tuple(sorted((key, round(float(value), 6)) for key, value in params.items())),
-            round(float(simulation_time), 6),
-            sample_count,
-        )
+    return stable_seed(
+        {
+            "model_version": SIMULATION_MODEL_VERSION,
+            "gene_count": gene_count,
+            "parameters": {
+                key: round(float(value), 6)
+                for key, value in sorted(params.items())
+            },
+            "simulation_time": round(float(simulation_time), 6),
+            "sample_count": sample_count,
+        }
     )
-    return abs(hash(seed_text)) % (2**32)
 
 
 def _cached_lookup(_memory, key: tuple, local_cache: dict[tuple, dict[str, Any]]) -> dict[str, Any] | None:
-    # The Memory object is retained so callers can opt into a joblib-backed cache
-    # directory later without changing the public constructor. The current cache
-    # is intentionally conservative and stores only process-local simulation
-    # payloads, avoiding stale scientific results across code changes.
     return deepcopy(local_cache.get(key))

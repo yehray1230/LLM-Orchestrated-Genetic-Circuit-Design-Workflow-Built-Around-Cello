@@ -1,4 +1,67 @@
 # Evaluation Metrics
+
+## Readiness evaluation boundary
+
+The existing `weighted_total_score` remains unchanged for historical
+benchmark compatibility. New responses also expose the identical value as
+`computational_design_score` to make its scope explicit.
+
+Assembly and experimental readiness are evaluated separately by
+`readiness-evaluator@1.0.0`. It reports:
+
+- `logic_score`
+- `dynamic_score`
+- `part_evidence_score`
+- `sequence_quality_score`
+- `assembly_plan_score`
+- `experimental_readiness_score`
+
+Unavailable domains are `null`, not zero. Hard blockers are not converted
+into score penalties. Any essential-feature disruption, checksum mismatch,
+missing sequence, insufficient part evidence, internal Type IIS site,
+non-unique Gibson overlap, or invalid Golden Gate overhang forces
+`readiness_status = "blocked"` regardless of computational score.
+
+The readiness stages are:
+
+```text
+conceptual
+sequence_complete
+assembly_planned
+primer_ready
+sequence_optimized
+host_optimized
+expert_review_required
+```
+
+This readiness result is not calibrated experimental evidence and does not
+replace expert review.
+
+## v1.8 Versioned Research Evaluation
+
+The API evaluation default is `research-v1.8@1.8.0`. Existing workflow code
+continues to use `legacy-weighted@1.0.0` unless it explicitly selects another
+profile.
+
+```text
+0.15 logic_function
+0.15 dynamic_behavior
+0.15 robustness
+0.10 resource_burden
+0.15 buildability
+0.10 evidence_quality
+0.10 data_completeness
+0.10 semantic_faithfulness
+```
+
+Each result includes `scoring_profile`, `scoring_version`, and
+`scoring_configuration_hash`. Comparisons across versions carry a warning
+because the scores are not assumed to be calibrated equivalents.
+
+Benchmark dataset manifests are content-addressed and versioned. The bundled
+`research_smoke_v1` dataset contains synthetic infrastructure fixtures, not
+wet-lab validated circuits. JSON, CSV, and Markdown reports preserve dataset
+and scoring hashes, case results, dimension summaries, and expectation checks.
 # 評估指標
 
 This document explains how the current benchmark system scores candidate genetic-circuit designs. The metrics are intended for computational triage: they rank and compare candidate designs inside the Reflexion loop so weak candidates can be repaired, rejected, or deprioritized.
@@ -164,6 +227,10 @@ candidate.functional_score or candidate.score or 0.0
 Interpretation: this score is strongest when it is backed by both a truth-table check and expression-separation evidence. A fallback-only score should be treated as weak evidence.
 
 解讀：當該分數同時有真值表檢查和表達分離度證據支援時，說服力最強。僅有回退（Fallback）的分數應被視為微弱的證據。
+
+The UI and MCP adapter may also expose explanation artifacts such as score explanations, decision traces, Cello provenance warnings, and ODE trajectory readouts. These explanations help audit why a score was assigned, but they do not change the benchmark weights or convert heuristic scores into experimental validation.
+
+UI 與 MCP adapter 也可能輸出分數解釋、決策紀錄、Cello 來源警示與 ODE 軌跡讀數等解釋性產物。這些解釋有助於審查分數為何如此，但不會改變基準權重，也不會將啟發式分數轉換為實驗驗證。
 
 ## 3. Kinetic and Robustness Scores
 ## 3. 動力學與魯棒性分數
@@ -488,12 +555,19 @@ The burden proxy is:
 excess_gates = max(0, gate_count - ideal_gate_limit)
 ```
 
-where:
+where `ideal_gate_limit` is dynamically calculated based on the number of inputs ($N$) in the candidate's truth table or logic matrix:
+```text
+ideal_gate_limit = max(3, 2 * num_inputs + 1)
+```
+If no truth table is provided, it falls back to the default limit of 3. It can also be overridden explicitly using the `ideal_gate_limit` key in the candidate metadata.
 
-其中：
+其中 `ideal_gate_limit` 是根據候選設計真值表或邏輯矩陣中的輸入數量（$N$）動態計算的：
+```text
+ideal_gate_limit = max(3, 2 * num_inputs + 1)
+```
+如果沒有提供真值表，則回退至預設限制 3。它也可以使用候選元數據中的 `ideal_gate_limit` 鍵進行明確覆寫。
 
 ```text
-ideal_gate_limit = 3
 decay_rate = 0.35
 ```
 
@@ -709,9 +783,9 @@ Mock-mode results should not be described as successful Cello mapping.
 ## 9. Semantic Faithfulness
 ## 9. 語義忠實性
 
-Implemented in [benchmark_suite/semantic_evaluator.py](benchmark_suite/semantic_evaluator.py), but not currently part of `SCORE_WEIGHTS`.
+Implemented in [benchmark_suite/semantic_evaluator.py](benchmark_suite/semantic_evaluator.py) and integrated into the `research-v1.8` scoring profile.
 
-實作於 [benchmark_suite/semantic_evaluator.py](benchmark_suite/semantic_evaluator.py)，但目前不屬於 `SCORE_WEIGHTS`（分數權重）的一部分。
+實作於 [benchmark_suite/semantic_evaluator.py](benchmark_suite/semantic_evaluator.py)，並已整合至 `research-v1.8` 分數權重設定檔中。
 
 The semantic evaluator can use an LLM to compare the original natural-language request with generated Verilog and return:
 
@@ -736,9 +810,9 @@ missed_edge_cases =
   or []
 ```
 
-Because semantic faithfulness is not currently included in the weighted total, it should be treated as diagnostic metadata rather than a direct scoring component.
+Semantic faithfulness is integrated in the `research-v1.8` scoring profile with a weight of `0.10` to measure compliance of the generated logic structure with the user's intent.
 
-由於語義忠實性目前未包含在加權總分中，因此應將其視為診斷元數據（Diagnostic metadata），而非直接的評分組件。
+語義忠實性已整合至 `research-v1.8` 分數設定檔中，加權權重為 `0.10`，以評估所生成邏輯結構與使用者意圖的一致性。
 
 ## 10. Critic Thresholds
 ## 10. Critic 閾值
@@ -770,6 +844,10 @@ Critic 可以將失效路由至：
   `Translator`，用於元件/映射/Verilog 導向的修復。
 - `Consolidator`, when the candidate is acceptable.
   `Consolidator`，當候選方案可接受時。
+
+Note: If Cello is executed in mock mode (i.e. `cello_mode` is `"mock"`), the `cello_buildable=false` check is bypassed by the Critic Agent to prevent blocking workflow progression during local testing.
+
+註：如果 Cello 運作於模擬模式（即 `cello_mode` 為 `"mock"`），Critic 智能體會豁免 `cello_buildable=false` 的檢測，以避免在本地測試時阻塞工作流的推進。
 
 ## 11. How to Read Scores
 ## 11. 如何解讀分數
@@ -804,3 +882,35 @@ Avoid describing the score as:
 
 > A proof that the generated construct is a complete, buildable, experimentally validated genetic circuit.
 > 生成的構建體是完整、可構建且經過實驗驗證的基因電路的證明。
+# Design Revision and Export Metrics Note (2026-06-06)
+# 設計版本與匯出指標說明（2026-06-06）
+
+The following new fields and operations are not additional benchmark components:
+
+以下新增欄位與操作不是新的 benchmark component：
+
+- sequence coverage (`missing`, `partial`, or `complete`);
+- sequence coverage（`missing`、`partial` 或 `complete`）；
+- replacement-validation pass/fail checks;
+- 元件替換驗證的 pass/fail；
+- DesignRevision number and lineage;
+- DesignRevision 版本號與 lineage；
+- DesignDiff part/construct changes;
+- DesignDiff 的元件／construct 差異；
+- BOM, GenBank, or SBOL3 export availability.
+- BOM、GenBank 或 SBOL3 是否可匯出。
+
+These fields describe design completeness, provenance, or representation. They do not change `weighted_total_score`.
+
+這些欄位描述設計完整度、來源或表示方式，不會改變 `weighted_total_score`。
+
+In particular:
+
+- A complete sequence does not increase functional, kinetic, robustness, orthogonality, or Cello-assignment scores automatically.
+- 完整序列不會自動提高 functional、kinetic、robustness、orthogonality 或 Cello-assignment 分數。
+- A successful export is not a score and should not be used as a buildability label.
+- 成功匯出不是分數，也不應作為 buildability 標籤。
+- A replacement revision should be re-evaluated before metric differences are interpreted.
+- 元件替換後的新版本應重新評估，才能解讀指標差異。
+- `DesignDiff` reports the metrics supplied to it; it does not rerun ODE simulation or benchmark evaluation.
+- `DesignDiff` 只回報傳入的指標，不會重新執行 ODE 或 benchmark。

@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+{% block title %}Run {{ run.run_id }}{% endblock %}
+{% block content %}
+<section
+  class="run-monitor"
+  data-run-monitor="true"
+  data-status-url="/web/runs/{{ run.run_id }}/status"
+  data-terminal="{{ 'true' if terminal else 'false' }}"
+>
+  <header class="page-header split-header">
+    <div>
+      <span class="eyebrow">Design run monitor</span>
+      <h1>{{ run.run_id }}</h1>
+      <p class="muted">Track execution status, review events, provide human guidance, and inspect final outputs from one place.</p>
+    </div>
+    <a class="button secondary" href="/web/runs">Back to runs</a>
+  </header>
+
+  <section class="grid grid-3">
+    <article class="card">
+      <span class="muted">Status</span>
+      <div class="metric compact" data-run-status>{{ run.status }}</div>
+      <span class="status-badge {{ monitor.status_class }}" data-run-status-pill>{{ run.status }}</span>
+    </article>
+    <article class="card">
+      <span class="muted">Stage</span>
+      <div class="metric compact" data-run-stage>{{ run.stage or "-" }}</div>
+      <span class="stage-chip {{ monitor.stage_class }}" data-run-stage-pill>{{ run.stage or "waiting" }}</span>
+    </article>
+    <article class="card">
+      <span class="muted">Progress</span>
+      <div class="metric" data-run-progress-label>{{ "%.0f"|format((run.progress or 0) * 100) }}%</div>
+    </article>
+  </section>
+
+  <div class="progress section-space" aria-label="Run progress">
+    <span data-run-progress-bar style="width:{{ (run.progress or 0) * 100 }}%"></span>
+  </div>
+
+  <div data-run-error>
+    {% if run.error %}<div class="error-box section-space">{{ run.error }}</div>{% endif %}
+  </div>
+
+  <section class="card section-space run-latest">
+    <span class="muted">Latest message</span>
+    <div data-run-latest-message>{{ monitor.latest_message }}</div>
+  </section>
+
+  {% if run.status == "needs_human_input" %}
+  <section class="grid grid-2 section-space" data-human-input-panel>
+    <article class="card">
+      <h2>Human guidance</h2>
+      <p class="muted">Add constraints or trade-off guidance so the workflow can continue with a clearer repair direction.</p>
+      <form method="post" action="/web/runs/{{ run.run_id }}/feedback">
+        <label>Guidance or constraints
+          <textarea name="constraints" required placeholder="Example: Prefer lower metabolic burden, keep GFP output, and allow one extra NOT gate."></textarea>
+        </label>
+        <div class="form-grid">
+          <label>Action
+            <select name="action">
+              <option value="repair">Repair</option>
+              <option value="exploitation">Exploitation</option>
+              <option value="fallback">Fallback</option>
+            </select>
+          </label>
+          <label>Extra budget
+            <input type="number" name="extra_budget" min="1" max="100" value="2">
+          </label>
+        </div>
+        <button class="button" type="submit">Submit guidance</button>
+      </form>
+    </article>
+    <article class="card">
+      <h2>Resume run</h2>
+      <p class="muted">Resume the workflow after reviewing the latest state. A new child run may be created depending on the backend decision.</p>
+      <form method="post" action="/web/runs/{{ run.run_id }}/resume">
+        <label>Model override
+          <input name="model_name" placeholder="Optional">
+        </label>
+        <button class="button secondary" type="submit">Resume</button>
+      </form>
+    </article>
+  </section>
+  {% endif %}
+
+  <section class="grid grid-2 section-space">
+    <article class="card">
+      <div class="split-header">
+        <div>
+          <h2>Event timeline</h2>
+          <p class="muted">Newest status updates are appended without a full page reload while the run is active.</p>
+        </div>
+        <span class="badge" data-run-event-count>{{ monitor.event_count }} events</span>
+      </div>
+      <div class="timeline" data-run-events>
+        {% for event in monitor.events %}
+        <div class="timeline-item {{ event.stage_class }} {{ event.status_class }}" data-event-id="{{ event.event_id }}">
+          <div class="timeline-meta">
+            <span>#{{ event.event_id }}</span>
+            <span class="stage-chip {{ event.stage_class }}">{{ event.stage or "-" }}</span>
+            <span class="status-badge {{ event.status_class }}">{{ event.status or "-" }}</span>
+          </div>
+          <div class="timeline-message">{{ event.message or "No message recorded." }}</div>
+        </div>
+        {% else %}
+        <p class="muted" data-empty-events>No events have been recorded yet.</p>
+        {% endfor %}
+      </div>
+    </article>
+
+    <article class="card">
+      <h2>Result summary</h2>
+      <div data-run-result-summary>
+        {% if result %}
+          <dl class="definition-list">
+            <dt>Status</dt><dd>{{ result.get("status", run.status) }}</dd>
+            <dt>Design</dt><dd>{{ result.get("design_id", "-") }}</dd>
+            <dt>Score</dt><dd>{% if monitor.score_summary and monitor.score_summary.score is not none %}{{ "%.3f"|format(monitor.score_summary.score) }}{% else %}-{% endif %}</dd>
+            <dt>Mapping</dt><dd>{{ monitor.score_summary.mapping_status or "-" }}</dd>
+            <dt>ODE</dt><dd>{{ monitor.score_summary.ode_status or "-" }}</dd>
+          </dl>
+          {% if monitor.score_breakdown %}
+          <h3>Score breakdown</h3>
+          <div class="score-breakdown" data-score-breakdown>
+            {% for item in monitor.score_breakdown %}
+            <div class="score-row">
+              <span>{{ item.label }}</span>
+              <div class="score-track"><span style="width:{{ item.percent }}%"></span></div>
+              <strong>{{ "%.3f"|format(item.score) }}</strong>
+            </div>
+            {% endfor %}
+          </div>
+          {% endif %}
+        {% elif terminal %}
+          <p class="muted">The run is terminal, but no result payload was returned.</p>
+        {% else %}
+          <p class="muted">Result details will appear here when the run reaches a terminal state.</p>
+        {% endif %}
+      </div>
+    </article>
+  </section>
+
+  <section class="grid grid-2 section-space">
+    <article class="card">
+      <h2>Topology graph</h2>
+      {% if monitor.topology_graph.nodes %}
+      <div class="topology-graph" data-topology-graph>
+        <div class="topology-nodes">
+          {% for node in monitor.topology_graph.nodes %}
+          <div class="topology-node topology-node-{{ node.type|lower|replace(' ', '-') }}">
+            <strong>{{ node.label }}</strong>
+            <span>{{ node.type }}</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% if monitor.topology_graph.edges %}
+        <div class="topology-edges">
+          {% for edge in monitor.topology_graph.edges %}
+          <div>
+            <code>{{ edge.source }}</code>
+            <span>&rarr;</span>
+            <code>{{ edge.target }}</code>
+            {% if edge.label %}<small>{{ edge.label }}</small>{% endif %}
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+      {% else %}
+      <p class="muted">{{ monitor.topology_graph.message }}</p>
+      {% endif %}
+    </article>
+
+    <article class="card">
+      <h2>ODE trace</h2>
+      {% if monitor.ode_trace.metrics %}
+      <dl class="metric-strip">
+        {% for item in monitor.ode_trace.metrics %}
+        <div><dt>{{ item.label }}</dt><dd>{{ item.value }}</dd></div>
+        {% endfor %}
+      </dl>
+      {% endif %}
+      {% if monitor.ode_trace.series %}
+      <div class="ode-traces" data-ode-trace>
+        {% for series in monitor.ode_trace.series %}
+        <div class="ode-series">
+          <span>{{ series.label }}</span>
+          <svg viewBox="0 0 100 40" role="img" aria-label="{{ series.label }}">
+            <polyline points="{{ series.points }}"></polyline>
+          </svg>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="muted">{{ monitor.ode_trace.message }}</p>
+      {% endif %}
+    </article>
+  </section>
+
+  <section class="card section-space">
+    <div class="split-header">
+      <div>
+        <h2>Search tree / branch history</h2>
+        <p class="muted">Review exploration, repair, and exploitation branches without opening the raw state file.</p>
+      </div>
+      {% if monitor.search_tree.nodes %}
+      <span class="badge">{{ monitor.search_tree.nodes|length }} nodes</span>
+      {% endif %}
+    </div>
+    {% if monitor.search_tree.nodes %}
+    <div class="search-tree" data-search-tree>
+      <div class="search-branches">
+        {% for node in monitor.search_tree.nodes %}
+        <div class="search-node">
+          <div>
+            <strong>{{ node.node_id }}</strong>
+            <span class="muted">{{ node.parent_id or "root" }}</span>
+          </div>
+          <span class="stage-chip {{ 'stage-complete' if node.status in ['Pass', 'Evaluated'] else 'stage-human' if node.status == 'Needs_Human_Input' else 'stage-neutral' }}">{{ node.status }}</span>
+          <span class="badge">{{ node.search_mode }}</span>
+          <span>{{ node.score_label }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% if monitor.search_tree.path %}
+      <h3>Current path</h3>
+      <div class="branch-path">
+        {% for node in monitor.search_tree.path %}
+        <div>
+          <strong>{{ loop.index }}. {{ node.node_id }}</strong>
+          <span>{{ node.search_mode }} / {{ node.status }} / score {{ node.score_label }}</span>
+          {% if node.critic_feedback %}<p>{{ node.critic_feedback }}</p>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    {% else %}
+    <p class="muted">{{ monitor.search_tree.message }}</p>
+    {% endif %}
+  </section>
+
+  <details class="section-space" data-run-debug>
+    <summary>Debug payload</summary>
+    {% if result %}
+      <pre data-run-result-json>{{ result | tojson(indent=2) }}</pre>
+    {% else %}
+      <pre data-run-result-json>{{ {"run": run, "events": events} | tojson(indent=2) }}</pre>
+    {% endif %}
+  </details>
+</section>
+{% endblock %}

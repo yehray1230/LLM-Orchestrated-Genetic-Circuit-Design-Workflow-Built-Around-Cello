@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}New Assembly Deliverable{% endblock %}
+{% block content %}
+<header class="page-header split-header">
+  <div>
+    <span class="eyebrow">Assembly workflow</span>
+    <h1>New Assembly Deliverable</h1>
+    <p class="muted">Create a sequence-level assembly plan and primer package from a DesignIR v2 record and registered backbone.</p>
+  </div>
+  <a class="button secondary" href="/web/assembly/backbones">Manage backbones</a>
+</header>
+
+<nav class="workspace-steps">
+  <a href="/web/assembly">Overview</a>
+  <a href="/web/assembly/backbones">Backbones</a>
+  <a class="active" href="/web/assembly/new">New deliverable</a>
+  <span>Report</span>
+  <span>Downloads</span>
+</nav>
+
+{% if not designs or not backbones %}
+<div class="warning-box section-space">A DesignIR v2 design and a registered backbone are required before generating a deliverable.</div>
+{% endif %}
+
+<section class="card section-space">
+  <span class="step-number">02</span>
+  <h2>Assembly and primer settings</h2>
+  <form action="/web/assembly/deliverables" method="post">
+    <div class="form-grid">
+      <label>Design
+        <select name="design_id" required>
+          {% for design in designs %}<option value="{{ design.design_id }}">{{ design.name }} ({{ design.design_id }})</option>{% endfor %}
+        </select>
+      </label>
+      <label>Plasmid ID<input name="plasmid_id" placeholder="plasmid_1" required></label>
+      <label>Backbone
+        <select name="backbone_id" required>
+          {% for item in backbones %}<option value="{{ item.backbone_id }}">{{ item.name }} ({{ item.backbone_id }})</option>{% endfor %}
+        </select>
+      </label>
+      <label>Backbone version<input name="backbone_version" value="1.0.0" required></label>
+      <label>Insertion region ID<input name="insertion_region_id" value="mcs" required></label>
+      <label>Insertion start<input type="number" name="insertion_start" min="0" required></label>
+      <label>Insertion end<input type="number" name="insertion_end" min="0" required></label>
+      <label>Assembly method
+        <select name="method"><option value="gibson">Gibson</option><option value="golden_gate">Golden Gate</option><option value="restriction_cloning">Restriction cloning</option></select>
+      </label>
+      <label>Restriction enzymes<input name="restriction_enzymes" value="EcoRI,BsaI,BsmBI"></label>
+      <label>Gibson overlap length<input type="number" name="gibson_overlap_length" value="25" min="15" max="80"></label>
+      <label>Golden Gate enzyme<select name="golden_gate_enzyme"><option>BsaI</option><option>BsmBI</option></select></label>
+      <label>Golden Gate overhangs<input name="golden_gate_overhangs" placeholder="AATG,GCTT"></label>
+    </div>
+    <button class="button" type="submit" {% if not designs or not backbones %}disabled{% endif %}>Validate and generate deliverables</button>
+  </form>
+</section>
+{% endblock %}

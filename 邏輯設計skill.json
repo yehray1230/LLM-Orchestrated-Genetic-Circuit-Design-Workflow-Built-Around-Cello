@@ -1,5 +1,6 @@
 [
   {
+    "skill_name": "NOT_GATE",
     "motif_name": "NOT_GATE",
     "category": "primitives",
     "tags": ["combinational", "primitive", "high-speed", "low-burden"],
@@ -30,6 +31,7 @@
     ]
   },
   {
+    "skill_name": "NOR_GATE",
     "motif_name": "NOR_GATE",
     "category": "primitives",
     "tags": ["combinational", "primitive", "universal", "multi-input"],
@@ -62,6 +64,7 @@
     ]
   },
   {
+    "skill_name": "OR_GATE",
     "motif_name": "OR_GATE",
     "category": "primitives",
     "tags": ["combinational", "primitive", "low-burden", "no-repressor"],
@@ -94,6 +97,7 @@
     ]
   },
   {
+    "skill_name": "NAND_GATE",
     "motif_name": "NAND_GATE",
     "category": "primitives",
     "tags": ["combinational", "primitive", "indirect-logic"],
@@ -126,6 +130,7 @@
     ]
   },
   {
+    "skill_name": "XOR_GATE",
     "motif_name": "XOR_GATE",
     "category": "primitives",
     "tags": ["combinational", "complex-logic", "high-burden"],
@@ -158,6 +163,7 @@
     ]
   },
   {
+    "skill_name": "XNOR_GATE",
     "motif_name": "XNOR_GATE",
     "category": "primitives",
     "tags": ["combinational", "complex-logic", "maximum-burden"],
@@ -190,6 +196,7 @@
     ]
   },
   {
+    "skill_name": "TOGGLE_SWITCH",
     "motif_name": "TOGGLE_SWITCH",
     "category": "sequential_memory",
     "tags": ["sequential", "memory", "cyclic", "feedback", "bistable"],
@@ -222,6 +229,7 @@
     ]
   },
   {
+    "skill_name": "REPRESSILATOR",
     "motif_name": "REPRESSILATOR",
     "category": "dynamic_oscillator",
     "tags": ["dynamic", "oscillator", "cyclic", "feedback", "unstable"],
@@ -254,6 +262,7 @@
     ]
   },
   {
+    "skill_name": "COHERENT_FEED_FORWARD_LOOP",
     "motif_name": "COHERENT_FEED_FORWARD_LOOP",
     "category": "signal_processing",
     "tags": ["combinational", "filter", "feed-forward", "noise-reduction"],
@@ -285,6 +294,7 @@
     ]
   },
   {
+    "skill_name": "INCOHERENT_FEED_FORWARD_LOOP",
     "motif_name": "INCOHERENT_FEED_FORWARD_LOOP",
     "category": "signal_processing",
     "tags": ["combinational", "filter", "feed-forward", "adaptation"],
@@ -316,6 +326,7 @@
     ]
   },
   {
+    "skill_name": "THRESHOLD_GATE",
     "motif_name": "THRESHOLD_GATE",
     "category": "signal_processing",
     "tags": ["combinational", "converter", "thresholding", "non-linear"],
@@ -347,6 +358,7 @@
     ]
   },
   {
+    "skill_name": "PULSE_GENERATOR",
     "motif_name": "PULSE_GENERATOR",
     "category": "signal_processing",
     "tags": ["combinational", "filter", "feed-forward", "pulse"],
@@ -378,6 +390,7 @@
     ]
   },
   {
+    "skill_name": "BAND_PASS_FILTER",
     "motif_name": "BAND_PASS_FILTER",
     "category": "signal_processing",
     "tags": ["combinational", "filter", "band-pass", "spatial-pattern"],
@@ -405,6 +418,142 @@
         "description": "適用於多細胞系統的形態發生或空間定位。例如：細胞只有在特定濃度的嗎啡根或化學梯度帶中才會存活或發光；或作為安全用藥劑量監測器（太高毒性強、太低無效，只有在中等區間表示安全且起效）。",
         "keywords": ["concentration window", "spatial patterning", "morphogen sensing", "區間感測", "空間圖案化"],
         "user_intent_example": "Build a circuit that expresses a reporter gene only when the chemical concentration is between a low and a high limit."
+      }
+    ]
+  },
+  {
+    "skill_name": "CELLO_COMPATIBILITY_POLICY",
+    "motif_name": "CELLO_COMPATIBILITY_POLICY",
+    "category": "design_policy",
+    "tags": ["cello", "compatibility", "verilog", "combinational", "constraints", "policy"],
+    "memory_kind": "success",
+    "confidence_score": 1.0,
+    "purpose": "定義 Builder 與 Translator 在產生 Cello 相容基因電路時必須遵守的邏輯與 Verilog 約束。",
+    "purpose_en": "Defines the logic and Verilog constraints that Builder and Translator must follow when producing Cello-compatible genetic circuits.",
+    "is_cyclic": false,
+    "logic_depth": 0,
+    "estimated_repressor_cost": 0,
+    "cost_description": "Policy skill only; no biological part cost.",
+    "decomposition_strategy": "在所有 Cello 目標設計中，優先使用簡單組合邏輯與可映射的 primitive gates。若需求不是明確要求記憶、震盪、脈衝或動態濾波，不應引入循環回饋、時序元件或 ODE-only motif。",
+    "boolean_template": "Policy: Cello-compatible combinational logic only",
+    "allowed_verilog_constructs": ["module", "input", "output", "wire", "assign", "and", "or", "not", "nand", "nor", "xor", "xnor"],
+    "forbidden_verilog_constructs": ["always", "reg", "clock", "posedge", "negedge", "latch", "memory", "initial", "delay syntax #", "nonblocking assignment <="],
+    "preferred_design_rules": [
+      "Prefer NOT, NOR, OR, NAND, and simple assign-based combinational logic.",
+      "Prefer NOR/NOT decompositions when biological implementation and Cello mapping are priorities.",
+      "Keep module interfaces explicit with named input and output ports.",
+      "Use wires for intermediate nodes; do not infer storage.",
+      "If XOR/XNOR is necessary, flag high burden, logic hazard, and mapping risk.",
+      "Do not claim dynamic, sequential, oscillator, pulse, or filter motifs are directly Cello-mappable unless the workflow explicitly moves outside pure combinational mapping."
+    ],
+    "truth_table": [],
+    "verilog_template": "module genetic_circuit(input A, input B, output Y);\n  wire n1;\n  not(n1, B);\n  and(Y, A, n1);\nendmodule",
+    "trade_offs": "嚴格限制 Verilog 結構會降低表達複雜動態行為的自由度，但能顯著提升 Cello 映射、靜態評估與後續驗證的一致性。",
+    "known_risks": "若使用者需求其實包含記憶、震盪、延遲或脈衝，硬套 Cello 組合邏輯會造成語意失真；此時應要求 PM Agent 澄清或標記為非純 Cello-combinational workflow。",
+    "application_scenarios": [
+      {
+        "scenario_name": "Cello-compatible Verilog generation",
+        "description": "當 Builder 或 Translator 需要產生可交給 Cello wrapper 的 Verilog 時，使用本 policy 約束語法與結構。",
+        "keywords": ["Cello", "Verilog", "combinational", "mapping", "constraint"],
+        "user_intent_example": "Generate a Cello-compatible genetic circuit for Y = A AND NOT B."
+      }
+    ]
+  },
+  {
+    "skill_name": "DESIGN_REPAIR_PLAYBOOK",
+    "motif_name": "DESIGN_REPAIR_PLAYBOOK",
+    "category": "repair_playbook",
+    "tags": ["repair", "critic", "debugging", "mapping", "truth-table", "burden", "playbook"],
+    "memory_kind": "success",
+    "confidence_score": 1.0,
+    "purpose": "將 Critic、Benchmark 或 Cello wrapper 指出的失敗模式轉換成可執行的修復策略。",
+    "purpose_en": "Converts failure modes reported by Critic, Benchmark, or Cello wrapper into actionable repair strategies.",
+    "is_cyclic": false,
+    "logic_depth": 0,
+    "estimated_repressor_cost": 0,
+    "cost_description": "Repair guidance only; no direct biological part cost.",
+    "decomposition_strategy": "先判斷失敗類型，再選擇最小變更修復：邏輯錯誤修 truth table 與 Boolean expression；Cello 映射失敗降階到更簡單可映射 primitive；負擔過高則減少 XOR/XNOR、多層反相與不必要中間節點；動態語意不符則回到 PM 規格澄清。",
+    "boolean_template": "Repair: classify failure -> apply minimal corrective rewrite -> preserve user intent",
+    "repair_rules": [
+      {
+        "failure_type": "truth_table_mismatch",
+        "action": "Recompute the Boolean expression from the user intent, enumerate all input combinations, and regenerate Verilog from the corrected table."
+      },
+      {
+        "failure_type": "cello_mapping_failed",
+        "action": "Replace exotic or deep logic with simple Cello-compatible primitive gates; prefer NOR/NOT decomposition and explicit wires."
+      },
+      {
+        "failure_type": "forbidden_verilog_construct",
+        "action": "Remove always/reg/clock/latch/delay constructs and rewrite as continuous assign or primitive combinational gates."
+      },
+      {
+        "failure_type": "high_gate_count_or_burden",
+        "action": "Minimize gates, avoid XOR/XNOR unless required, remove double inversions, and prefer direct OR/assign paths when biologically plausible."
+      },
+      {
+        "failure_type": "logic_depth_too_high",
+        "action": "Flatten equivalent expressions, share intermediate wires only when they reduce total depth, and avoid multi-layer motif decomposition unless necessary."
+      },
+      {
+        "failure_type": "dynamic_behavior_requested",
+        "action": "Do not silently force a combinational design. Mark the requirement as memory/dynamic behavior and request a non-combinational workflow or explicit user confirmation."
+      },
+      {
+        "failure_type": "part_or_orthogonality_risk",
+        "action": "Avoid repeated repressors, reduce tandem promoter complexity, and prefer simpler topologies before adding constraints."
+      }
+    ],
+    "truth_table": [],
+    "verilog_template": "module repaired_circuit(input A, input B, output Y);\n  wire not_b;\n  not(not_b, B);\n  and(Y, A, not_b);\nendmodule",
+    "trade_offs": "最小變更修復能保留使用者意圖並降低迴歸風險；但若原始需求不完整，過度自動修復可能掩蓋需求歧義。",
+    "known_risks": "修復時若只追求通過靜態測試，可能犧牲語意忠實度。每次 repair 後都應重新檢查 truth table、Cello-compatible syntax、gate count、logic depth 與 Critic feedback。",
+    "application_scenarios": [
+      {
+        "scenario_name": "Critic-guided repair",
+        "description": "當工作流進入 Repair 模式或 Critic 指出 LOGIC_ERROR、PART_ERROR、mapping failure、burden 過高時，使用本 playbook 選擇修復方向。",
+        "keywords": ["repair", "critic feedback", "mapping failed", "truth table", "burden"],
+        "user_intent_example": "The candidate failed Cello mapping and has too many gates; repair it while preserving Y = A AND NOT B."
+      }
+    ]
+  },
+  {
+    "skill_name": "REQUIREMENT_ANALYSIS_PLAYBOOK",
+    "motif_name": "REQUIREMENT_ANALYSIS_PLAYBOOK",
+    "category": "requirement_analysis",
+    "tags": ["pm-agent", "requirements", "elicitation", "structured-spec", "intent-parsing", "clarification"],
+    "memory_kind": "success",
+    "confidence_score": 1.0,
+    "purpose": "協助 PM Agent 將模糊自然語言需求拆解成可交給 Builder 的結構化設計規格。",
+    "purpose_en": "Helps the PM Agent decompose ambiguous natural-language requests into structured design specifications for the Builder.",
+    "is_cyclic": false,
+    "logic_depth": 0,
+    "estimated_repressor_cost": 0,
+    "cost_description": "Requirement-analysis guidance only; no biological part cost.",
+    "decomposition_strategy": "先抽取使用者明確指定的 host、inputs、outputs、Boolean relation、reporter/payload、timing、memory、safety 與 burden constraints；缺失的核心欄位再提出單一合理預設值。Optional constraints 不應憑空補齊，但若使用者明確提到，必須保留到 structured_spec 或後續澄清問題中。",
+    "boolean_template": "Requirement analysis: user intent -> structured spec fields -> clarify missing or unsafe assumptions",
+    "required_spec_fields": ["chassis", "inputs", "outputs", "logic_relation", "copy_number"],
+    "optional_spec_fields": ["timing_requirement", "memory_requirement", "safety_constraint", "reporter_or_payload", "burden_preference", "dynamic_behavior"],
+    "elicitation_rules": [
+      "Identify inputs as biological signals or sensors, not only variable names.",
+      "Identify outputs as reporters, payload genes, enzymes, survival effects, or pathway controls.",
+      "Translate phrases like 'only when A high and B low' into explicit Boolean relations.",
+      "Preserve host/chassis if the user states one; otherwise prefer Escherichia coli as the current safe default.",
+      "Do not invent timing, memory, safety, or payload constraints when absent.",
+      "If the user asks for persistent memory, oscillation, delay, pulse, or temporal filtering, mark it as dynamic_behavior and do not silently treat it as pure Cello-combinational logic.",
+      "If the request is underspecified but safe defaults exist, propose exactly one default and ask for confirmation.",
+      "If the missing detail changes circuit semantics, ask a clarification rather than guessing."
+    ],
+    "truth_table": [],
+    "verilog_template": "",
+    "trade_offs": "較嚴格的需求解析會增加前置互動，但能降低 Builder 亂補 inputs、outputs、host 或動態行為的風險。",
+    "known_risks": "若 PM Agent 把 optional constraints 當成必填，流程會變得冗長；若完全忽略 optional constraints，後續 Builder 可能產生語意不忠實的設計。",
+    "application_scenarios": [
+      {
+        "scenario_name": "PM requirement elicitation",
+        "description": "當使用者以自然語言描述基因電路，但未完整指定輸入、輸出、邏輯關係、宿主或安全/時序條件時，使用本 playbook 進行拆解與澄清。",
+        "keywords": ["PM Agent", "structured spec", "clarification", "requirements", "intent parsing"],
+        "user_intent_example": "Only turn on GFP when A is high and B is low, and keep it on after the signal disappears."
       }
     ]
   }

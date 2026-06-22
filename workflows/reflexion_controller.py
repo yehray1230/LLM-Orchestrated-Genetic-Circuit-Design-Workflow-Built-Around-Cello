@@ -1,6 +1,6 @@
 import logging
 import uuid
-from typing import Any
+from typing import Any, Callable
 
 from benchmark_suite.benchmark_controller import evaluate_candidate
 from schemas.state import DesignState, SearchNode
@@ -9,6 +9,22 @@ from schemas.state import DesignState, SearchNode
 # but we will define the workflow loop here.
 
 MAX_CONSECUTIVE_ERROR_TYPE = 3
+ProgressCallback = Callable[[str, str, float, str, dict[str, Any] | None], None]
+
+
+def _emit(
+    callback: ProgressCallback | None,
+    stage: str,
+    status: str,
+    progress: float,
+    message: str,
+    details: dict[str, Any] | None = None,
+) -> None:
+    if callback:
+        try:
+            callback(stage, status, progress, message, details)
+        except Exception:
+            logging.exception("Progress callback failed for stage %s.", stage)
 
 
 def _latest_feedback(node: SearchNode) -> str:
@@ -45,6 +61,9 @@ def _topology_summary(topology: dict | None) -> dict:
         "missed_edge_cases",
         "scoring_model",
         "verilog_index",
+        "simulation_model_version",
+        "simulation_spec",
+        "simulation_result",
     ]
     return {key: topology[key] for key in summary_keys if key in topology}
 
@@ -149,6 +168,7 @@ def run_reflexion_workflow(
     skill_retriever,
     data_miner=None,
     skill_extractor=None,
+    progress_callback: ProgressCallback | None = None,
 ) -> DesignState:
     state.requires_human_input = False
     state.pause_reason = None
@@ -158,6 +178,7 @@ def run_reflexion_workflow(
         root_node = SearchNode(node_id="root", search_mode="Exploration")
         state.tree_nodes["root"] = root_node
         state.active_frontier.append("root")
+    _emit(progress_callback, "workflow", "running", 0.05, "Reflexion workflow started.")
     
     while state.active_frontier:
         if state.used_budget >= state.compute_budget:
@@ -176,6 +197,14 @@ def run_reflexion_workflow(
         current_node_id = state.active_frontier.pop(0)
         node = state.tree_nodes[current_node_id]
         state.current_node_id = current_node_id
+        _emit(
+            progress_callback,
+            "search",
+            "running",
+            0.1,
+            f"Processing search node {current_node_id}.",
+            {"node_id": current_node_id, "search_mode": node.search_mode},
+        )
         
         logging.info(f"Processing Node: {current_node_id} (Mode: {node.search_mode})")
         
@@ -183,17 +212,20 @@ def run_reflexion_workflow(
         if node.search_mode == "Exploration":
             temperature = 0.7
             if skill_retriever:
-                state.rag_context = skill_retriever.retrieve_skills(state.user_intent, mode="Exploration")
+                state.skill_context = skill_retriever.retrieve_skills(state.user_intent, mode="Exploration")
+                state.rag_context = state.skill_context
         elif node.search_mode == "Repair":
             temperature = 0.1
             if skill_retriever:
-                state.rag_context = skill_retriever.retrieve_skills(state.user_intent, mode="Repair")
+                state.skill_context = skill_retriever.retrieve_skills(state.user_intent, mode="Repair")
+                state.rag_context = state.skill_context
         elif node.search_mode == "Exploitation":
             temperature = 0.1
-            # Inherit rag_context from parent if possible, or just default
+            # Inherit skill_context from parent if possible, or just default
             
         # 1. Builder
         if node.search_mode != "Exploitation":
+            _emit(progress_callback, "builder", "running", 0.18, "Generating logic proposals.")
             builder.kwargs["temperature"] = temperature
             state = builder.run(state)
             if state.last_error:
@@ -202,6 +234,7 @@ def run_reflexion_workflow(
                 continue
                 
         # 2. Translator
+        _emit(progress_callback, "translator", "running", 0.32, "Translating the proposal to Verilog.")
         translator.kwargs["temperature"] = temperature
         state = translator.run(state)
         if state.last_error:
@@ -210,6 +243,7 @@ def run_reflexion_workflow(
             continue
             
         # 3. Cello (assuming it reads node.verilog_codes via state)
+        _emit(progress_callback, "cello", "running", 0.48, "Evaluating Cello mapping and constraints.")
         state = cello_wrapper.run(state)
         if state.last_error:
             node.last_error = state.last_error
@@ -218,12 +252,14 @@ def run_reflexion_workflow(
             
         # 4. Optional biokinetic data mining, then batch ODE/DAE simulation
         if data_miner:
+            _emit(progress_callback, "data_mining", "running", 0.58, "Collecting kinetic context.")
             state = data_miner.run(state)
             if state.last_error:
                 node.last_error = state.last_error
                 _record_dead_end(state, node)
                 continue
 
+        _emit(progress_callback, "ode_simulation", "running", 0.68, "Running dynamic simulation.")
         state = batch_ode_simulator.run(state)
 
         for topo in node.candidate_topologies:
@@ -244,6 +280,7 @@ def run_reflexion_workflow(
             state.best_topology = best_topo
             
         # 5. Critic
+        _emit(progress_callback, "critic", "running", 0.84, "Reviewing candidate quality and constraints.")
         state = critic.run(state)
         node.status = "Evaluated"
         
@@ -252,6 +289,14 @@ def run_reflexion_workflow(
             logging.info(f"Node {current_node_id} PASS! Goal reached.")
             node.status = "Pass"
             state.is_completed = True
+            _emit(
+                progress_callback,
+                "critic",
+                "completed",
+                0.92,
+                "Critic approved the candidate.",
+                {"node_id": current_node_id, "score": node.score},
+            )
             break
             
         # If not approved, handle errors
@@ -364,6 +409,8 @@ def run_reflexion_workflow(
             state.current_node_id = best_node.node_id
             
     # 6. Consolidator
+    _emit(progress_callback, "consolidator", "running", 0.96, "Consolidating the selected design.")
     state = consolidator.run(state)
     state = _extract_skill_memory(state, skill_extractor)
+    _emit(progress_callback, "workflow", "completed", 1.0, "Workflow finished.")
     return state

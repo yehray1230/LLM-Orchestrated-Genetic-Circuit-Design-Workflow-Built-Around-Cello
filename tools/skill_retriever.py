@@ -13,8 +13,16 @@ DEFAULT_EXTRACTED_SKILLS_PATH = "outputs/extracted_skills.jsonl"
 @dataclass
 class SkillRetriever:
     skills: list[dict[str, Any]] = field(default_factory=list)
+    core_skills: list[dict[str, Any]] = field(default_factory=list)
+    memory_skills: list[dict[str, Any]] = field(default_factory=list)
     min_confidence: float = 0.5
     tag_hops: int = 1
+
+    def __post_init__(self) -> None:
+        if self.core_skills or self.memory_skills:
+            self.skills = [*self.core_skills, *self.memory_skills]
+        elif self.skills:
+            self.memory_skills = self.skills
 
     @classmethod
     def from_json_file(
@@ -32,53 +40,123 @@ class SkillRetriever:
         data = json.loads(skill_path.read_text(encoding="utf-8"))
         if not isinstance(data, list):
             raise ValueError(f"Skill library must be a JSON list: {skill_path}")
-        skills = [_normalize_skill(record) for record in data if isinstance(record, dict)]
+        core_skills = [_normalize_skill(record) for record in data if isinstance(record, dict)]
+        memory_skills: list[dict[str, Any]] = []
         if include_extracted:
-            skills.extend(_load_extracted_skills(extracted_path))
-        return cls(skills=skills, min_confidence=min_confidence)
+            memory_skills.extend(_load_extracted_skills(extracted_path))
+        return cls(core_skills=core_skills, memory_skills=memory_skills, min_confidence=min_confidence)
 
     def retrieve_skills(self, query: str, mode: str = "Exploration", k: int = 5) -> str:
+        sections: list[str] = []
+        if self.core_skills:
+            sections.append(_format_core_skill_catalog(self.core_skills))
+
         query_terms = _tokenize(query)
         if not query_terms:
-            return ""
-        tag_index = _build_tag_index(self.skills)
-        backlink_index = _build_backlink_index(self.skills)
-        positive_ranked: list[tuple[float, dict[str, Any]]] = []
-        avoid_ranked: list[tuple[float, dict[str, Any]]] = []
-        for skill in self.skills:
-            confidence = float(skill.get("confidence_score", 1.0))
-            if confidence < self.min_confidence:
-                continue
-            text = _searchable_text(skill)
-            overlap = len(query_terms.intersection(_tokenize(text)))
-            mode_bonus = _mode_bonus(skill, mode)
-            graph_bonus = _graph_bonus(skill, query_terms, tag_index, backlink_index, self.tag_hops)
-            recency_bonus = float(skill.get("recency_score", 0.0)) * 0.15
-            relevance = overlap + graph_bonus
-            if relevance <= 0:
-                continue
-            score = relevance + confidence + mode_bonus + recency_bonus
-            if _is_negative_memory(skill):
-                avoid_ranked.append((score, skill))
-            else:
-                positive_ranked.append((score, skill))
-        positive_ranked.sort(key=lambda item: item[0], reverse=True)
-        avoid_ranked.sort(key=lambda item: item[0], reverse=True)
-
-        sections: list[str] = []
-        positive_snippets = [_format_skill_snippet(skill) for _, skill in positive_ranked[:k]]
-        if positive_snippets:
-            sections.append("Reusable successful patterns:\n" + "\n\n".join(positive_snippets))
-        if mode.lower() in {"repair", "exploitation"}:
-            avoid_limit = max(1, min(2, k // 2 or 1))
-            avoid_snippets = [_format_skill_snippet(skill) for _, skill in avoid_ranked[:avoid_limit]]
-            if avoid_snippets:
-                sections.append("Patterns to avoid or repair:\n" + "\n\n".join(avoid_snippets))
+            return "\n\n".join(sections)
+        search_pool = self.memory_skills if self.core_skills else self.skills
+        retrieved = _retrieve_ranked_skills(
+            search_pool,
+            query_terms=query_terms,
+            mode=mode,
+            k=k,
+            min_confidence=self.min_confidence,
+            tag_hops=self.tag_hops,
+        )
+        if retrieved:
+            sections.append(retrieved)
         return "\n\n".join(sections)
 
 
+def _retrieve_ranked_skills(
+    skills: list[dict[str, Any]],
+    query_terms: set[str],
+    mode: str,
+    k: int,
+    min_confidence: float,
+    tag_hops: int,
+) -> str:
+    if not skills:
+        return ""
+    tag_index = _build_tag_index(skills)
+    backlink_index = _build_backlink_index(skills)
+    positive_ranked: list[tuple[float, dict[str, Any]]] = []
+    avoid_ranked: list[tuple[float, dict[str, Any]]] = []
+    for skill in skills:
+        confidence = float(skill.get("confidence_score", 1.0))
+        if confidence < min_confidence:
+            continue
+        text = _searchable_text(skill)
+        overlap = len(query_terms.intersection(_tokenize(text)))
+        mode_bonus = _mode_bonus(skill, mode)
+        graph_bonus = _graph_bonus(skill, query_terms, tag_index, backlink_index, tag_hops)
+        recency_bonus = float(skill.get("recency_score", 0.0)) * 0.15
+        relevance = overlap + graph_bonus
+        if relevance <= 0:
+            continue
+        score = relevance + confidence + mode_bonus + recency_bonus
+        if _is_negative_memory(skill):
+            avoid_ranked.append((score, skill))
+        else:
+            positive_ranked.append((score, skill))
+    positive_ranked.sort(key=lambda item: item[0], reverse=True)
+    avoid_ranked.sort(key=lambda item: item[0], reverse=True)
+
+    sections: list[str] = []
+    positive_snippets = [_format_skill_snippet(skill) for _, skill in positive_ranked[:k]]
+    if positive_snippets:
+        sections.append("Reusable successful patterns:\n" + "\n\n".join(positive_snippets))
+    if mode.lower() in {"repair", "exploitation"}:
+        avoid_limit = max(1, min(2, k // 2 or 1))
+        avoid_snippets = [_format_skill_snippet(skill) for _, skill in avoid_ranked[:avoid_limit]]
+        if avoid_snippets:
+            sections.append("Patterns to avoid or repair:\n" + "\n\n".join(avoid_snippets))
+    return "\n\n".join(sections)
+
+
+def _format_core_skill_catalog(skills: list[dict[str, Any]]) -> str:
+    lines = [
+        "Canonical logic skill catalog (always available; use as authoritative design constraints):",
+        "- Prefer NOT/NOR/OR for simple Cello-compatible combinational designs.",
+        "- Treat XOR/XNOR as high-burden motifs; warn or simplify when possible.",
+        "- Do not use cyclic, sequential, oscillator, pulse, or filter motifs unless explicitly requested.",
+    ]
+    for skill in skills:
+        title = str(skill.get("title") or skill.get("skill_name") or "Unnamed skill")
+        category = str(skill.get("category") or "unknown")
+        boolean_template = str(skill.get("boolean_template") or "N/A")
+        depth = skill.get("logic_depth", "N/A")
+        repressor_cost = skill.get("estimated_repressor_cost", "N/A")
+        cyclic = "yes" if bool(skill.get("is_cyclic", False)) else "no"
+        purpose = _compact_text(skill.get("purpose_en") or skill.get("purpose") or "")
+        tradeoffs = _compact_text(skill.get("trade_offs") or "")
+        risks = _compact_text(skill.get("known_risks") or "")
+        detail_parts = [
+            f"category={category}",
+            f"Boolean template={boolean_template}",
+            f"depth={depth}",
+            f"repressors={repressor_cost}",
+            f"cyclic={cyclic}",
+        ]
+        if purpose:
+            detail_parts.append(f"use={purpose}")
+        if tradeoffs:
+            detail_parts.append(f"tradeoffs={tradeoffs}")
+        if risks:
+            detail_parts.append(f"risks={risks}")
+        lines.append(f"- {title}: " + "; ".join(detail_parts))
+    return "\n".join(lines)
+
+
+def _compact_text(value: Any, limit: int = 220) -> str:
+    text = " ".join(str(value).split())
+    if len(text) <= limit:
+        return text
+    return text[: limit - 1].rstrip() + "..."
+
+
 def _normalize_skill(record: dict[str, Any]) -> dict[str, Any]:
-    title = str(record.get("title") or record.get("motif_name") or "Unnamed skill")
+    title = str(record.get("title") or record.get("skill_name") or record.get("motif_name") or "Unnamed skill")
     category = str(record.get("category") or "")
     boolean_template = str(record.get("boolean_template") or "")
     decomposition = str(record.get("decomposition_strategy") or "")
@@ -86,7 +164,7 @@ def _normalize_skill(record: dict[str, Any]) -> dict[str, Any]:
     tradeoffs = str(record.get("trade_offs") or "")
     purpose = str(record.get("purpose") or record.get("summary") or "")
     tags = _normalize_tags(record.get("tags", [])) + [title, category, boolean_template]
-    if record.get("summary") and not any([record.get("motif_name"), category, boolean_template]):
+    if record.get("summary") and not any([record.get("skill_name"), record.get("motif_name"), category, boolean_template]):
         summary = str(record["summary"])
     else:
         summary = (

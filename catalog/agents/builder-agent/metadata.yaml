@@ -1,0 +1,34 @@
+id: builder-agent
+name: Builder Agent
+schema_version: agent-metadata-v1
+module: agents.builder_agent
+entrypoint: BuilderAgent
+role: logic_design
+summary: Generates three Cello-oriented Boolean circuit proposals and draft Verilog candidates.
+inputs:
+  - user_intent
+  - structured_spec
+  - skill_context
+  - latest_critic_feedback
+outputs:
+  - logic_proposals
+  - verilog_drafts
+  - translator_directives
+tools:
+  - skill_retriever
+  - llm
+downstream_agents:
+  - translator-agent
+claim_level: computational_candidate
+requires_expert_review: true
+risk_notes:
+  - Produces candidate logic designs, not experimentally validated biological circuits.
+  - Must avoid sequential logic unless the user explicitly requests non-combinational behavior.
+failure_modes:
+  - Invalid Boolean interpretation.
+  - Unsupported Cello construct.
+  - Logic proposal ignores structured specification.
+tags:
+  - agent
+  - boolean-logic
+  - design-generation

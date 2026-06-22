@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Assembly Delivery{% endblock %}
+{% block content %}
+<header class="page-header split-header">
+  <div>
+    <span class="eyebrow">Experimental deliverables v1</span>
+    <h1>Assembly Delivery</h1>
+    <p class="muted">Move from registered backbones to validated assembly plans, reports, and downloadable lab handoff artifacts.</p>
+  </div>
+  <a class="button" href="/web/assembly/new">Create deliverable</a>
+</header>
+
+<nav class="workspace-steps">
+  <a class="active" href="/web/assembly">Overview</a>
+  <a href="/web/assembly/backbones">Backbones</a>
+  <a href="/web/assembly/new">New deliverable</a>
+  <span>Report</span>
+  <span>Downloads</span>
+</nav>
+
+<section class="grid grid-3 section-space">
+  <article class="card">
+    <span class="muted">Registered backbones</span>
+    <div class="metric">{{ backbones|length }}</div>
+    <a class="button secondary section-space" href="/web/assembly/backbones">Manage registry</a>
+  </article>
+  <article class="card">
+    <span class="muted">DesignIR v2 designs</span>
+    <div class="metric">{{ designs|length }}</div>
+    <a class="button secondary section-space" href="/web/designs">Open library</a>
+  </article>
+  <article class="card">
+    <span class="muted">Next action</span>
+    <div class="metric compact">{{ "Ready" if designs and backbones else "Setup needed" }}</div>
+    <a class="button secondary section-space" href="{{ '/web/assembly/new' if designs and backbones else '/web/assembly/backbones' }}">
+      {{ "Start assembly" if designs and backbones else "Register backbone" }}
+    </a>
+  </article>
+</section>
+
+<section class="grid grid-2 section-space">
+  <article class="card">
+    <h2>Workflow</h2>
+    <div class="timeline">
+      <div class="timeline-item"><div class="timeline-meta"><span>01</span><span>Backbone Registry</span></div><div class="timeline-message">Upload trusted GenBank backbones and define insertion regions.</div></div>
+      <div class="timeline-item"><div class="timeline-meta"><span>02</span><span>New Assembly Deliverable</span></div><div class="timeline-message">Select a design, backbone, insertion window, and assembly method.</div></div>
+      <div class="timeline-item"><div class="timeline-meta"><span>03</span><span>Assembly Report</span></div><div class="timeline-message">Review primer design, readiness, validation findings, and plasmid map.</div></div>
+      <div class="timeline-item"><div class="timeline-meta"><span>04</span><span>Artifact Downloads</span></div><div class="timeline-message">Download GenBank, CSV, JSON, report, and map files for handoff.</div></div>
+    </div>
+  </article>
+  <article class="card">
+    <h2>Readiness checks</h2>
+    {% if not designs %}
+      <div class="warning-box">No DesignIR v2 records are available yet.</div>
+    {% endif %}
+    {% if not backbones %}
+      <div class="warning-box">No backbone has been registered yet.</div>
+    {% endif %}
+    {% if designs and backbones %}
+      <div class="status-badge status-ready">Designs and backbones are available for assembly planning.</div>
+    {% endif %}
+    <p class="muted section-space">Computational deliverables remain screening artifacts; review sequences, reagent conditions, and experimental protocol before wet-lab use.</p>
+  </article>
+</section>
+{% endblock %}

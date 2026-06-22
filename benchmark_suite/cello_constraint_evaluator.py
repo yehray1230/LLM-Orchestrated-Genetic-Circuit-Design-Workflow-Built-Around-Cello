@@ -32,7 +32,6 @@ def evaluate_cello_constraints(candidate: dict[str, Any]) -> dict[str, Any]:
     """Extract Cello assignment, toxicity, and orthogonality signals from a topology."""
     report_objects, report_text, source_errors = _collect_reports(candidate)
     mapping_status = str(candidate.get("mapping_status", "")).lower()
-    return_code = candidate.get("return_code")
     cello_buildable = _coerce_bool(candidate.get("cello_buildable"), mapping_status == "mapped")
     has_output = bool(report_objects or report_text.strip())
 

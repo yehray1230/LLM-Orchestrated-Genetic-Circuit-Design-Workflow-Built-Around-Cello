@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Benchmarks{% endblock %}
+{% block content %}
+<header class="page-header">
+  <h1>研究評估</h1>
+  <p class="muted">以固定資料集與版本化評分設定執行可重現的橫向比較。</p>
+</header>
+<section class="grid grid-2">
+  <article class="card">
+    <h2>執行 Benchmark</h2>
+    <form method="post" action="/web/benchmarks">
+      <label>資料集
+        <select name="dataset_id">
+          {% for dataset in datasets %}
+          <option value="{{ dataset.dataset_id }}">{{ dataset.name }} @ {{ dataset.version }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>評分 Profile
+        <select name="profile_id">
+          {% for profile in profiles %}
+          <option value="{{ profile.profile_id }}" {{ 'selected' if profile.profile_id == 'research-v1.8' else '' }}>
+            {{ profile.name }} @ {{ profile.version }}
+          </option>
+          {% endfor %}
+        </select>
+      </label>
+      <button type="submit">執行評估</button>
+    </form>
+  </article>
+  <article class="card">
+    <h2>資料集</h2>
+    {% for dataset in datasets %}
+    <p><strong>{{ dataset.dataset_id }} @ {{ dataset.version }}</strong><br>
+      <span class="muted">{{ dataset.case_count }} cases · {{ dataset.description }}</span>
+    </p>
+    {% else %}
+    <p class="muted">尚無可用資料集。</p>
+    {% endfor %}
+  </article>
+</section>
+<article class="card" style="margin-top:18px">
+  <h2>歷史執行</h2>
+  {% if runs %}
+  <table>
+    <tr><th>Run</th><th>Dataset</th><th>Profile</th><th>Mean</th><th>Pass rate</th></tr>
+    {% for run in runs %}
+    <tr>
+      <td><a href="/web/benchmarks/{{ run.benchmark_run_id }}">{{ run.benchmark_run_id }}</a></td>
+      <td>{{ run.dataset.dataset_id }} @ {{ run.dataset.version }}</td>
+      <td>{{ run.profile_id }} @ {{ run.scoring_version }}</td>
+      <td>{{ "%.3f"|format(run.summary.mean) }}</td>
+      <td>{{ "%.0f"|format(run.summary.pass_rate * 100) }}%</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">尚無 Benchmark 執行紀錄。</p>
+  {% endif %}
+</article>
+{% endblock %}

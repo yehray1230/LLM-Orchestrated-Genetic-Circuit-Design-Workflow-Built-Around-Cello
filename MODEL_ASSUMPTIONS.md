@@ -52,15 +52,29 @@ It does not represent a complete plasmid or full cellular physiology. In particu
 
 它並不代表完整的質體或完整的細胞生理學。特別是，它不指定或模擬質體骨架、複製起點、篩選標記、完整 DNA 序列、組裝策略、宿主生長或宿主全局代謝。
 
+The current ODE explanation layer reports what can be read from the stored trajectory, such as peak output, time to peak, final output, coarse burden proxies, resource occupancy, and whether the final segment appears near steady state. These are derived readouts from the existing trace, not additional biological mechanisms.
+
+目前的 ODE 解釋層會回報可從已保存軌跡讀出的內容，例如最大輸出、達峰時間、最終輸出、粗略負載代理指標、資源佔用率，以及最後一段軌跡是否看似接近穩態。這些是從既有軌跡衍生出的讀數，而不是額外的生物學機制。
+
 ## 3. State Variables/狀態變數
 
-For `n` inferred genes or gates, the ODE state is:
+For `n` inferred genes or gates, the ODE state is a $3n$-dimensional vector:
 
-對於 `n` 個推導出的基因或邏輯閘，ODE 狀態為：
+對於 `n` 個推導出的基因或邏輯閘，ODE 狀態為一個 $3n$ 維向量：
 
 ```text
-y = [mRNA_1 ... mRNA_n, protein_1 ... protein_n]
+y = [mRNA_1 ... mRNA_n, P_immature_1 ... P_immature_n, P_mature_1 ... P_mature_n]
 ```
+
+Where:
+- `mRNA_i` is the mRNA concentration of gene `i` (nM)
+- `P_immature_i` is the immature/unfolded protein concentration of gene `i` (nM)
+- `P_mature_i` is the mature/folded active protein concentration of gene `i` (nM)
+
+其中：
+- `mRNA_i` 為基因 `i` 的 mRNA 濃度 (nM)
+- `P_immature_i` 為基因 `i` 的未成熟/未折疊蛋白質濃度 (nM)
+- `P_mature_i` 為基因 `i` 的已成熟/已折疊活性蛋白質濃度 (nM)
 
 The simulator also records resource-related values over time:
 
@@ -74,12 +88,12 @@ ribosome_occupancy
 burden_nM
 ```
 
-`burden_nM` is a coarse aggregate:
+`burden_nM` is a coarse aggregate of all synthetic species:
 
-`burden_nM` 是一個粗略的聚合值：
+`burden_nM` 是一個包含所有合成物種的粗略聚合值：
 
 ```text
-burden_nM = sum(mRNA) + sum(protein)
+burden_nM = sum(mRNA) + sum(P_immature) + sum(P_mature)
 ```
 
 This is a proxy used for screening, not a measured cellular burden model.
@@ -129,15 +143,33 @@ ODE 動力學為：
 
 ```text
 d_mRNA_i/dt =
-  transcription_rate * regulation_i * rnap_factor
-  - mrna_degradation_rate * mRNA_i
+  transcription_rate * copy_number * regulation_i * rnap_factor
+  - (mrna_degradation_rate + mu) * mRNA_i
 ```
 
 ```text
-d_protein_i/dt =
+d_P_immature_i/dt =
   translation_rate * mRNA_i * ribosome_factor
-  - protein_degradation_rate * protein_i
+  - (protein_degradation_rate + maturation_rate + mu) * P_immature_i
 ```
+
+```text
+d_P_mature_i/dt =
+  maturation_rate * P_immature_i
+  - (protein_degradation_rate + mu) * P_mature_i
+```
+
+Where:
+- `copy_number` ($C$) scales the plasmid-borne promoter resource demand and transcription rates.
+- `mu` ($\mu(t)$) is the dynamic growth rate dilution coupled to free ribosome availability:
+  $$\mu(t) = \mu_{\text{max}} \cdot \frac{R_{\text{free}}}{R_{\text{total}}}$$
+- `maturation_rate` ($k_{\text{mat}}$) represents the first-order protein folding and maturation delay rate.
+
+其中：
+- `copy_number` ($C$) 縮放質體所攜帶的啟動子資源需求與轉錄速率。
+- `mu` ($\mu(t)$) 為動態的生長稀釋率，耦合至游離核糖體比例：
+  $$\mu(t) = \mu_{\text{max}} \cdot \frac{R_{\text{free}}}{R_{\text{total}}}$$
+- `maturation_rate` ($k_{\text{mat}}$) 代表一階蛋白質折疊與成熟延遲速率。
 
 Resource occupancy is used as a warning signal for coarse burden:
 
@@ -148,9 +180,9 @@ rnap_occupancy = 1.0 - rnap_free / rnap_total
 ribosome_occupancy = 1.0 - ribosome_free / ribosome_total
 ```
 
-This resource model is useful for detecting candidates that may demand too much transcriptional or translational capacity. It does not model full cell growth, energy metabolism, amino-acid availability, stress responses, or burden-growth feedback.
+This resource model is useful for detecting candidates that may demand too much transcriptional or translational capacity, and now couples growth dilution dynamically to ribosome occupancy. It does not model full cell division cycle, energy metabolism, amino-acid availability, stress responses, or detailed metabolic feedback.
 
-此資源模型有助於檢測可能需求過多轉錄或翻譯能力的候選方案。它不模擬完整的細胞生長、能量代謝、胺基酸可用性、應激反應或負載-生長反饋。
+此資源模型有助於檢測可能需求過多轉錄或翻譯能力的候選方案，且現在將生長稀釋率與核糖體佔用率進行了動態耦合。它並不模擬完整的細胞分裂週期、能量代謝、胺基酸可用性、應激反應或詳細的代謝反饋。
 
 ## 7. Parameter Assumptions/參數假設
 
@@ -162,19 +194,49 @@ Current default parameters include:
 
 目前的預設參數包括：
 
-- `rnap_total`
-- `ribosome_total`
-- `km_rnap`
-- `km_ribosome`
-- `transcription_rate`
-- `translation_rate`
-- `mrna_degradation_rate`
-- `protein_degradation_rate`
-- `kd`
-- `hill_coefficient`
-- `leak_fraction`
-- `burden_soft_limit`
-- `toxicity_threshold`
+- `rnap_total` (total RNAP concentration / 總 RNAP 濃度, nM)
+- `ribosome_total` (total ribosome concentration / 總核糖體濃度, nM)
+- `km_rnap` (Michaelis constant for RNAP / RNAP 的米氏常數, nM)
+- `km_ribosome` (Michaelis constant for ribosome / 核糖體的米氏常數, nM)
+- `transcription_rate` (transcription rate / 轉錄速率, nM/s)
+- `translation_rate` (translation rate / 翻譯速率, 1/s)
+- `mrna_degradation_rate` (mRNA degradation rate / mRNA 降解速率, 1/s)
+- `protein_degradation_rate` (protein degradation rate / 蛋白質降解速率, 1/s)
+- `maturation_rate` (protein maturation rate / 蛋白質成熟速率, 1/s)
+- `growth_rate_dilution` (maximum growth rate dilution / 最大生長稀釋速率, 1/s)
+- `kd` / `kd_<node_id>` (dissociation constant / 解離常數, nM; can be loaded from Cello UCF response functions)
+- `hill_coefficient` / `hill_coefficient_<node_id>` (Hill coefficient / 希爾係數, dimensionless; can be loaded from Cello UCF response functions)
+- `leak_fraction` / `leak_fraction_<node_id>` (promoter leak fraction / 啟動子洩漏比例, dimensionless; computed as ymin/ymax from Cello UCF)
+- `burden_soft_limit` (burden penalty threshold / 負載懲罰閾值, nM)
+- `toxicity_threshold` (toxicity threshold / 毒性閾值, nM)
+- `copy_number` (plasmid copy number / 質體複製數, default: 1.0)
+- `protein_degradation_rate_<part_id>` / `protein_degradation_rate_<node_id>` (specific protein degradation rate / 特異性蛋白質降解速率, 1/s; dynamically scaled by active degradation tags like LVA/LAV/ASV)
+
+Chassis-Specific Defaults:
+DataMinerAgent supports host-specific overrides for two major chassis models:
+- **Escherichia coli** (default):
+  - `rnap_total`: 5000.0 nM
+  - `ribosome_total`: 25000.0 nM
+  - `translation_rate`: 0.045 1/s
+  - `growth_rate_dilution`: 0.0004 1/s
+- **Saccharomyces cerevisiae** (yeast):
+  - `rnap_total`: 3000.0 nM
+  - `ribosome_total`: 120000.0 nM
+  - `translation_rate`: 0.012 1/s
+  - `growth_rate_dilution`: 0.0001 1/s
+
+宿主特異性預設值：
+DataMinerAgent 支援針對兩種主要宿主模型的特異性參數覆蓋：
+- **大腸桿菌 (Escherichia coli)**（預設）：
+  - `rnap_total`: 5000.0 nM
+  - `ribosome_total`: 25000.0 nM
+  - `translation_rate`: 0.045 1/s
+  - `growth_rate_dilution`: 0.0004 1/s
+- **釀酒酵母 (Saccharomyces cerevisiae)**（酵母）：
+  - `rnap_total`: 3000.0 nM
+  - `ribosome_total`: 120000.0 nM
+  - `translation_rate`: 0.012 1/s
+  - `growth_rate_dilution`: 0.0001 1/s
 
 The current unit system is:
 
@@ -208,12 +270,21 @@ A successful integration means the model equations were solved numerically under
 
 ## 9. Noise and Monte Carlo Assumptions/雜訊與蒙特卡羅假設
 
-Monte Carlo perturbation is used as a sensitivity screen. It perturbs selected kinetic parameters by sampling around their current values:
+Monte Carlo perturbation is used as a sensitivity screen. It perturbs selected kinetic parameters by sampling around their current values. For standard biokinetic parameters, normal distribution perturbation is used:
 
-蒙特卡羅微擾被用作敏感性篩選。它通過在其當前值周圍進行抽樣來對選定的動力學參數進行微擾：
+蒙特卡羅微擾被用作敏感性篩選。它通過在其當前值周圍進行抽樣來對選定的動力學參數進行微擾。對於標準生物動力學參數，使用常態分佈微擾：
 
 ```text
 sampled_value = max(0.0, normal(original_value, abs(original_value) * noise_level))
+```
+
+For plasmid copy number (`copy_number`), log-normal perturbation is used to preserve the arithmetic mean and ensure strictly positive values:
+
+對於質體複製數 (`copy_number`)，使用對數常態（Log-normal）微擾，以保留其算術平均值並確保數值恆大於零：
+
+```text
+sampled_value = original_value * exp(normal(0.0, s) - 0.5 * s * s)
+where s = sqrt(log(1.0 + noise_level^2))
 ```
 
 Perturbable parameters include:
@@ -230,6 +301,7 @@ Perturbable parameters include:
 - `y_min`
 - `ymax`
 - `y_max`
+- `copy_number`
 
 The noisy-response scorer compares terminal output against an early output window:
 
@@ -268,6 +340,9 @@ Important output fields should be interpreted conservatively:
 | `resource_occupancy` | Coarse RNAP/ribosome burden signal. <br> 粗略的 RNAP/核糖體負載訊號。 |
 | `metrics_max_burden` | Aggregate mRNA/protein burden proxy. <br> 聚合 mRNA/蛋白質負載代理指標。 |
 | `parameter_provenance` | Evidence quality for the parameter values used. <br> 所用參數值的證據品質。 |
+| `ode_explanation.key_readouts` | Derived trajectory readouts such as peak output, time to peak, final output, fold-change proxy, and steady-state status. <br> 衍生的軌跡讀數，例如最大輸出、達峰時間、最終輸出、fold-change 代理指標與穩態狀態。 |
+| `ode_explanation.burden_readouts` | Coarse mRNA/protein and RNAP/ribosome burden readouts. <br> 粗略的 mRNA/蛋白質與 RNAP/核糖體負載讀數。 |
+| `ode_explanation.coverage_warnings` | Warnings about missing explicit input scenarios, OFF-state traces, ON/OFF ratios, or Monte Carlo perturbation. <br> 關於缺少明確輸入情境、OFF-state 軌跡、ON/OFF 比率或蒙特卡羅微擾的警示。 |
 
 These fields are most useful for comparing candidates generated in the same workflow. They should not be treated as standalone experimental predictions.
 
@@ -281,22 +356,22 @@ The current model does not include:
 
 - complete plasmid sequence or backbone architecture;
   完整的質體序列或骨架架構；
-- origin of replication, selectable marker, copy-number dynamics, or assembly scars;
-  複製起點、篩選標記、複製數動力學或組裝疤痕；
+- origin of replication, selectable marker, dynamic copy-number variance (e.g. noise, segregational instability), or assembly scars (plasmid copy number scaling is modeled statically);
+  複製起點、篩選標記、動態複製數變異如雜訊或分配不均、以及組裝疤痕（質體複製數縮放目前為靜態建模）；
 - promoter-, RBS-, terminator-, or coding-sequence-level design constraints;
   啟動子、RBS、終止子或編碼序列級別的設計約束；
-- host growth, dilution by growth, cell-cycle effects, or global metabolic regulation;
-  宿主生長、生長產生的稀釋、細胞週期效應或全局代謝調節；
-- burden-growth coupling or stress-response feedback;
-  負載-生長耦合或應激反應反饋；
+- host cell division cycle, cell-cycle effects, or global metabolic regulation (dilution by host growth is modeled via ribosome-growth coupling);
+  宿主細胞分裂週期、細胞週期效應或全局代謝調節（宿主生長稀釋目前已透過核糖體-生長耦合進行建模）；
+- stress-response feedback (ribosome-growth dilution coupling is modeled, but complex cellular stress responses are not);
+  應激反應反饋（核糖體-生長稀釋耦合已建模，但複雜的細胞應激反應尚未建模）；
 - DNA supercoiling or local sequence context;
   DNA 超螺旋或本地序列上下文；
 - RNA folding, RNA stability motifs, or transcript processing;
   RNA 折疊、RNA 穩定性基序或轉錄本處理；
-- codon usage, translation initiation context, or ribosome traffic;
-  密碼子使用偏好、翻譯起始上下文或核糖體交通（Ribosome traffic）；
-- protein folding, maturation, degradation tags, or active/inactive maturation states;
-  蛋白質折疊、成熟、降解標籤或活性/非活性成熟狀態；
+- detailed codon-pair bias, translation initiation context, or ribosome traffic (synonymous E. coli codon replacement is now supported at the sequence level, but not dynamically simulated in ODEs);
+  詳細的密碼子對偏好、翻譯起始上下文或核糖體交通（目前已在序列層級支援大腸桿菌同義密碼子替換，但尚未在 ODE 中進行動態模擬）；
+- detailed protein folding pathways, chaperones, degradation tags, or active/inactive maturation states (modeled via a simplified first-order maturation rate delay);
+  詳細的蛋白質折疊路徑、分子伴侶、降解標籤或活性/非活性成熟狀態（目前透過簡化的一階成熟速率延遲進行建模）；
 - inducer transport, ligand binding, or environmental dynamics;
   誘導物轉運、配體結合或環境動力學；
 - experimentally calibrated toxicity and noise distributions.
@@ -318,10 +393,10 @@ To move from computational candidate ranking toward stronger biological claims, 
   針對啟動子、RBS、編碼區、終止子與克隆約束的序列級檢查；
 - host-specific parameter calibration from literature or experiments;
   來自文獻或實驗的宿主特異性參數校準；
-- plasmid copy-number and growth-dilution dynamics;
-  質體複製數與生長稀釋動力學；
-- burden-growth feedback and toxicity calibration;
-  負載-生長反饋與毒性校準；
+- experimentally calibrated plasmid copy-number and growth-dilution dynamics;
+  經實驗校準的質體複製數與生長稀釋動力學；
+- experimental burden-growth feedback and toxicity calibration;
+  實驗性負載-生長反饋與毒性校準；
 - experimentally measured ON/OFF ratios, response times, noise, burden, and growth effects;
   經實驗測量的 ON/OFF 比率、響應時間、雜訊、負載與生長效應；
 - comparison against known measured genetic circuits;
@@ -342,3 +417,38 @@ It should not be described as:
 
 > A quantitative predictor of complete, buildable, experimentally validated genetic circuits.
 > 完整、可構建且經過實驗驗證 of 基因電路的定量預測器。
+## 13. Relationship Between DesignIR and the ODE Model (2026-06-06)
+## 13. DesignIR 與 ODE 模型的關係（2026-06-06）
+
+The new part, revision, comparison, and export layers do not expand the biological scope of the ODE model.
+
+新增的元件、版本、比較與匯出層不會擴張 ODE 模型的生物學範圍。
+
+- `DesignIR` provides a richer representation of candidate parts and constructs.
+- `DesignIR` 提供較完整的候選元件與 construct 表示。
+- Part replacement changes stored assignment and sequence metadata, but the current ODE simulator does not automatically derive calibrated kinetic parameters from those sequences.
+- 元件替換會改變保存的 assignment 與 sequence metadata，但目前 ODE simulator 不會自動從序列推導經校準的動力學參數。
+- `DesignDiff` can display score differences, but those scores remain based on the existing benchmark and simulation assumptions.
+- `DesignDiff` 可以顯示分數差異，但這些分數仍基於既有 benchmark 與模擬假設。
+- BOM, GenBank, and SBOL3 are representations of current data; they do not add biological mechanisms or improve parameter calibration.
+- BOM、GenBank 與 SBOL3 是目前資料的表示，不會增加生物機制或改善參數校準。
+
+Therefore, a sequence-backed export should not be interpreted as a sequence-aware ODE prediction. Stronger coupling would require part-specific response functions, promoter/RBS models, degradation parameters, copy-number context, and calibrated host data.
+
+因此，具有序列的匯出不應解讀為 sequence-aware ODE 預測。更強的耦合需要元件特定 response function、promoter/RBS 模型、降解參數、copy-number 情境與經校準的宿主資料。
+
+## 14. Sequence and Host Optimization Assumptions (2026-06-16)
+## 14. 序列與宿主優化假設（2026-06-16）
+
+The new synonymous codon-optimization, host profiling, and experimental calibration layers introduce additional computational models with specific assumptions:
+
+新增的同義密碼子優化、宿主設定檔與實驗校準層引入了具有特定假設的額外計算模型：
+
+- **Synonymous CDS Replacement**: Assumes synonymous codon replacements preserve the primary protein structure and translated folding rate. Mature dynamic maturation delay rates are kept constant.
+  **同義 CDS 替換**：假設同義密碼子替換保留了主要蛋白質結構與翻譯折疊速率。成熟的動態成熟延遲速率保持不變。
+- **Motif Avoidance**: Assumes configured forbidden restriction/Type IIS sites can be resolved synonomously without affecting translation efficiency.
+  **基序避免**：假設已配置的禁用限制酶切位點/Type IIS 位點可以被同義解決，而不影響翻譯效率。
+- **Candidate Ranking Strategies**: Matches E. coli candidates under high-expression, low-burden, and balanced strategies to fixed copy-number classes, promoter strengths, and RBS strengths. Biases (expression/burden/stability) are static scores and do not dynamically simulate cellular trajectories.
+  **候選方案排序策略**：將在高表達、低負載與平衡策略下的大腸桿菌候選方案與固定的複製數類別、啟動子強度及 RBS 強度相匹配。偏置分數（表達量/負載/穩定性）是靜態分數，不會動態模擬細胞軌跡。
+- **Calibration Model Independence**: Experimental calibration summaries evaluate dataset coverage and average performance; they do not calibrate parameters dynamically in the ODE simulation.
+  **校準模型獨立性**：實驗校準摘要評估數據集覆蓋率和平均表現；它們目前不會動態調整 ODE 模擬中的參數。

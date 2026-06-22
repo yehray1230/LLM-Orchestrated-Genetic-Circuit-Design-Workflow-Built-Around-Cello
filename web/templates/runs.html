@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Runs{% endblock %}
+{% block content %}
+<header class="page-header">
+  <h1>設計執行</h1>
+  <p class="muted">追蹤背景任務、進度與人工介入狀態。</p>
+</header>
+<article class="card">
+  <div class="inline" style="justify-content:space-between">
+    <h2>執行紀錄</h2>
+    <a class="button" href="/web/new-design">新增執行</a>
+  </div>
+  {% if runs %}
+  <table>
+    <tr><th>Run ID</th><th>Status</th><th>Stage</th><th>Progress</th><th>Created</th></tr>
+    {% for run in runs %}
+    <tr>
+      <td><a href="/web/runs/{{ run.run_id }}">{{ run.run_id }}</a></td>
+      <td><span class="badge">{{ run.status }}</span></td>
+      <td>{{ run.stage or "-" }}</td>
+      <td>{{ "%.0f"|format((run.progress or 0) * 100) }}%</td>
+      <td>{{ run.created_at or "-" }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">尚無執行紀錄。</p>
+  {% endif %}
+</article>
+{% endblock %}
