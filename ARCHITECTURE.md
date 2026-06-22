@@ -77,7 +77,8 @@ The workflow is coordinated by [workflows/reflexion_controller.py](workflows/ref
 | [tools/host_optimization.py](tools/host_optimization.py) | Host-candidate ranking (high_expression, low_burden, balanced) and calibrations. <br> 宿主候選方案排序（高表達、低負載、平衡）與實驗校準。 |
 | [api/v2_routes.py](api/v2_routes.py) | V2 API router containing assembly plans, sequence analysis, codon optimization, and host optimization. <br> 包含組裝計畫、序列分析、密碼子優化及宿主優化的 V2 API 路由器。 |
 | [benchmark_suite/](benchmark_suite) | Deterministic, heuristic, and experimental readiness evaluation scoring. <br> 確定性、啟發式與實驗整備度評估評分組件。 |
-| [tools/skill_retriever.py](tools/skill_retriever.py) | Skill retrieval for contextual guidance. <br> 用於上下文引導的技能檢索。 |
+| [LOGIC_DESIGN_SKILL.md](LOGIC_DESIGN_SKILL.md) | Maintenance guide for the canonical logic design skill JSON schema. <br> Canonical 邏輯設計 skill JSON schema 的維護指南。 |
+| [tools/skill_retriever.py](tools/skill_retriever.py) | Logic skill context builder: injects the full compact canonical logic skill catalog and retrieves only dynamic design memories. <br> 邏輯技能上下文建構器：注入完整精簡版 canonical logic skill 目錄，僅對動態設計記憶進行檢索。 |
 | [tools/vector_retriever.py](tools/vector_retriever.py) | Vector retrieval wrapper for local records. <br> 用於本地記錄的向量檢索包裝器。 |
 | [mcp_server/](mcp_server) | Local service for run artifacts and serialized outputs. <br> 用於運行產物與序列化輸出的本地服務。 |
 | [tests/](tests) | Tests for workflow behavior, simulation, assembly planning, optimization, and MCP server. <br> 針對工作流行為、模擬、組裝計畫、優化以及 MCP 伺服器的測試。 |
@@ -108,8 +109,8 @@ The shared state is defined in [schemas/state.py](schemas/state.py).
   `current_node_id`：當前正在處理的節點。
 - `compute_budget` / `used_budget`: search budget control.
   `compute_budget` / `used_budget`：搜尋預算控制。
-- `rag_context` / `skill_library_context`: retrieved context for LLM agents.
-  `rag_context` / `skill_library_context`：為 LLM 智能體檢索的上下文。
+- `skill_context` / `skill_library_context`: logic design skill context for LLM agents. The canonical logic skill library is injected as a compact full catalog; extracted design memories are query-ranked. `rag_context` is retained as a backward-compatible alias for older state exports.
+  `skill_context` / `skill_library_context`：供 LLM 智能體使用的邏輯設計知識上下文。Canonical logic skill library 會以精簡全量目錄注入；萃取出的設計記憶才會依查詢排序。`rag_context` 保留為舊版狀態匯出的相容別名。
 - `biokinetic_context`: parameter context from data mining.
   `biokinetic_context`：來自數據挖掘的生物動力學參數上下文。
 - `logic_proposals`: generated logic-level candidates.

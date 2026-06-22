@@ -167,8 +167,8 @@ A typical run proceeds as follows:
    從 `active_frontier` 取出下一個節點。
 4. Select search behavior based on `search_mode`.
    根據 `search_mode` 選擇搜尋行為。
-5. Retrieve skill/RAG context when configured.
-   若有配置，檢索技能/RAG 上下文。
+5. Load logic design skill context when configured: the canonical logic skill catalog is injected in full compact form, while extracted design memories are retrieved by query.
+   若有配置，載入邏輯設計知識上下文：canonical logic skill 目錄會以精簡全量形式注入，萃取出的設計記憶才依查詢檢索。
 6. Run `BuilderAgent` unless the node is in `Exploitation` mode.
    運行 `BuilderAgent`（除非節點處於 `Exploitation` 模式）。
 7. Run `TranslatorAgent` to generate Cello-compatible Verilog.
