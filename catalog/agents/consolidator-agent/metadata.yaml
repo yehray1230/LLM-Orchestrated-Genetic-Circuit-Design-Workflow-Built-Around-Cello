@@ -1,0 +1,28 @@
+id: consolidator-agent
+name: Consolidator Agent
+schema_version: agent-metadata-v1
+module: agents.consolidator_agent
+entrypoint: ConsolidatorAgent
+role: result_consolidation
+summary: Copies the selected node-level result and review state back into the global design state.
+inputs:
+  - current_node_id
+  - tree_nodes
+outputs:
+  - best_topology
+  - is_approved
+  - error_type
+  - critic_feedbacks
+downstream_agents:
+  - skill-extractor-agent
+claim_level: computational_candidate
+requires_expert_review: true
+risk_notes:
+  - Consolidates current workflow state and does not independently validate correctness.
+failure_modes:
+  - Missing current node.
+  - No selected best topology to promote.
+tags:
+  - agent
+  - consolidation
+  - workflow-state

@@ -1,0 +1,36 @@
+id: critic-agent
+name: Critic Agent
+schema_version: agent-metadata-v1
+module: agents.critic_agent
+entrypoint: CriticAgent
+role: candidate_review
+summary: Reviews benchmark and topology signals to classify errors, request repair, or approve a candidate.
+inputs:
+  - best_topology
+  - benchmark_report
+  - candidate_topologies
+  - failed_attempts
+outputs:
+  - critic_feedbacks
+  - error_type
+  - is_approved
+  - requires_human_input
+tools:
+  - benchmark_report_interpreter
+  - llm
+downstream_agents:
+  - builder-agent
+  - consolidator-agent
+claim_level: computational_candidate
+requires_expert_review: true
+risk_notes:
+  - Approval means passing project heuristics, not wet-lab validation.
+  - Scores and thresholds are decision aids rather than biological guarantees.
+failure_modes:
+  - Misclassifying a part issue as a logic issue.
+  - Ignoring low-confidence simulation or mapping evidence.
+  - Failing to pause for human input when semantics are ambiguous.
+tags:
+  - agent
+  - review
+  - repair-loop

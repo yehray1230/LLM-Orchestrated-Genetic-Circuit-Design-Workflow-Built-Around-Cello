@@ -1,0 +1,33 @@
+id: data-miner-agent
+name: Data Miner Agent
+schema_version: agent-metadata-v1
+module: agents.data_miner_agent
+entrypoint: DataMinerAgent
+role: kinetic_context_enrichment
+summary: Adds host-aware biokinetic parameter context to candidate topologies before simulation and scoring.
+inputs:
+  - candidate_topologies
+  - host_organism
+  - logic_proposals
+  - verilog_codes
+outputs:
+  - candidate_topologies
+  - biokinetic_context
+tools:
+  - vector_retriever
+  - unit_conversion
+downstream_agents:
+  - critic-agent
+claim_level: simulation_screening
+requires_expert_review: true
+risk_notes:
+  - Conservative defaults are screening assumptions, not calibrated measurements.
+  - Retrieved parameter records may be incomplete or host-mismatched.
+failure_modes:
+  - Missing kinetic parameter coverage.
+  - Unit normalization error.
+  - Over-reliance on conservative defaults.
+tags:
+  - agent
+  - kinetics
+  - simulation

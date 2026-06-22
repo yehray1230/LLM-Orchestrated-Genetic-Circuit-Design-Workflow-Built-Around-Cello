@@ -1,0 +1,31 @@
+id: pm-agent
+name: PM Agent
+schema_version: agent-metadata-v1
+module: agents.pm_agent
+entrypoint: call_pm_agent
+role: specification_elicitation
+summary: Builds and completes a structured design specification from a natural-language circuit request.
+inputs:
+  - user_intent
+  - pm_chat_history
+  - structured_spec
+outputs:
+  - structured_spec
+  - pending_proposal
+  - human_feedback_prompt
+tools:
+  - litellm
+downstream_agents:
+  - builder-agent
+claim_level: planning_only
+requires_expert_review: true
+risk_notes:
+  - Suggests biological defaults but does not prove biological feasibility.
+  - User-facing defaults must remain distinguishable from explicit user requirements.
+failure_modes:
+  - Missing or ambiguous chassis, input, output, or logic relation.
+  - Over-interpreting a dynamic behavior request as combinational logic.
+tags:
+  - agent
+  - elicitation
+  - human-in-the-loop

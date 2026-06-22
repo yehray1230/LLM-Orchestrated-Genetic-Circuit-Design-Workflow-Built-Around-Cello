@@ -1,0 +1,168 @@
+{
+  "kit_count": 1,
+  "schema_version": "workflow-kit-registry-v1",
+  "workflow_kits": [
+    {
+      "agents": [
+        "pm-agent",
+        "builder-agent",
+        "translator-agent",
+        "data-miner-agent",
+        "critic-agent",
+        "consolidator-agent",
+        "skill-extractor-agent"
+      ],
+      "claim_level": "computational_candidate",
+      "default_settings": {
+        "allows_mock_cello": true,
+        "compute_budget": 3,
+        "data_mining_optional": true,
+        "requires_cello_command": false,
+        "search_modes": [
+          "Exploration",
+          "Repair",
+          "Exploitation"
+        ],
+        "skill_extraction_optional": true
+      },
+      "entrypoint": "workflows.reflexion_controller.run_reflexion_workflow",
+      "id": "logic-design-basic",
+      "inputs": [
+        "user_intent",
+        "host_organism",
+        "structured_spec",
+        "compute_budget",
+        "scoring_profile",
+        "simulation_settings"
+      ],
+      "name": "Logic Design Basic",
+      "outputs": [
+        "structured_spec",
+        "logic_proposals",
+        "verilog_codes",
+        "candidate_topologies",
+        "best_topology",
+        "benchmark_report",
+        "critic_feedbacks",
+        "failed_attempts",
+        "extracted_skills"
+      ],
+      "requires_expert_review": true,
+      "risk_notes": [
+        "Outputs are computational candidates and are not experimentally validated genetic circuits.",
+        "Mock Cello output can support UI and workflow tests but must not be interpreted as successful biological part mapping.",
+        "ODE and benchmark scores are screening heuristics rather than calibrated wet-lab measurements."
+      ],
+      "sample_prompts": [
+        "Activate GFP only when IPTG is present and aTc is absent.",
+        "Design an E. coli reporter circuit that turns on mCherry when arabinose or salicylate is present.",
+        "Create a low-burden GFP logic gate for A AND NOT B with medium copy number."
+      ],
+      "schema_version": "workflow-kit-v1",
+      "source_path": "catalog\\workflow-kits\\logic-design-basic\\kit.json",
+      "stages": [
+        {
+          "agent": "pm-agent",
+          "id": "pre-design-elicitation",
+          "name": "Pre-design elicitation",
+          "optional": true,
+          "summary": "Completes chassis, input, output, logic relation, and copy-number fields before the core workflow.",
+          "tool": null
+        },
+        {
+          "agent": "builder-agent",
+          "id": "logic-proposal",
+          "name": "Logic proposal",
+          "optional": false,
+          "summary": "Generates Cello-oriented Boolean logic proposals and draft Verilog candidates.",
+          "tool": null
+        },
+        {
+          "agent": "translator-agent",
+          "id": "verilog-translation",
+          "name": "Verilog translation",
+          "optional": false,
+          "summary": "Translates logic proposals into Cello-compatible combinational Verilog.",
+          "tool": null
+        },
+        {
+          "agent": null,
+          "id": "cello-mapping",
+          "name": "Cello mapping",
+          "optional": false,
+          "summary": "Runs configured Cello mapping or explicit mock fallback topology generation.",
+          "tool": "cello_wrapper"
+        },
+        {
+          "agent": "data-miner-agent",
+          "id": "kinetic-context",
+          "name": "Kinetic context",
+          "optional": true,
+          "summary": "Adds host-aware kinetic parameter context for downstream ODE screening.",
+          "tool": null
+        },
+        {
+          "agent": null,
+          "id": "ode-simulation",
+          "name": "ODE simulation",
+          "optional": false,
+          "summary": "Screens candidate dynamics with the reduced resource-aware simulation path.",
+          "tool": "batch_ode_simulator"
+        },
+        {
+          "agent": null,
+          "id": "benchmark-review",
+          "name": "Benchmark review",
+          "optional": false,
+          "summary": "Applies weighted heuristic scoring for functional, burden, robustness, temporal, orthogonality, and Cello-assignment signals.",
+          "tool": "benchmark_suite.evaluate_candidate"
+        },
+        {
+          "agent": "critic-agent",
+          "id": "critic-repair-routing",
+          "name": "Critic repair routing",
+          "optional": false,
+          "summary": "Approves candidates or routes LOGIC_ERROR and PART_ERROR feedback into repair/exploitation branches.",
+          "tool": null
+        },
+        {
+          "agent": "consolidator-agent",
+          "id": "result-consolidation",
+          "name": "Result consolidation",
+          "optional": false,
+          "summary": "Promotes the selected node-level result into the global design state.",
+          "tool": null
+        },
+        {
+          "agent": "skill-extractor-agent",
+          "id": "skill-memory-extraction",
+          "name": "Skill memory extraction",
+          "optional": true,
+          "summary": "Captures successful or failed workflow traces as reusable design memory.",
+          "tool": null
+        }
+      ],
+      "success_criteria": [
+        "Structured specification is complete enough for combinational logic design.",
+        "At least one Verilog candidate passes local Cello-compatibility checks.",
+        "A best topology is selected with benchmark and critic feedback recorded.",
+        "Run artifacts preserve failure and repair context for reproducibility."
+      ],
+      "summary": "Runs the core Reflexion workflow for turning a natural-language genetic-circuit request into computational candidate designs with Verilog, mapping, simulation, benchmark review, and repair.",
+      "tags": [
+        "workflow-kit",
+        "logic-design",
+        "reflexion",
+        "cello",
+        "simulation"
+      ],
+      "tools": [
+        "skill_retriever",
+        "cello_wrapper",
+        "batch_ode_simulator",
+        "benchmark_suite.evaluate_candidate"
+      ],
+      "version": "1.0.0"
+    }
+  ]
+}
