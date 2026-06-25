@@ -82,6 +82,55 @@ For the fixed demo, confirm the available result includes:
 - [ ] Export artifacts, or explicit warnings explaining missing sequence
       evidence.
 
+## Demo Baseline Freeze Packet
+
+Generate the fixed baseline evidence packet:
+
+```powershell
+.\venv\Scripts\python.exe scripts\generate_demo_baseline.py --timeout-seconds 60
+```
+
+Confirm the generated packet reports the staged baseline progression:
+
+```text
+conceptual -> sequence_complete -> assembly_planned -> primer_ready
+```
+
+- [ ] `demo_baseline_packet.json` exists under `outputs/demo_baseline/`.
+- [ ] `demo_baseline_summary.md` exists under `outputs/demo_baseline/`.
+- [ ] `sequence_analysis.json` exists and reports zero blocked parts.
+- [ ] `assembly_plan.json` exists and uses
+      `abstract_non_experimental_ordering`.
+- [ ] `primer_readiness.json` exists and reports `status: ready`.
+- [ ] The final readiness status is `primer_ready`.
+- [ ] The next required stage is `sequence_optimized`.
+- [ ] `primer_readiness.json` reports
+      `actual_primer_sequences_generated: false`.
+- [ ] `primer_readiness.json` states that no primer sequences, oligo order
+      information, PCR conditions, or wet-lab protocol are included.
+- [ ] `experimental_readiness_score` remains null/empty for this demo gate.
+- [ ] The packet claim boundary still says the result is computational
+      screening evidence, not wet-lab validation or an experimental protocol.
+
+Recommended focused validation before pushing this milestone:
+
+```powershell
+.\venv\Scripts\python.exe -m pytest tests\test_demo_baseline_freeze.py tests\test_readiness_evaluator.py -q
+```
+
+Recommended review/commit scope for the baseline-freeze milestone:
+
+- `application/demo_baseline.py`
+- `scripts/generate_demo_baseline.py`
+- `tests/test_demo_baseline_freeze.py`
+- `tests/test_readiness_evaluator.py`
+- `benchmark_suite/readiness_evaluator.py`
+- `DEMO_CHECKLIST.md`
+
+Generated `outputs/demo_baseline/` packets are local evidence artifacts. Keep
+them out of the commit unless a specific frozen artifact is intentionally being
+published.
+
 ## Cello Claim Boundary
 
 - [ ] If `cello_mode` is `mock`, describe the output as workflow/testing

@@ -205,7 +205,12 @@ def _experimental_readiness_score(
         host_optimization_result,
         calibration_result,
     ]
-    available = [result for result in results if isinstance(result, dict)]
+    available = [
+        result
+        for result in results
+        if isinstance(result, dict)
+        and result.get("experimental_evidence") is not False
+    ]
     if not available:
         return None
     values = [_result_score(result) or 0.0 for result in available]
@@ -231,7 +236,10 @@ def _completed_stages(
     host_optimization: dict[str, Any] | None,
 ) -> list[str]:
     stages = ["conceptual"]
-    if assembly.get("readiness_status") == "assembly_check_passed":
+    if assembly.get("readiness_status") in {
+        "sequence_complete",
+        "assembly_check_passed",
+    }:
         stages.append("sequence_complete")
     if plan.get("status") == "ready":
         stages.append("assembly_planned")
