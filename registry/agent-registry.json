@@ -33,7 +33,7 @@
       ],
       "role": "logic_design",
       "schema_version": "agent-metadata-v1",
-      "source_path": "catalog\\agents\\builder-agent\\metadata.yaml",
+      "source_path": "catalog/agents/builder-agent/metadata.yaml",
       "summary": "Generates three Cello-oriented Boolean circuit proposals and draft Verilog candidates.",
       "tags": [
         "agent",
@@ -74,7 +74,7 @@
       ],
       "role": "result_consolidation",
       "schema_version": "agent-metadata-v1",
-      "source_path": "catalog\\agents\\consolidator-agent\\metadata.yaml",
+      "source_path": "catalog/agents/consolidator-agent/metadata.yaml",
       "summary": "Copies the selected node-level result and review state back into the global design state.",
       "tags": [
         "agent",
@@ -117,7 +117,7 @@
       ],
       "role": "candidate_review",
       "schema_version": "agent-metadata-v1",
-      "source_path": "catalog\\agents\\critic-agent\\metadata.yaml",
+      "source_path": "catalog/agents/critic-agent/metadata.yaml",
       "summary": "Reviews benchmark and topology signals to classify errors, request repair, or approve a candidate.",
       "tags": [
         "agent",
@@ -160,7 +160,7 @@
       ],
       "role": "kinetic_context_enrichment",
       "schema_version": "agent-metadata-v1",
-      "source_path": "catalog\\agents\\data-miner-agent\\metadata.yaml",
+      "source_path": "catalog/agents/data-miner-agent/metadata.yaml",
       "summary": "Adds host-aware biokinetic parameter context to candidate topologies before simulation and scoring.",
       "tags": [
         "agent",
@@ -202,7 +202,7 @@
       ],
       "role": "specification_elicitation",
       "schema_version": "agent-metadata-v1",
-      "source_path": "catalog\\agents\\pm-agent\\metadata.yaml",
+      "source_path": "catalog/agents/pm-agent/metadata.yaml",
       "summary": "Builds and completes a structured design specification from a natural-language circuit request.",
       "tags": [
         "agent",
@@ -242,7 +242,7 @@
       ],
       "role": "workflow_memory_extraction",
       "schema_version": "agent-metadata-v1",
-      "source_path": "catalog\\agents\\skill-extractor-agent\\metadata.yaml",
+      "source_path": "catalog/agents/skill-extractor-agent/metadata.yaml",
       "summary": "Converts successful and failed workflow traces into reusable design-memory records.",
       "tags": [
         "agent",
@@ -286,7 +286,7 @@
       ],
       "role": "verilog_translation",
       "schema_version": "agent-metadata-v1",
-      "source_path": "catalog\\agents\\translator-agent\\metadata.yaml",
+      "source_path": "catalog/agents/translator-agent/metadata.yaml",
       "summary": "Converts structured logic proposals into validated Cello-compatible combinational Verilog.",
       "tags": [
         "agent",

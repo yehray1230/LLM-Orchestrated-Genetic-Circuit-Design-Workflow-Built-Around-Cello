@@ -455,6 +455,10 @@ def _append_sequence_warnings(
     assembly_method: str,
     report: AssemblyReport,
 ) -> None:
+    from benchmark_suite.layout_critic import analyze_layout_issues
+    layout_issues = analyze_layout_issues(design, plasmid)
+    report.issues.extend(layout_issues)
+
     host = str(design.biological_context.host_organism.value or "").lower()
     part_ids = {
         instance.part_id

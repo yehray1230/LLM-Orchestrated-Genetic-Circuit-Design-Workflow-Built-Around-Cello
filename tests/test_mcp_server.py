@@ -794,6 +794,7 @@ def test_mcp_server_registers_expected_tools_without_real_mcp(monkeypatch) -> No
         "get_design_run_progress",
         "get_design_run_result",
         "list_design_runs",
+        "list_tool_capabilities",
         "cancel_design_run",
         "get_design_run_artifacts",
         "compare_design_runs",

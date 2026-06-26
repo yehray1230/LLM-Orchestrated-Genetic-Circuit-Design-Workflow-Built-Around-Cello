@@ -65,7 +65,10 @@ from schemas.design_ir_v2 import (
 from schemas.host_profile import (
     HostProfile,
     default_ecoli_profile,
+    default_yeast_profile,
+    default_mammalian_profile,
     host_profile_from_dict,
+    apply_host_profile_to_topology,
 )
 from schemas.host_optimization import (
     calibration_from_dict,
@@ -86,6 +89,8 @@ from schemas.sequence_optimization import SequenceOptimizationRequest
 from tools.assembly_planner import create_assembly_plan
 from tools.primer_designer import design_assembly_primers
 from tools.ode_simulator import BatchODESimulator
+from benchmark_suite.parameter_fitting import apply_parameter_fit_snapshot
+from tools.tool_adapters import inspect_capabilities
 from tools.sequence_analyzer import analyze_design_sequences
 from tools.sequence_optimization import evaluate_sequence_optimization
 from tools.sequence_optimization import generate_host_optimized_sequences
@@ -97,6 +102,13 @@ from tools.host_optimization import (
 
 DEFAULT_API_DATA_DIR = Path("outputs") / "api_data"
 SAFE_RUN_ID = re.compile(r"^run_[A-Za-z0-9_-]{1,120}$")
+SNAPSHOT_COMPARISON_REPORT_TYPE = "parameter_fit_snapshot_comparison"
+SNAPSHOT_COMPARISON_REPORT_VERSION = "1.0"
+SNAPSHOT_COMPARISON_METRICS = {
+    "dynamic_margin": "Dynamic margin",
+    "signal_to_noise_ratio": "Signal-to-noise ratio",
+    "kinetic_score": "Kinetic score",
+}
 
 
 class ImportService:
@@ -264,10 +276,59 @@ class EvaluationService:
     def __init__(
         self,
         benchmark_repository: JsonRepository,
+        parameter_fit_repository: JsonRepository,
         report_dir: Path,
     ):
         self.benchmark_repository = benchmark_repository
+        self.parameter_fit_repository = parameter_fit_repository
         self.report_dir = report_dir
+
+    def create_parameter_fit_snapshot(
+        self,
+        request: dict[str, Any],
+    ) -> dict[str, Any]:
+        snapshot_id = request.get("snapshot_id") or f"fit_{uuid4().hex[:12]}"
+        part_id = request.get("part_id", "unknown_part")
+
+        from benchmark_suite.parameter_fitting import load_plate_reader_csv, fit_hill_response
+        points = load_plate_reader_csv(
+            source=request["csv_content"],
+            concentration_column=request.get("concentration_column", "concentration"),
+            response_column=request.get("response_column", "response"),
+        )
+        fit = fit_hill_response(
+            points=points,
+            source=str(request.get("source") or "local_plate_reader_fit"),
+            measurement_context=dict(request.get("measurement_context") or {}),
+        )
+
+        from benchmark_suite.parameter_fitting import fitted_parameters_to_part_override
+        override = fitted_parameters_to_part_override(
+            part_id=part_id,
+            fit=fit,
+            snapshot_id=snapshot_id,
+        )
+        payload = {
+            "snapshot_id": snapshot_id,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "status": "completed",
+            "part_id": part_id,
+            "source": str(request.get("source") or "local_plate_reader_fit"),
+            "measurement_context": dict(request.get("measurement_context") or {}),
+            "fit": fit.to_dict(),
+            "override": override,
+            "warnings": list(fit.warnings),
+            "data_boundary": "local_private",
+            "update_policy": override["update_policy"],
+        }
+        self.parameter_fit_repository.save(snapshot_id, payload)
+        return payload
+
+    def parameter_fit_snapshot(self, snapshot_id: str) -> dict[str, Any] | None:
+        return self.parameter_fit_repository.get(snapshot_id)
+
+    def parameter_fit_snapshots(self) -> list[dict[str, Any]]:
+        return self.parameter_fit_repository.list()
 
     def evaluate(
         self,
@@ -320,7 +381,108 @@ class EvaluationService:
         return compare_benchmark_runs(runs)
 
 
+def _metric_delta(
+    metric: str,
+    before: dict[str, Any],
+    after: dict[str, Any],
+) -> dict[str, Any]:
+    default_value = before.get(metric)
+    fitted_value = after.get(metric)
+    delta = (
+        round(float(fitted_value) - float(default_value), 6)
+        if default_value is not None and fitted_value is not None
+        else None
+    )
+    return {
+        "metric": metric,
+        "label": SNAPSHOT_COMPARISON_METRICS[metric],
+        "default": default_value,
+        "fitted": fitted_value,
+        "delta": delta,
+        "direction": _delta_direction(delta),
+    }
+
+
+def _delta_direction(delta: float | None) -> str:
+    if delta is None:
+        return "unknown"
+    if delta > 0:
+        return "improved"
+    if delta < 0:
+        return "reduced"
+    return "unchanged"
+
+
+def _provenance_count(summary: dict[str, Any], key: str) -> int:
+    value = summary.get(key, 0)
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _provenance_delta(
+    default_provenance: dict[str, Any],
+    fitted_provenance: dict[str, Any],
+) -> dict[str, Any]:
+    fields = {
+        "override_count": "override_count",
+        "local_private_parameter_count": "local_private_parameter_count",
+    }
+    deltas: dict[str, Any] = {}
+    for report_key, provenance_key in fields.items():
+        before = _provenance_count(default_provenance, provenance_key)
+        after = _provenance_count(fitted_provenance, provenance_key)
+        deltas[report_key] = {
+            "default": before,
+            "fitted": after,
+            "delta": after - before,
+        }
+    return {
+        "counts": deltas,
+        "source_summary_default": default_provenance.get("source_summary", {}),
+        "source_summary_fitted": fitted_provenance.get("source_summary", {}),
+        "data_boundary_summary_default": default_provenance.get(
+            "data_boundary_summary", {}
+        ),
+        "data_boundary_summary_fitted": fitted_provenance.get(
+            "data_boundary_summary", {}
+        ),
+    }
+
+
+def _snapshot_comparison_interpretation(
+    metric_deltas: list[dict[str, Any]],
+) -> dict[str, Any]:
+    indexed = {item["metric"]: item for item in metric_deltas}
+    kinetic = indexed.get("kinetic_score", {}).get("delta")
+    snr = indexed.get("signal_to_noise_ratio", {}).get("delta")
+    margin = indexed.get("dynamic_margin", {}).get("delta")
+    return {
+        "status": "complete",
+        "primary_direction": _delta_direction(kinetic),
+        "improved_metrics": [
+            item["metric"] for item in metric_deltas if item["direction"] == "improved"
+        ],
+        "reduced_metrics": [
+            item["metric"] for item in metric_deltas if item["direction"] == "reduced"
+        ],
+        "summary": (
+            f"Fitted snapshot comparison completed: kinetic_score delta={kinetic}, "
+            f"SNR delta={snr}, dynamic_margin delta={margin}."
+        ),
+    }
+
+
 class SimulationService:
+    def __init__(
+        self,
+        parameter_fit_repository: JsonRepository | None = None,
+        host_profiles: HostProfileRegistryService | None = None,
+    ):
+        self.parameter_fit_repository = parameter_fit_repository
+        self.host_profiles = host_profiles
+
     def models(self) -> list[dict[str, Any]]:
         return [
             {
@@ -347,13 +509,41 @@ class SimulationService:
         monte_carlo_samples: int = 1,
         noise_fraction: float = 0.15,
         random_seed: int | None = None,
+        host_profile_id: str | None = None,
+        temporal_inputs: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        # Apply host profile if provided or if we can resolve one
+        if host_profile_id:
+            if self.host_profiles:
+                profile = self.host_profiles.get(host_profile_id)
+                if not profile:
+                    raise ValueError(f"Host profile '{host_profile_id}' not found.")
+                topology = apply_host_profile_to_topology(topology, profile)
+        else:
+            # Fallback/resolve from topology if no host_profile_id is explicitly passed
+            chassis = topology.get("chassis") or topology.get("biokinetic_parameters", {}).get("host")
+            if chassis and self.host_profiles:
+                ch = str(chassis).lower().strip()
+                resolved_id = None
+                if "yeast" in ch or "cerevisiae" in ch:
+                    resolved_id = "yeast_sc_default"
+                elif "coli" in ch:
+                    resolved_id = "ecoli_k12_default"
+                elif "cho" in ch or "mammalian" in ch or "sapiens" in ch:
+                    resolved_id = "mammalian_cho_default"
+
+                if resolved_id:
+                    profile = self.host_profiles.get(resolved_id)
+                    if profile:
+                        topology = apply_host_profile_to_topology(topology, profile)
+
         simulator = BatchODESimulator(
             simulation_time=simulation_time,
             sample_count=sample_count,
             monte_carlo_samples=monte_carlo_samples,
             noise_fraction=noise_fraction,
             random_seed=random_seed,
+            temporal_inputs=temporal_inputs,
         )
         result = simulator.simulate_topology(topology)
         return {
@@ -361,6 +551,162 @@ class SimulationService:
             "simulation_result": result["simulation_result"],
             "candidate": result,
         }
+
+    def apply_parameter_fit_snapshot(
+        self,
+        topology: dict[str, Any],
+        snapshot: dict[str, Any],
+    ) -> dict[str, Any]:
+        return apply_parameter_fit_snapshot(topology, snapshot)
+
+    def compare_default_vs_fitted(
+        self,
+        topology: dict[str, Any],
+        snapshot_id: str,
+        *,
+        simulation_time: float = 600.0,
+        sample_count: int = 80,
+        monte_carlo_samples: int = 1,
+        noise_fraction: float = 0.15,
+        random_seed: int | None = None,
+        host_profile_id: str | None = None,
+        temporal_inputs: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        if not self.parameter_fit_repository:
+            raise ValueError("Parameter fit repository is not configured.")
+        snapshot = self.parameter_fit_repository.get(snapshot_id)
+        if snapshot is None:
+            raise KeyError(snapshot_id)
+
+        # 1. Simulate default topology
+        default_res = self.simulate(
+            topology,
+            simulation_time=simulation_time,
+            sample_count=sample_count,
+            monte_carlo_samples=monte_carlo_samples,
+            noise_fraction=noise_fraction,
+            random_seed=random_seed,
+            host_profile_id=host_profile_id,
+            temporal_inputs=temporal_inputs,
+        )
+        default_cand = default_res["candidate"]
+
+        # 2. Simulate fitted topology (with snapshot overrides applied)
+        fitted_topology = self.apply_parameter_fit_snapshot(topology, snapshot)
+        fitted_res = self.simulate(
+            fitted_topology,
+            simulation_time=simulation_time,
+            sample_count=sample_count,
+            monte_carlo_samples=monte_carlo_samples,
+            noise_fraction=noise_fraction,
+            random_seed=random_seed,
+            host_profile_id=host_profile_id,
+            temporal_inputs=temporal_inputs,
+        )
+        fitted_cand = fitted_res["candidate"]
+
+        def_prov = default_cand.get("parameter_provenance", {})
+        fit_prov = fitted_cand.get("parameter_provenance", {})
+        metric_deltas = [
+            _metric_delta(metric, default_cand, fitted_cand)
+            for metric in SNAPSHOT_COMPARISON_METRICS
+        ]
+        metric_delta_map = {
+            item["metric"]: item["delta"] for item in metric_deltas
+        }
+        provenance_delta = _provenance_delta(def_prov, fit_prov)
+        simulation_config = {
+            "simulation_time": simulation_time,
+            "sample_count": sample_count,
+            "monte_carlo_samples": monte_carlo_samples,
+            "noise_fraction": noise_fraction,
+            "random_seed": random_seed,
+            "host_profile_id": host_profile_id,
+            "temporal_inputs": temporal_inputs,
+            "simulation_model_id": SIMULATION_MODEL_ID,
+            "simulation_model_version": SIMULATION_MODEL_VERSION,
+        }
+        generated_at = datetime.now(timezone.utc).isoformat()
+        report = {
+            "report_type": SNAPSHOT_COMPARISON_REPORT_TYPE,
+            "report_version": SNAPSHOT_COMPARISON_REPORT_VERSION,
+            "topology_id": topology.get("topology_id") or "unknown",
+            "snapshot_id": snapshot_id,
+            "part_id": snapshot.get("part_id"),
+            "snapshot": {
+                "snapshot_id": snapshot.get("snapshot_id"),
+                "part_id": snapshot.get("part_id"),
+                "source": snapshot.get("source"),
+                "data_boundary": snapshot.get("data_boundary"),
+                "measurement_context": snapshot.get("measurement_context", {}),
+                "fit_quality": snapshot.get("fit_quality", {}),
+            },
+            "generated_at": generated_at,
+            "simulation_config": simulation_config,
+            "default_run": {
+                "dynamic_margin": default_cand.get("dynamic_margin"),
+                "signal_to_noise_ratio": default_cand.get("signal_to_noise_ratio"),
+                "kinetic_score": default_cand.get("kinetic_score"),
+                "parameter_provenance": def_prov,
+                "ode_trace": default_cand.get("ode_trace"),
+            },
+            "fitted_run": {
+                "dynamic_margin": fitted_cand.get("dynamic_margin"),
+                "signal_to_noise_ratio": fitted_cand.get("signal_to_noise_ratio"),
+                "kinetic_score": fitted_cand.get("kinetic_score"),
+                "parameter_provenance": fit_prov,
+                "ode_trace": fitted_cand.get("ode_trace"),
+            },
+            "metric_deltas": metric_deltas,
+            "provenance_delta": provenance_delta,
+            "interpretation": _snapshot_comparison_interpretation(metric_deltas),
+            "comparison": {
+                "dynamic_margin_delta": metric_delta_map["dynamic_margin"],
+                "signal_to_noise_ratio_delta": metric_delta_map[
+                    "signal_to_noise_ratio"
+                ],
+                "kinetic_score_delta": metric_delta_map["kinetic_score"],
+                "provenance_changes": {
+                    "override_count_before": provenance_delta["counts"][
+                        "override_count"
+                    ]["default"],
+                    "override_count_after": provenance_delta["counts"][
+                        "override_count"
+                    ]["fitted"],
+                    "local_private_count_before": provenance_delta["counts"][
+                        "local_private_parameter_count"
+                    ]["default"],
+                    "local_private_count_after": provenance_delta["counts"][
+                        "local_private_parameter_count"
+                    ]["fitted"],
+                },
+                "summary": (
+                    f"Applying snapshot {snapshot_id} "
+                    f"changed kinetic_score by {metric_delta_map['kinetic_score']:+.4f} "
+                    f"({default_cand.get('kinetic_score'):.4f} -> {fitted_cand.get('kinetic_score'):.4f}), "
+                    f"SNR by {metric_delta_map['signal_to_noise_ratio']:+.4f} "
+                    f"({default_cand.get('signal_to_noise_ratio'):.4f} -> {fitted_cand.get('signal_to_noise_ratio'):.4f}), "
+                    f"and dynamic_margin by {metric_delta_map['dynamic_margin']:+.4f} "
+                    f"({default_cand.get('dynamic_margin'):.4f} -> {fitted_cand.get('dynamic_margin'):.4f})."
+                    if all(value is not None for value in metric_delta_map.values())
+                    else f"Snapshot comparison finished for snapshot {snapshot_id}."
+                ),
+            }
+        }
+        hash_payload = {
+            key: value
+            for key, value in report.items()
+            if key not in {"generated_at", "report_id", "report_hash"}
+        }
+        report_hash = canonical_payload_hash(hash_payload)
+        report["report_hash"] = report_hash
+        report["report_id"] = f"snapshot_comparison_{report_hash[:12]}"
+        return report
+
+
+class ToolCapabilityService:
+    def inspect(self) -> dict[str, Any]:
+        return inspect_capabilities()
 
 
 class ExportService:
@@ -420,9 +766,14 @@ class HostProfileRegistryService:
         self.ensure_defaults()
 
     def ensure_defaults(self) -> None:
-        default = default_ecoli_profile()
-        if not self.repository.exists(default.profile_id):
-            self.repository.save(default.profile_id, default.to_dict())
+        defaults = [
+            default_ecoli_profile(),
+            default_yeast_profile(),
+            default_mammalian_profile(),
+        ]
+        for default in defaults:
+            if not self.repository.exists(default.profile_id):
+                self.repository.save(default.profile_id, default.to_dict())
 
     def register(self, payload: dict[str, Any]) -> HostProfile:
         profile = host_profile_from_dict(payload)
@@ -1055,6 +1406,7 @@ def create_application_services(
     selected = Path(base_dir) if base_dir else DEFAULT_API_DATA_DIR
     draft_repository = JsonRepository(selected / "drafts")
     benchmark_repository = JsonRepository(selected / "benchmark_runs")
+    parameter_fit_repository = JsonRepository(selected / "parameter_fit_snapshots")
     backbone_repository = JsonRepository(selected / "backbones")
     host_profile_repository = JsonRepository(selected / "host_profiles")
     host_calibration_repository = JsonRepository(selected / "host_calibrations")
@@ -1063,9 +1415,10 @@ def create_application_services(
     designs = DesignService(design_repository)
     _migrate_legacy_design_repository(selected / "designs", designs)
     run_store = RunStore(base_dir=selected / "runs")
-    simulation_service = SimulationService()
-    backbones = BackboneRegistryService(backbone_repository)
     host_profiles = HostProfileRegistryService(host_profile_repository)
+    simulation_service = SimulationService(parameter_fit_repository, host_profiles)
+    tool_capability_service = ToolCapabilityService()
+    backbones = BackboneRegistryService(backbone_repository)
     plasmid_assemblies = PlasmidAssemblyService(designs, backbones)
     assembly_plans = AssemblyPlanningService(plasmid_assemblies, backbones)
     sequence_quality = SequenceQualityService(designs, host_profiles)
@@ -1084,6 +1437,7 @@ def create_application_services(
         comparisons=ComparisonService(designs),
         evaluations=EvaluationService(
             benchmark_repository,
+            parameter_fit_repository,
             selected / "benchmark_reports",
         ),
         simulations=simulation_service,

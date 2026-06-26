@@ -115,6 +115,7 @@ def test_benchmark_runner_checks_expectations_and_writes_reports(
     assert result["summary"]["case_count"] == 4
     assert result["summary"]["pass_rate"] == 1.0
     assert result["result_hash"]
+    assert any(tool["capability"] == "ode_simulation" for tool in result["tools"])
     assert all(case["passed"] for case in result["cases"])
     assert Path(result["artifacts"]["report_json"]).exists()
     assert Path(result["artifacts"]["cases_csv"]).exists()

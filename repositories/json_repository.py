@@ -25,9 +25,17 @@ class JsonRepository:
         path = self._path(record_id)
         temp_path = self.base_dir / f".{record_id}.{uuid4().hex}.tmp"
         serialized = json.dumps(payload, indent=2, ensure_ascii=False)
+        import time
         with self._lock:
             temp_path.write_text(serialized, encoding="utf-8")
-            temp_path.replace(path)
+            for i in range(10):
+                try:
+                    temp_path.replace(path)
+                    break
+                except PermissionError:
+                    if i == 9:
+                        raise
+                    time.sleep(0.05)
         return payload
 
     def get(self, record_id: str) -> dict[str, Any] | None:

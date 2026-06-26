@@ -131,6 +131,32 @@ Generated `outputs/demo_baseline/` packets are local evidence artifacts. Keep
 them out of the commit unless a specific frozen artifact is intentionally being
 published.
 
+## Phase 1/2 API Validation
+
+- [ ] Create a local/private fitted snapshot with
+      `POST /api/v1/benchmarks/parameter-fits`.
+- [ ] Confirm the snapshot is listed by
+      `GET /api/v1/benchmarks/parameter-fits`.
+- [ ] Run `POST /api/v1/simulations` with `parameter_fit_snapshot_id` and
+      confirm the candidate includes `applied_parameter_fit_snapshot`.
+- [ ] Run
+      `POST /api/v1/benchmarks/parameter-fits/{snapshot_id}/comparison` and
+      confirm `default_run`, `fitted_run`, `metric_deltas`,
+      `provenance_delta`, and `report_hash` are present.
+- [ ] Run `POST /api/v1/simulations/sweep` for a parameter such as
+      `copy_number` or `ribosome_total`, and confirm the response includes
+      `report_type`, `schema_version`, `host_profile_id`, and row-level
+      dynamic margin, SNR, kinetic score, and burden fields.
+- [ ] Compare host profile effects by running the same simulation with
+      `ecoli_k12_default`, `yeast_sc_default`, and
+      `mammalian_cho_default`; confirm the resulting
+      `biokinetic_parameters.host` and provenance summaries change.
+- [ ] If temporal inputs are demonstrated, use the structured
+      `temporal_inputs` schema and confirm the simulation configuration hash
+      changes when the temporal pattern changes.
+- [ ] If layout critique is demonstrated, confirm layout issues are reported
+      with `schema_version`, `code`, `severity`, `subject_id`, and `message`.
+
 ## Cello Claim Boundary
 
 - [ ] If `cello_mode` is `mock`, describe the output as workflow/testing

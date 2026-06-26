@@ -11,6 +11,7 @@ from uuid import uuid4
 from benchmark_suite.benchmark_controller import evaluate_candidate
 from benchmark_suite.dataset import BenchmarkDataset
 from benchmark_suite.reporting import write_benchmark_report
+from tools.tool_adapters import inspect_capabilities
 
 
 def run_benchmark_dataset(
@@ -87,6 +88,11 @@ def run_benchmark_dataset(
             "dimensions": dimension_summary,
         },
         "cases": case_results,
+        "tools": [
+            tool
+            for tool in inspect_capabilities().get("tools", [])
+            if tool.get("capability") in {"logic_synthesis", "ode_simulation"}
+        ],
     }
     result["result_hash"] = _payload_hash(result)
     if output_dir is not None:

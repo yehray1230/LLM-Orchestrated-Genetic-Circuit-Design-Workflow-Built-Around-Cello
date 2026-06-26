@@ -47,7 +47,14 @@ from schemas.design_migrations import (
     migrate_design_payload_to_v2,
 )
 from schemas.run_manifest import RunManifest
-from schemas.host_profile import HostProfile, default_ecoli_profile, host_profile_from_dict
+from schemas.host_profile import (
+    HostProfile,
+    default_ecoli_profile,
+    default_yeast_profile,
+    default_mammalian_profile,
+    host_profile_from_dict,
+    apply_host_profile_to_topology,
+)
 from schemas.host_optimization import (
     ExperimentalMeasurement,
     HostCalibrationResult,
@@ -109,7 +116,10 @@ __all__ = [
     "RunManifest",
     "HostProfile",
     "default_ecoli_profile",
+    "default_yeast_profile",
+    "default_mammalian_profile",
     "host_profile_from_dict",
+    "apply_host_profile_to_topology",
     "ExperimentalMeasurement",
     "HostCalibrationResult",
     "HostOptimizationCandidate",

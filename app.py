@@ -1866,6 +1866,75 @@ def _render_topology_card(index: int, topology: dict[str, Any], best_topology: d
             if topology.get("verilog"):
                 st.markdown(f'<div class="code-panel">{_escape_html(str(topology["verilog"]))}</div>', unsafe_allow_html=True)
 
+def _list_host_profiles() -> list[dict[str, Any]]:
+    try:
+        from repositories.json_repository import JsonRepository
+        from pathlib import Path
+        repo = JsonRepository(Path("outputs") / "api_data" / "host_profiles")
+        return repo.list()
+    except Exception:
+        return []
+
+
+def _list_parameter_fit_snapshots() -> list[dict[str, Any]]:
+    try:
+        from repositories.json_repository import JsonRepository
+        from pathlib import Path
+        repo = JsonRepository(Path("outputs") / "api_data" / "parameter_fit_snapshots")
+        return repo.list()
+    except Exception:
+        return []
+
+
+def _render_layout_audit(node: SearchNode, state: DesignState, topology: dict[str, Any]) -> None:
+    from schemas.design_ir import topology_to_design_ir
+    from schemas.design_migrations import migrate_design_payload_to_v2
+    from schemas.design_ir_v2 import PlasmidV2, AttributedValue
+    from benchmark_suite.layout_critic import analyze_layout_issues
+
+    try:
+        # Convert topology to DesignIR
+        design_v1 = topology_to_design_ir(
+            topology,
+            host_organism=str(topology.get("host_organism", "Escherichia coli")),
+            design_id="candidate_layout_audit"
+        )
+        # Migrate to V2
+        migration_res = migrate_design_payload_to_v2(design_v1.to_dict())
+        design_v2 = migration_res.design
+        
+        # Ensure we have at least one plasmid to analyze
+        if not design_v2.plasmids:
+            # Create a mock plasmid that contains all constructs in the design
+            construct_ids = [c.id for c in design_v2.constructs]
+            plasmid = PlasmidV2(
+                id="mock_plasmid_layout_audit",
+                name="Mock Plasmid for Layout Audit",
+                construct_ids=construct_ids,
+                backbone=AttributedValue(value="None (Linear)", status="defaulted")
+            )
+            plasmids_to_analyze = [plasmid]
+        else:
+            plasmids_to_analyze = design_v2.plasmids
+
+        # Run layout critic
+        all_issues = []
+        for plasmid in plasmids_to_analyze:
+            issues = analyze_layout_issues(design_v2, plasmid)
+            all_issues.extend(issues)
+
+        # Render layout critic results
+        st.markdown("### DNA 配置佈局審查 (DNA Layout Audit)")
+        if all_issues:
+            st.warning("檢測到以下 DNA 配置佈局與轉錄干擾風險：")
+            for issue in all_issues:
+                severity_str = "⚠️ [警告]" if issue.severity == "warning" else "❌ [錯誤]"
+                st.markdown(f"**{severity_str} {issue.code}** (標的: `{issue.subject_id}`): {issue.message}")
+        else:
+            st.success("DNA 配置佈局審查通過！無顯著干擾或碰撞風險。")
+    except Exception as e:
+        st.error(f"DNA 佈局審查失敗：{e}")
+
 
 def _render_ode_simulation_tab(node: SearchNode, state: DesignState) -> None:
     topologies = node.candidate_topologies or state.candidate_topologies
@@ -1877,22 +1946,157 @@ def _render_ode_simulation_tab(node: SearchNode, state: DesignState) -> None:
     selected_label = st.selectbox("檢視 ODE 候選", labels, key=f"ode_candidate_{node.node_id}")
     selected_index = labels.index(selected_label)
     topology = topologies[selected_index]
-    trace = topology.get("ode_trace")
     _render_ode_explanation(topology)
+    
+    # Render Layout Audit panel
+    _render_layout_audit(node, state, topology)
 
-    status = str(topology.get("ode_status", "unknown"))
+    # Host environment selection
+    st.markdown("### 模擬宿主環境設定 (Host Organism)")
+    host_profiles = _list_host_profiles()
+    default_chassis = topology.get("chassis") or state.host_organism or "Escherichia coli"
+    default_profile_id = "ecoli_k12_default"
+    ch = str(default_chassis).lower().strip()
+    if "yeast" in ch or "cerevisiae" in ch:
+        default_profile_id = "yeast_sc_default"
+    elif "cho" in ch or "mammalian" in ch or "sapiens" in ch:
+        default_profile_id = "mammalian_cho_default"
+
+    profile_options = [p["profile_id"] for p in host_profiles]
+    for pid in ["ecoli_k12_default", "yeast_sc_default", "mammalian_cho_default"]:
+        if pid not in profile_options:
+            profile_options.append(pid)
+
+    selected_host_id = st.selectbox(
+        "選擇模擬宿主環境 (Host Organism)",
+        profile_options,
+        index=profile_options.index(default_profile_id) if default_profile_id in profile_options else 0,
+        key=f"ode_host_select_{node.node_id}_{selected_index}",
+        format_func=lambda pid: f"{pid} (宿主: {next((p['host_organism'] for p in host_profiles if p['profile_id'] == pid), 'unknown')})" if any(p['profile_id'] == pid for p in host_profiles) else pid
+    )
+
+    # Load profile object
+    selected_profile_data = next((p for p in host_profiles if p["profile_id"] == selected_host_id), None)
+    if selected_profile_data is None:
+        if selected_host_id == "ecoli_k12_default":
+            from schemas.host_profile import default_ecoli_profile
+            selected_profile = default_ecoli_profile()
+        elif selected_host_id == "yeast_sc_default":
+            from schemas.host_profile import default_yeast_profile
+            selected_profile = default_yeast_profile()
+        elif selected_host_id == "mammalian_cho_default":
+            from schemas.host_profile import default_mammalian_profile
+            selected_profile = default_mammalian_profile()
+        else:
+            selected_profile = None
+    else:
+        from schemas.host_profile import host_profile_from_dict
+        selected_profile = host_profile_from_dict(selected_profile_data)
+
+    # Temporal profile setup
+    st.markdown("### 時間輸入訊號配置 (Temporal Input Profiles)")
+    try:
+        from tools.ode_simulator import parse_verilog_netlist
+        verilog = str(topology.get("verilog") or "")
+        signals, _ = parse_verilog_netlist(verilog)
+        input_signals = [name for name in sorted(signals.keys()) if signals[name] == "input"]
+    except Exception:
+        input_signals = []
+
+    temporal_inputs = {}
+    if input_signals:
+        st.caption("針對個別輸入化學訊號 (Inducer) 配置其隨時間變化的濃度 profile")
+        for inp in input_signals:
+            st.markdown(f"**輸入訊號 `{inp}`**")
+            profile_type = st.selectbox(
+                f"訊號 `{inp}` 隨時間變化模式",
+                ["Constant (恆定)", "Step (階梯)", "Pulse (脈衝)", "Sine (弦波)"],
+                key=f"temp_profile_type_{node.node_id}_{selected_index}_{inp}"
+            )
+            
+            if profile_type.startswith("Constant"):
+                temporal_inputs[inp] = {"type": "step", "time": 0.0, "start_value": 200.0, "end_value": 200.0}
+            elif profile_type.startswith("Step"):
+                step_time = st.number_input(f"`{inp}` 階梯跳變時間 (秒)", min_value=0.0, value=100.0, key=f"step_time_{node.node_id}_{selected_index}_{inp}")
+                val_start = st.number_input(f"`{inp}` 跳變前濃度 (nM)", min_value=0.0, value=0.0, key=f"step_start_{node.node_id}_{selected_index}_{inp}")
+                val_end = st.number_input(f"`{inp}` 跳變後濃度 (nM)", min_value=0.0, value=200.0, key=f"step_end_{node.node_id}_{selected_index}_{inp}")
+                temporal_inputs[inp] = {
+                    "type": "step",
+                    "time": step_time,
+                    "start_value": val_start,
+                    "end_value": val_end
+                }
+            elif profile_type.startswith("Pulse"):
+                start_time = st.number_input(f"`{inp}` 脈衝開始時間 (秒)", min_value=0.0, value=50.0, key=f"pulse_start_{node.node_id}_{selected_index}_{inp}")
+                end_time = st.number_input(f"`{inp}` 脈衝結束時間 (秒)", min_value=0.0, value=150.0, key=f"pulse_end_{node.node_id}_{selected_index}_{inp}")
+                val_active = st.number_input(f"`{inp}` 脈衝期間濃度 (nM)", min_value=0.0, value=200.0, key=f"pulse_active_{node.node_id}_{selected_index}_{inp}")
+                val_basal = st.number_input(f"`{inp}` 脈衝外基底濃度 (nM)", min_value=0.0, value=0.0, key=f"pulse_basal_{node.node_id}_{selected_index}_{inp}")
+                temporal_inputs[inp] = {
+                    "type": "pulse",
+                    "start_time": start_time,
+                    "end_time": end_time,
+                    "active_value": val_active,
+                    "basal_value": val_basal
+                }
+            elif profile_type.startswith("Sine"):
+                amplitude = st.number_input(f"`{inp}` 震盪振幅 (nM)", min_value=0.0, value=100.0, key=f"sine_amp_{node.node_id}_{selected_index}_{inp}")
+                frequency = st.number_input(f"`{inp}` 震盪頻率 (Hz)", min_value=0.0, value=0.005, format="%.5f", key=f"sine_freq_{node.node_id}_{selected_index}_{inp}")
+                bias = st.number_input(f"`{inp}` 濃度基準/偏置 (nM)", min_value=0.0, value=100.0, key=f"sine_bias_{node.node_id}_{selected_index}_{inp}")
+                temporal_inputs[inp] = {
+                    "type": "sine",
+                    "amplitude": amplitude,
+                    "frequency": frequency,
+                    "bias": bias
+                }
+    else:
+        st.caption("無偵測到輸入化學訊號。")
+
+    # Run host-specific simulation on the fly
+    with st.spinner("執行宿主特異性模擬中..."):
+        try:
+            from tools.ode_simulator import BatchODESimulator
+            from schemas.host_profile import apply_host_profile_to_topology
+
+            if selected_profile:
+                sim_topology = apply_host_profile_to_topology(topology, selected_profile)
+            else:
+                sim_topology = topology
+
+            spec_data = topology.get("simulation_spec", {})
+            sim_time = spec_data.get("simulation_time", 600.0)
+            samp_count = spec_data.get("sample_count", 80)
+            mc_samples = spec_data.get("monte_carlo_samples", 1)
+            noise_frac = spec_data.get("noise_level", 0.15)
+            seed = spec_data.get("random_seed")
+
+            simulator = BatchODESimulator(
+                simulation_time=sim_time,
+                sample_count=samp_count,
+                monte_carlo_samples=mc_samples,
+                noise_fraction=noise_frac,
+                random_seed=seed,
+                temporal_inputs=temporal_inputs,
+            )
+            simured_topology = simulator.simulate_topology(sim_topology)
+        except Exception as exc:
+            st.error(f"模擬失敗：{exc}")
+            simured_topology = {"ode_status": "failed", "error": str(exc)}
+
+    status = str(simured_topology.get("ode_status", "unknown"))
     if status == "disabled":
         st.info("此候選的 ODE 模擬已停用。請在左側開啟 ODE 模擬後重新執行。")
         return
     if status == "failed":
-        st.error("此候選的 ODE 模擬失敗，無法顯示時間序列圖。")
-        return
-    if not _valid_ode_trace(trace):
-        st.warning("此候選尚未保存 ODE 時間序列。請重新執行 ODE 模擬以產生圖表資料。")
-        _render_ode_metric_summary(topology)
+        st.error(f"此候選的 ODE 模擬失敗，無法顯示時間序列圖。原因: {simured_topology.get('error')}")
         return
 
-    _render_ode_metric_summary(topology)
+    trace = simured_topology.get("ode_trace")
+    if not _valid_ode_trace(trace):
+        st.warning("此候選尚未保存 ODE 時間序列。請重新執行 ODE 模擬以產生圖表資料。")
+        _render_ode_metric_summary(simured_topology)
+        return
+
+    _render_ode_metric_summary(simured_topology)
     trace_rows = _ode_trace_rows(trace)
     if pd is not None:
         trace_df = pd.DataFrame(trace_rows).set_index("time")
@@ -1912,6 +2116,300 @@ def _render_ode_simulation_tab(node: SearchNode, state: DesignState) -> None:
 
     with st.expander("ODE trace 原始資料", expanded=False):
         st.json(trace)
+
+    st.markdown("---")
+    st.subheader("參數配適快照對比 (Parameter Fit Snapshot Comparison)")
+
+    snapshots = _list_parameter_fit_snapshots()
+    if not snapshots:
+        st.info("目前無可用的參數配適快照。請先使用 API 建立配適快照。")
+    else:
+        compare_enabled = st.checkbox(
+            "啟用快照對比 (Compare with Parameter Fit Snapshot)",
+            value=False,
+            key=f"compare_snapshot_enable_{node.node_id}_{selected_index}"
+        )
+        if compare_enabled:
+            snapshot_options = [s["snapshot_id"] for s in snapshots]
+            selected_snapshot_id = st.selectbox(
+                "選擇配適快照 ID",
+                snapshot_options,
+                key=f"compare_snapshot_id_{node.node_id}_{selected_index}",
+                format_func=lambda sid: f"{sid} (元件: {next((s['part_id'] for s in snapshots if s['snapshot_id'] == sid), 'unknown')})"
+            )
+
+            snapshot = next(s for s in snapshots if s["snapshot_id"] == selected_snapshot_id)
+
+            with st.spinner("執行快照對比模擬中..."):
+                try:
+                    from tools.ode_simulator import BatchODESimulator
+                    from benchmark_suite.parameter_fitting import apply_parameter_fit_snapshot
+                    from schemas.host_profile import apply_host_profile_to_topology
+
+                    # Extract simulation params
+                    spec_data = topology.get("simulation_spec", {})
+                    sim_time = spec_data.get("simulation_time", 600.0)
+                    samp_count = spec_data.get("sample_count", 80)
+                    mc_samples = spec_data.get("monte_carlo_samples", 1)
+                    noise_frac = spec_data.get("noise_level", 0.15)
+                    seed = spec_data.get("random_seed")
+
+                    if selected_profile:
+                        default_topology_input = apply_host_profile_to_topology(topology, selected_profile)
+                    else:
+                        default_topology_input = topology
+
+                    simulator = BatchODESimulator(
+                        simulation_time=sim_time,
+                        sample_count=samp_count,
+                        monte_carlo_samples=mc_samples,
+                        noise_fraction=noise_frac,
+                        random_seed=seed,
+                        temporal_inputs=temporal_inputs,
+                    )
+                    default_topology = simulator.simulate_topology(default_topology_input)
+
+                    fitted_topology_input = apply_parameter_fit_snapshot(topology, snapshot)
+                    if selected_profile:
+                        fitted_topology_input = apply_host_profile_to_topology(fitted_topology_input, selected_profile)
+
+                    fitted_simulator = BatchODESimulator(
+                        simulation_time=sim_time,
+                        sample_count=samp_count,
+                        monte_carlo_samples=mc_samples,
+                        noise_fraction=noise_frac,
+                        random_seed=seed,
+                        temporal_inputs=temporal_inputs,
+                    )
+                    fitted_topology = fitted_simulator.simulate_topology(fitted_topology_input)
+                except Exception as exc:
+                    fitted_topology = {"ode_status": "failed", "error": str(exc)}
+                    default_topology = topology
+
+            if fitted_topology.get("ode_status") == "failed":
+                st.error(f"套用快照後的 ODE 模擬失敗：{fitted_topology.get('error')}")
+            else:
+                st.markdown("#### 模擬指標對比 (Metrics Comparison)")
+
+                def_margin = default_topology.get("dynamic_margin")
+                fit_margin = fitted_topology.get("dynamic_margin")
+                def_snr = default_topology.get("signal_to_noise_ratio")
+                fit_snr = fitted_topology.get("signal_to_noise_ratio")
+                def_kinetic = default_topology.get("kinetic_score")
+                fit_kinetic = fitted_topology.get("kinetic_score")
+
+                def_prov = default_topology.get("parameter_provenance", {})
+                fit_prov = fitted_topology.get("parameter_provenance", {})
+
+                def _format_diff(val):
+                    if val is None:
+                        return "-"
+                    if val > 0:
+                        return f"+{val:.4f}"
+                    return f"{val:.4f}"
+
+                metrics_comparison_data = [
+                    {
+                        "指標 (Metric)": "Kinetic Score (健壯性得分)",
+                        "預設值 (Default)": _format_metric(def_kinetic),
+                        "快照配適值 (Fitted)": _format_metric(fit_kinetic),
+                        "差異 (Delta)": _format_diff(fit_kinetic - def_kinetic) if def_kinetic is not None and fit_kinetic is not None else "-"
+                    },
+                    {
+                        "指標 (Metric)": "Dynamic Margin (動態範圍邊際)",
+                        "預設值 (Default)": _format_metric(def_margin),
+                        "快照配適值 (Fitted)": _format_metric(fit_margin),
+                        "差異 (Delta)": _format_diff(fit_margin - def_margin) if def_margin is not None and fit_margin is not None else "-"
+                    },
+                    {
+                        "指標 (Metric)": "Signal-to-Noise Ratio (訊噪比 SNR)",
+                        "預設值 (Default)": _format_metric(def_snr),
+                        "快照配適值 (Fitted)": _format_metric(fit_snr),
+                        "差異 (Delta)": _format_diff(fit_snr - def_snr) if def_snr is not None and fit_snr is not None else "-"
+                    },
+                    {
+                        "指標 (Metric)": "私有參數數量 (Local Private Parameters)",
+                        "預設值 (Default)": str(def_prov.get("local_private_parameter_count", 0)),
+                        "快照配適值 (Fitted)": str(fit_prov.get("local_private_parameter_count", 0)),
+                        "差異 (Delta)": f"+{fit_prov.get('local_private_parameter_count', 0) - def_prov.get('local_private_parameter_count', 0)}"
+                    },
+                    {
+                        "指標 (Metric)": "覆蓋/覆寫參數數量 (Overridden Parameters)",
+                        "預設值 (Default)": str(def_prov.get("override_count", 0)),
+                        "快照配適值 (Fitted)": str(fit_prov.get("override_count", 0)),
+                        "差異 (Delta)": f"+{fit_prov.get('override_count', 0) - def_prov.get('override_count', 0)}"
+                    }
+                ]
+                st.table(metrics_comparison_data)
+
+                st.markdown("#### 時間序列重疊對比 (Overlaid Output Protein)")
+                def_trace = default_topology.get("ode_trace")
+                fit_trace = fitted_topology.get("ode_trace")
+
+                if _valid_ode_trace(def_trace) and _valid_ode_trace(fit_trace):
+                    def_rows = _ode_trace_rows(def_trace)
+                    fit_rows = _ode_trace_rows(fit_trace)
+
+                    if pd is not None:
+                        df_def = pd.DataFrame(def_rows).set_index("time")[["output_protein"]].rename(columns={"output_protein": "Default (預設)"})
+                        df_fit = pd.DataFrame(fit_rows).set_index("time")[["output_protein"]].rename(columns={"output_protein": "Fitted (快照配適)"})
+                        combined_df = df_def.join(df_fit)
+                        st.line_chart(combined_df, use_container_width=True)
+                    else:
+                        st.warning("Pandas 未載入，無法顯示重疊折線圖。")
+                else:
+                    st.warning("模擬追蹤資料無效，無法顯示圖表。")
+
+    # Render Parameter Sensitivity Sweep
+    st.markdown("---")
+    st.subheader("參數敏感度分析 (Parameter Sensitivity Sweep)")
+    st.caption("透過對特定生物物理參數進行範圍掃描，評估其對電路效能指標 (訊噪比 SNR、動態範圍等) 的影響。")
+
+    sweep_param = st.selectbox(
+        "選擇要掃描的參數",
+        [
+            "copy_number (質體拷貝數)",
+            "growth_dilution (生長稀釋速率, 1/s)",
+            "translation_rate (蛋白質翻譯速率)",
+            "km_rnap (RNAP 飽和常數)",
+            "km_ribo (核糖體飽和常數)",
+            "rnap_total (總 RNAP 濃度)",
+            "ribo_total (總核糖體濃度)",
+        ],
+        key=f"sweep_param_select_{node.node_id}_{selected_index}"
+    )
+
+    param_name = sweep_param.split()[0]
+    left_c, mid_c, right_c = st.columns(3)
+    with left_c:
+        min_val = st.number_input("掃描下限", min_value=0.001, value=1.0, format="%.3f", key=f"sweep_min_{node.node_id}_{selected_index}")
+    with mid_c:
+        max_val = st.number_input("掃描上限", min_value=0.001, value=15.0, format="%.3f", key=f"sweep_max_{node.node_id}_{selected_index}")
+    with right_c:
+        steps = st.slider("掃描點數", min_value=5, max_value=50, value=15, key=f"sweep_steps_{node.node_id}_{selected_index}")
+
+    if min_val >= max_val:
+        st.error("下限必須小於上限！")
+    else:
+        import numpy as np
+        sweep_values = list(np.linspace(min_val, max_val, steps))
+
+        if st.button("執行敏感度掃描", key=f"run_sweep_btn_{node.node_id}_{selected_index}"):
+            with st.spinner("掃描模擬中..."):
+                try:
+                    from tools.sensitivity_analysis import run_parameter_sweep
+                    sweep_res = run_parameter_sweep(
+                        topology=topology,
+                        parameter_name=param_name,
+                        sweep_values=sweep_values,
+                        host_profile_id=selected_host_id,
+                        host_profiles={p["profile_id"]: p for p in host_profiles} if host_profiles else None
+                    )
+
+                    if pd is not None:
+                        sweep_df = pd.DataFrame([
+                            {
+                                param_name: r["value"],
+                                "Dynamic Margin (動態範圍邊際)": r["dynamic_margin"],
+                                "SNR (訊噪比)": r["signal_to_noise_ratio"],
+                                "Kinetic Score (健壯性得分)": r["kinetic_score"],
+                                "Max Burden (最大細胞負擔 nM)": r["max_burden_nM"]
+                            }
+                            for r in sweep_res["results"]
+                        ]).set_index(param_name)
+
+                        st.success("敏感度分析完成！")
+
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.caption("電路效能指標 (Dynamic Margin / SNR / Kinetic Score)")
+                            st.line_chart(sweep_df[["Dynamic Margin (動態範圍邊際)", "SNR (訊噪比)", "Kinetic Score (健壯性得分)"]], use_container_width=True)
+                        with col2:
+                            st.caption("細胞代謝負擔 (Max Burden nM)")
+                            st.line_chart(sweep_df[["Max Burden (最大細胞負擔 nM)"]], use_container_width=True)
+                    else:
+                        st.table(sweep_res["results"])
+
+                    with st.expander("敏感度掃描原始數據", expanded=False):
+                        st.write(sweep_res)
+                except Exception as e:
+                    st.error(f"敏感度掃描失敗：{e}")
+
+    # Render Bifurcation Sweep
+    st.markdown("---")
+    st.subheader("分岔與轉移函數分析 (Bifurcation & Transfer Function)")
+    st.caption("掃描輸入化學訊號 (Inducer) 的濃度範圍，觀察穩態輸出濃度的轉移函數曲線 (Hill curve)。")
+
+    if input_signals:
+        selected_bif_input = st.selectbox(
+            "選擇要掃描的輸入訊號",
+            input_signals,
+            key=f"bif_input_select_{node.node_id}_{selected_index}"
+        )
+
+        col_b1, col_b2, col_b3 = st.columns(3)
+        with col_b1:
+            bif_min = st.number_input("輸入濃度下限 (nM)", min_value=0.0, value=0.1, key=f"bif_min_{node.node_id}_{selected_index}")
+        with col_b2:
+            bif_max = st.number_input("輸入濃度上限 (nM)", min_value=0.1, value=500.0, key=f"bif_max_{node.node_id}_{selected_index}")
+        with col_b3:
+            bif_steps = st.slider("濃度掃描點數", min_value=5, max_value=50, value=20, key=f"bif_steps_{node.node_id}_{selected_index}")
+
+        if bif_min >= bif_max:
+            st.error("下限必須小於上限！")
+        else:
+            import numpy as np
+            log_scale = st.checkbox("採用對數尺度 (Log Scale) 進行掃描", value=True, key=f"bif_log_scale_{node.node_id}_{selected_index}")
+            if log_scale and bif_min > 0:
+                bif_values = list(np.logspace(np.log10(bif_min), np.log10(bif_max), bif_steps))
+            else:
+                bif_values = list(np.linspace(bif_min, bif_max, bif_steps))
+
+            if st.button("執行轉移函數掃描", key=f"run_bif_btn_{node.node_id}_{selected_index}"):
+                with st.spinner("穩態轉移模擬中..."):
+                    try:
+                        from tools.sensitivity_analysis import run_bifurcation_sweep
+                        bif_res = run_bifurcation_sweep(
+                            topology=topology,
+                            input_name=selected_bif_input,
+                            input_values=bif_values,
+                            host_profile_id=selected_host_id,
+                            host_profiles={p["profile_id"]: p for p in host_profiles} if host_profiles else None
+                        )
+
+                        if pd is not None:
+                            bif_df = pd.DataFrame([
+                                {
+                                    "Input (nM)": r["input_value"],
+                                    "Output (nM)": r["output_value"],
+                                    "Cell Burden (nM)": r["burden_nM"]
+                                    if "burden_nM" in r
+                                    else r.get("burden")
+                                    if "burden" in r
+                                    else 0.0
+                                }
+                                for r in bif_res["results"]
+                            ]).set_index("Input (nM)")
+
+                            st.success("轉移函數掃描完成！")
+
+                            col_c1, col_c2 = st.columns(2)
+                            with col_c1:
+                                st.caption(f"穩態轉移曲線 (Transfer Function: {selected_bif_input} -> {bif_res.get('target_output', 'Output')})")
+                                st.line_chart(bif_df[["Output (nM)"]], use_container_width=True)
+                            with col_c2:
+                                st.caption("穩態代謝負擔 (Steady-state Burden nM)")
+                                st.line_chart(bif_df[["Cell Burden (nM)"]], use_container_width=True)
+                        else:
+                            st.table(bif_res["results"])
+
+                        with st.expander("轉移掃描原始數據", expanded=False):
+                            st.write(bif_res)
+                    except Exception as e:
+                        st.error(f"轉移函數掃描失敗：{e}")
+    else:
+        st.info("無可用輸入訊號，無法進行轉移函數掃描。")
+
 
 
 def _render_ode_explanation(topology: dict[str, Any]) -> None:

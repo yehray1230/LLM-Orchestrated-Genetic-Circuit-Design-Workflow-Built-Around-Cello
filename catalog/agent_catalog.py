@@ -143,7 +143,7 @@ def validate_agent_metadata(
         risk_notes=list(payload.get("risk_notes", [])),
         failure_modes=list(payload.get("failure_modes", [])),
         tags=list(payload.get("tags", [])),
-        source_path=str(metadata_path) if metadata_path else None,
+        source_path=_source_path(metadata_path),
     )
 
 
@@ -266,3 +266,9 @@ def _as_bool(value: Any) -> bool:
 
 def _label(path: str | Path | None) -> str:
     return str(path) if path else "agent metadata"
+
+
+def _source_path(path: str | Path | None) -> str | None:
+    if path is None:
+        return None
+    return Path(path).as_posix()

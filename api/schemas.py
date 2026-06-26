@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class FieldEvidenceRequest(BaseModel):
@@ -104,15 +104,110 @@ class BenchmarkComparisonRequest(BaseModel):
     benchmark_run_ids: list[str] = Field(min_length=2, max_length=20)
 
 
+class ParameterFitRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    part_id: str = Field(min_length=1, max_length=128)
+    csv_content: str = Field(min_length=1, max_length=2_000_000)
+    snapshot_id: str | None = Field(default=None, max_length=128)
+    concentration_column: str = Field(default="concentration", max_length=128)
+    response_column: str = Field(default="response", max_length=128)
+    source: str = Field(default="local_plate_reader_fit", max_length=512)
+    measurement_context: dict[str, Any] = Field(default_factory=dict)
+
+
+class TemporalStageInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    start: float = Field(default=0.0, ge=0.0)
+    end: float = Field(default=float("inf"), ge=0.0)
+    value: float
+
+    @model_validator(mode="after")
+    def validate_window(self) -> "TemporalStageInput":
+        if self.end <= self.start:
+            raise ValueError("Temporal stage end must be greater than start.")
+        return self
+
+
+class TemporalPatternInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["step", "pulse", "sine"]
+    time: float | None = Field(default=None, ge=0.0)
+    start_value: float | None = None
+    end_value: float | None = None
+    start_time: float | None = Field(default=None, ge=0.0)
+    end_time: float | None = Field(default=None, ge=0.0)
+    active_value: float | None = None
+    basal_value: float | None = None
+    amplitude: float | None = None
+    frequency: float | None = Field(default=None, ge=0.0)
+    bias: float | None = None
+
+    @model_validator(mode="after")
+    def validate_pattern_fields(self) -> "TemporalPatternInput":
+        if self.type == "step":
+            missing = [
+                name
+                for name in ("time", "start_value", "end_value")
+                if getattr(self, name) is None
+            ]
+        elif self.type == "pulse":
+            missing = [
+                name
+                for name in ("start_time", "end_time", "active_value", "basal_value")
+                if getattr(self, name) is None
+            ]
+            if self.start_time is not None and self.end_time is not None:
+                if self.end_time <= self.start_time:
+                    raise ValueError("Pulse end_time must be greater than start_time.")
+        else:
+            missing = [
+                name
+                for name in ("amplitude", "frequency", "bias")
+                if getattr(self, name) is None
+            ]
+        if missing:
+            raise ValueError(
+                f"Temporal {self.type} input is missing required fields: {', '.join(missing)}."
+            )
+        return self
+
+
+TemporalInputValue = TemporalPatternInput | list[TemporalStageInput]
+
+
+def temporal_inputs_to_dict(
+    temporal_inputs: dict[str, TemporalInputValue] | None,
+) -> dict[str, Any] | None:
+    if temporal_inputs is None:
+        return None
+    result: dict[str, Any] = {}
+    for signal_name, spec in temporal_inputs.items():
+        if isinstance(spec, list):
+            result[signal_name] = [item.model_dump() for item in spec]
+        else:
+            result[signal_name] = {
+                key: value
+                for key, value in spec.model_dump().items()
+                if value is not None
+            }
+    return result
+
+
 class SimulationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     topology: dict[str, Any]
+    parameter_fit_snapshot_id: str | None = Field(default=None, max_length=128)
+    host_profile_id: str | None = Field(default=None, max_length=128)
     simulation_time: float = Field(default=600.0, gt=0.0, le=604800.0)
     sample_count: int = Field(default=80, ge=2, le=10000)
     monte_carlo_samples: int = Field(default=1, ge=1, le=1000)
     noise_fraction: float = Field(default=0.15, ge=0.0, le=10.0)
     random_seed: int | None = Field(default=None, ge=0, le=2**32 - 1)
+    temporal_inputs: dict[str, TemporalInputValue] | None = Field(default=None)
 
 
 class RunStartRequest(BaseModel):
@@ -148,3 +243,48 @@ class RunResumeRequest(BaseModel):
 
     model_name: str | None = Field(default=None, max_length=256)
     api_base: str | None = Field(default=None, max_length=2048)
+
+
+class SimulationComparisonRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    topology: dict[str, Any]
+    parameter_fit_snapshot_id: str = Field(min_length=1, max_length=128)
+    host_profile_id: str | None = Field(default=None, max_length=128)
+    simulation_time: float = Field(default=600.0, gt=0.0, le=604800.0)
+    sample_count: int = Field(default=80, ge=2, le=10000)
+    monte_carlo_samples: int = Field(default=1, ge=1, le=1000)
+    noise_fraction: float = Field(default=0.15, ge=0.0, le=10.0)
+    random_seed: int | None = Field(default=None, ge=0, le=2**32 - 1)
+    temporal_inputs: dict[str, TemporalInputValue] | None = Field(default=None)
+
+
+class ParameterFitSnapshotComparisonRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    topology: dict[str, Any]
+    host_profile_id: str | None = Field(default=None, max_length=128)
+    simulation_time: float = Field(default=600.0, gt=0.0, le=604800.0)
+    sample_count: int = Field(default=80, ge=2, le=10000)
+    monte_carlo_samples: int = Field(default=1, ge=1, le=1000)
+    noise_fraction: float = Field(default=0.15, ge=0.0, le=10.0)
+    random_seed: int | None = Field(default=None, ge=0, le=2**32 - 1)
+    temporal_inputs: dict[str, TemporalInputValue] | None = Field(default=None)
+
+
+class ParameterSweepRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    topology: dict[str, Any]
+    parameter_name: str = Field(min_length=1, max_length=128)
+    sweep_values: list[float] = Field(min_length=1, max_length=100)
+    host_profile_id: str | None = Field(default=None, max_length=128)
+
+
+class BifurcationSweepRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    topology: dict[str, Any]
+    input_name: str = Field(min_length=1, max_length=128)
+    input_values: list[float] = Field(min_length=1, max_length=100)
+    host_profile_id: str | None = Field(default=None, max_length=128)

@@ -74,6 +74,17 @@ class HostProfileRegistrationRequest(BaseModel):
     source: str = Field(default="user_supplied", max_length=2000)
     version: str = Field(default="1.0.0", max_length=64)
     metadata: dict[str, Any] = Field(default_factory=dict)
+    rnap_total: float | None = Field(default=None, gt=0.0)
+    ribosome_total: float | None = Field(default=None, gt=0.0)
+    transcription_rate: float | None = Field(default=None, ge=0.0)
+    translation_rate: float | None = Field(default=None, ge=0.0)
+    mrna_degradation_rate: float | None = Field(default=None, ge=0.0)
+    protein_degradation_rate: float | None = Field(default=None, ge=0.0)
+    growth_rate_dilution: float | None = Field(default=None, ge=0.0)
+    km_rnap: float | None = Field(default=None, gt=0.0)
+    km_ribosome: float | None = Field(default=None, gt=0.0)
+    burden_soft_limit: float | None = Field(default=None, gt=0.0)
+    toxicity_threshold: float | None = Field(default=None, gt=0.0)
 
 
 class HostOptimizationCandidateRequest(BaseModel):

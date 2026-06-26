@@ -19,6 +19,7 @@ from mcp_server.service import (
     get_design_run_progress as service_get_design_run_progress,
     list_compatible_replacements as service_list_compatible_replacements,
     list_design_runs as service_list_design_runs,
+    list_tool_capabilities as service_list_tool_capabilities,
     start_design_run as service_start_design_run,
     submit_design_feedback as service_submit_design_feedback,
     summarize_design_state,
@@ -157,6 +158,11 @@ if FastMCP is not None:
     def list_design_runs(limit: int = 20) -> dict[str, Any]:
         """List recent background design runs, newest first."""
         return service_list_design_runs(limit=limit)
+
+    @mcp.tool()
+    def list_tool_capabilities() -> dict[str, Any]:
+        """List optional biological tool capabilities, availability, and fallbacks."""
+        return service_list_tool_capabilities()
 
     @mcp.tool()
     def cancel_design_run(run_id: str) -> dict[str, Any]:
