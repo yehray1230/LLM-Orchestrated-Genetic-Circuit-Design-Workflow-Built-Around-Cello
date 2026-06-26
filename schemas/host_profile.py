@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
@@ -22,11 +23,33 @@ class HostProfile:
     metadata: dict[str, Any] = field(default_factory=dict)
     schema_version: str = HOST_PROFILE_SCHEMA_VERSION
 
+    # Biophysical parameters for Phase 2 modeling
+    rnap_total: float | None = None
+    ribosome_total: float | None = None
+    transcription_rate: float | None = None
+    translation_rate: float | None = None
+    mrna_degradation_rate: float | None = None
+    protein_degradation_rate: float | None = None
+    growth_rate_dilution: float | None = None
+    km_rnap: float | None = None
+    km_ribosome: float | None = None
+    burden_soft_limit: float | None = None
+    toxicity_threshold: float | None = None
+
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
 def host_profile_from_dict(payload: dict[str, Any]) -> HostProfile:
+    def _float_or_none(key: str) -> float | None:
+        val = payload.get(key)
+        if val is None:
+            return None
+        try:
+            return float(val)
+        except (TypeError, ValueError):
+            return None
+
     return HostProfile(
         profile_id=str(payload.get("profile_id") or ""),
         name=str(payload.get("name") or ""),
@@ -51,13 +74,24 @@ def host_profile_from_dict(payload: dict[str, Any]) -> HostProfile:
         schema_version=str(
             payload.get("schema_version") or HOST_PROFILE_SCHEMA_VERSION
         ),
+        rnap_total=_float_or_none("rnap_total"),
+        ribosome_total=_float_or_none("ribosome_total"),
+        transcription_rate=_float_or_none("transcription_rate"),
+        translation_rate=_float_or_none("translation_rate"),
+        mrna_degradation_rate=_float_or_none("mrna_degradation_rate"),
+        protein_degradation_rate=_float_or_none("protein_degradation_rate"),
+        growth_rate_dilution=_float_or_none("growth_rate_dilution"),
+        km_rnap=_float_or_none("km_rnap"),
+        km_ribosome=_float_or_none("km_ribosome"),
+        burden_soft_limit=_float_or_none("burden_soft_limit"),
+        toxicity_threshold=_float_or_none("toxicity_threshold"),
     )
 
 
 def default_ecoli_profile() -> HostProfile:
     return HostProfile(
         profile_id="ecoli_k12_default",
-        name="E. coli K-12 default codon profile",
+        name="E. coli K-12 default biophysical profile",
         host_organism="Escherichia coli",
         strain="K-12",
         codon_usage={
@@ -110,12 +144,157 @@ def default_ecoli_profile() -> HostProfile:
             "CGTCTC",
             "GAGACG",
         ],
+        rare_codon_threshold=0.10,
         evidence_level="defaulted",
         source="built_in_ecoli_k12_reference_profile",
         metadata={
             "intended_use": (
-                "Computational codon-optimization baseline, not calibrated "
-                "expression prediction."
+                "Computational biophysical and codon-optimization baseline."
             )
         },
+        rnap_total=5000.0,
+        ribosome_total=25000.0,
+        transcription_rate=0.08,
+        translation_rate=0.045,
+        mrna_degradation_rate=0.0038,
+        protein_degradation_rate=0.00058,
+        growth_rate_dilution=0.0004,
+        km_rnap=75.0,
+        km_ribosome=120.0,
+        burden_soft_limit=45000.0,
+        toxicity_threshold=65000.0,
     )
+
+
+def default_yeast_profile() -> HostProfile:
+    return HostProfile(
+        profile_id="yeast_sc_default",
+        name="S. cerevisiae default biophysical profile",
+        host_organism="Saccharomyces cerevisiae",
+        strain="S288C",
+        codon_usage={},
+        forbidden_motifs=[],
+        rare_codon_threshold=0.10,
+        evidence_level="defaulted",
+        source="built_in_yeast_reference_profile",
+        metadata={
+            "intended_use": (
+                "Eukaryotic yeast expression biophysical modeling baseline."
+            )
+        },
+        rnap_total=3000.0,
+        ribosome_total=120000.0,
+        transcription_rate=0.05,
+        translation_rate=0.012,
+        mrna_degradation_rate=0.0012,
+        protein_degradation_rate=0.0001,
+        growth_rate_dilution=0.0001,
+        km_rnap=50.0,
+        km_ribosome=150.0,
+        burden_soft_limit=200000.0,
+        toxicity_threshold=300000.0,
+    )
+
+
+def default_mammalian_profile() -> HostProfile:
+    return HostProfile(
+        profile_id="mammalian_cho_default",
+        name="Mammalian CHO default biophysical profile",
+        host_organism="Homo sapiens",
+        strain="CHO",
+        codon_usage={},
+        forbidden_motifs=[],
+        rare_codon_threshold=0.10,
+        evidence_level="defaulted",
+        source="built_in_mammalian_reference_profile",
+        metadata={
+            "intended_use": (
+                "Mammalian host expression biophysical modeling baseline."
+            )
+        },
+        rnap_total=1500.0,
+        ribosome_total=500000.0,
+        transcription_rate=0.03,
+        translation_rate=0.008,
+        mrna_degradation_rate=0.0002,
+        protein_degradation_rate=0.00005,
+        growth_rate_dilution=0.00001,
+        km_rnap=40.0,
+        km_ribosome=200.0,
+        burden_soft_limit=800000.0,
+        toxicity_threshold=1200000.0,
+    )
+
+
+def apply_host_profile_to_topology(
+    topology: dict[str, Any],
+    host_profile: HostProfile,
+) -> dict[str, Any]:
+    topology = deepcopy(topology)
+    biokinetic = topology.setdefault("biokinetic_parameters", {})
+    biokinetic["host"] = host_profile.host_organism
+
+    parameters = biokinetic.setdefault("parameters", {})
+    if not parameters:
+        from agents.data_miner_agent import DEFAULT_BIOKINETIC_PARAMETERS
+        parameters.update(deepcopy(DEFAULT_BIOKINETIC_PARAMETERS))
+
+    host_fields = {
+        "rnap_total": host_profile.rnap_total,
+        "ribosome_total": host_profile.ribosome_total,
+        "transcription_rate": host_profile.transcription_rate,
+        "translation_rate": host_profile.translation_rate,
+        "mrna_degradation_rate": host_profile.mrna_degradation_rate,
+        "protein_degradation_rate": host_profile.protein_degradation_rate,
+        "growth_rate_dilution": host_profile.growth_rate_dilution,
+        "km_rnap": host_profile.km_rnap,
+        "km_ribosome": host_profile.km_ribosome,
+        "burden_soft_limit": host_profile.burden_soft_limit,
+        "toxicity_threshold": host_profile.toxicity_threshold,
+    }
+
+    from schemas.parameter_governance import (
+        normalize_parameter_metadata,
+        summarize_parameter_governance,
+    )
+
+    default_origin = "inferred" if host_profile.source == "local_user" else "default"
+    data_boundary = "local_private" if host_profile.source == "local_user" else "public"
+    confidence = 0.85 if host_profile.evidence_level == "experimental" else 0.65
+    context = {
+        "host_profile_id": host_profile.profile_id,
+        "host": host_profile.host_organism,
+        "source": host_profile.source,
+        "source_version": host_profile.version,
+        "context_scope": "host_profile_application",
+    }
+
+    for key, val in host_fields.items():
+        if val is not None:
+            parameters[key] = normalize_parameter_metadata(
+                {
+                    **dict(parameters.get(key) or {}),
+                    "value": float(val),
+                    "source": f"host_profile:{host_profile.profile_id}",
+                    "confidence": confidence,
+                    "parameter_origin": default_origin,
+                    "confidence_category": default_origin,
+                    "measurement_context": context,
+                    "data_boundary": data_boundary,
+                    "is_override": True,
+                },
+                default_origin=default_origin,
+                default_context=context,
+                is_override=True,
+            )
+    gov = summarize_parameter_governance(parameters)
+    mining = biokinetic.setdefault("mining_summary", {})
+    mining.update(gov)
+
+    if host_profile.source == "local_user":
+        local_count = sum(
+            1 for p in parameters.values() if p.get("data_boundary") == "local_private"
+        )
+        mining["local_private_parameter_count"] = local_count
+
+    return topology

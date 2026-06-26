@@ -23,6 +23,7 @@ from schemas.state import DesignState, SearchNode
 from tools.cello_wrapper import CelloWrapper
 from tools.ode_simulator import BatchODESimulator
 from tools.part_library import PartLibrary
+from tools.tool_adapters import inspect_capabilities
 from exporters.bom_exporter import export_bom_csv
 from exporters.genbank_exporter import export_genbank
 from exporters.sbol3_exporter import export_sbol3_turtle
@@ -317,6 +318,27 @@ def list_design_runs(limit: int = 20, run_store: RunStore | None = None) -> dict
     except (TypeError, ValueError):
         return _error_response("limit must be an integer.", ERROR_VALIDATION)
     return selected_store.list_runs(selected_limit)
+
+
+def list_tool_capabilities() -> dict[str, Any]:
+    capabilities = inspect_capabilities()
+    unavailable_count = sum(
+        1
+        for tool in capabilities.get("tools", [])
+        if tool.get("status") in {"unavailable", "fallback", "failed"}
+    )
+    return _success_response(
+        {
+            "status": "completed",
+            "summary": {
+                "capability_count": len(capabilities.get("capabilities", [])),
+                "tool_count": len(capabilities.get("tools", [])),
+                "unavailable_or_fallback_count": unavailable_count,
+            },
+            "artifacts": {},
+            **capabilities,
+        }
+    )
 
 
 def cancel_design_run(run_id: str, run_store: RunStore | None = None) -> dict[str, Any]:

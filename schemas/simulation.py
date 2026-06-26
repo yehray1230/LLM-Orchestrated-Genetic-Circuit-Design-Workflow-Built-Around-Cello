@@ -64,6 +64,7 @@ class SimulationSpec:
     monte_carlo_samples: int = 1
     noise_fraction: float = 0.15
     random_seed: int | None = None
+    temporal_inputs: dict[str, Any] = field(default_factory=dict)
     solver_methods: list[str] = field(default_factory=lambda: ["BDF", "Radau", "RK4"])
     relative_tolerance: float = 1e-5
     absolute_tolerance: float = 1e-8
@@ -152,6 +153,7 @@ def simulation_spec_from_topology(
     input_signals: list[str] | None = None,
     target_output: str | None = None,
     random_seed: int | None = None,
+    temporal_inputs: dict[str, Any] | None = None,
 ) -> SimulationSpec:
     inputs = input_signals or []
     truth_table = (
@@ -201,6 +203,7 @@ def simulation_spec_from_topology(
         monte_carlo_samples=max(1, int(monte_carlo_samples)),
         noise_fraction=max(0.0, float(noise_fraction)),
         random_seed=random_seed,
+        temporal_inputs=dict(temporal_inputs or {}),
         provenance={
             "source": "topology",
             "parameter_provenance": topology.get("parameter_provenance", {}),

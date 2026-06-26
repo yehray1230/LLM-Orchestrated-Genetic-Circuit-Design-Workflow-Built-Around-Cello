@@ -22,6 +22,22 @@ class ArtifactDigest:
 
 
 @dataclass
+class ToolRunRecord:
+    tool_name: str
+    adapter_name: str
+    capability: str
+    status: str
+    version: str | None = None
+    fallback_available: bool = False
+    fallback_used: bool = False
+    license_sensitive: bool = False
+    input_artifact_hash: str | None = None
+    output_artifacts: list[str] = field(default_factory=list)
+    warnings: list[dict[str, Any]] = field(default_factory=list)
+    errors: list[dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass
 class RunManifest:
     run_id: str
     request: dict[str, Any]
@@ -36,6 +52,7 @@ class RunManifest:
     datasets: list[dict[str, Any]] = field(default_factory=list)
     input_design: dict[str, Any] | None = None
     software: dict[str, Any] = field(default_factory=dict)
+    tools: list[ToolRunRecord] = field(default_factory=list)
     artifacts: list[ArtifactDigest] = field(default_factory=list)
     result_sha256: str | None = None
     created_at: str = field(
@@ -98,6 +115,7 @@ def finalize_run_manifest(
     manifest.finished_at = finished_at
     manifest.result_sha256 = payload_sha256(result)
     manifest.simulation = _simulation_metadata(result) or manifest.simulation
+    manifest.tools = _tool_records(result) or manifest.tools
     artifacts = result.get("artifacts")
     manifest.artifacts = [
         _artifact_digest(str(key), value)
@@ -111,6 +129,11 @@ def run_manifest_from_dict(payload: dict[str, Any]) -> RunManifest:
     selected["artifacts"] = [
         ArtifactDigest(**item)
         for item in selected.get("artifacts", [])
+        if isinstance(item, dict)
+    ]
+    selected["tools"] = [
+        ToolRunRecord(**item)
+        for item in selected.get("tools", [])
         if isinstance(item, dict)
     ]
     return RunManifest(**selected)
@@ -190,3 +213,69 @@ def _simulation_metadata(result: dict[str, Any]) -> dict[str, Any]:
             "result_hash": result_payload.get("result_hash"),
         }
     return {}
+
+
+def _tool_records(result: dict[str, Any]) -> list[ToolRunRecord]:
+    records = []
+    for item in _collect_tool_record_payloads(result):
+        try:
+            records.append(
+                ToolRunRecord(
+                    tool_name=str(item.get("tool_name") or item.get("tool") or "unknown"),
+                    adapter_name=str(item.get("adapter_name") or item.get("adapter") or "unknown"),
+                    capability=str(item.get("capability") or "unknown"),
+                    status=str(item.get("status") or "unknown"),
+                    version=_optional_string(item.get("version")),
+                    fallback_available=bool(item.get("fallback_available", False)),
+                    fallback_used=bool(item.get("fallback_used", False)),
+                    license_sensitive=bool(item.get("license_sensitive", False)),
+                    input_artifact_hash=_optional_string(
+                        item.get("input_artifact_hash")
+                        or item.get("input_sha256")
+                    ),
+                    output_artifacts=[
+                        str(value)
+                        for value in item.get("output_artifacts", [])
+                    ],
+                    warnings=[
+                        warning
+                        for warning in item.get("warnings", [])
+                        if isinstance(warning, dict)
+                    ],
+                    errors=[
+                        error
+                        for error in item.get("errors", [])
+                        if isinstance(error, dict)
+                    ],
+                )
+            )
+        except (TypeError, ValueError):
+            continue
+    return records
+
+
+def _collect_tool_record_payloads(payload: Any) -> list[dict[str, Any]]:
+    if not isinstance(payload, dict):
+        return []
+    records = []
+    tools = payload.get("tools") or payload.get("tool_records")
+    if isinstance(tools, list):
+        records.extend(item for item in tools if isinstance(item, dict))
+    availability = payload.get("availability")
+    if isinstance(availability, dict) and {
+        "tool_name",
+        "adapter_name",
+        "capability",
+    }.issubset(availability):
+        records.append(availability)
+    for key in ("summary", "best_topology"):
+        child = payload.get(key)
+        if isinstance(child, dict):
+            records.extend(_collect_tool_record_payloads(child))
+    return records
+
+
+def _optional_string(value: Any) -> str | None:
+    if value is None:
+        return None
+    return str(value)

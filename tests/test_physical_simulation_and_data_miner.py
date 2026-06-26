@@ -99,7 +99,11 @@ def test_data_miner_writes_normalized_parameters_to_topologies() -> None:
     assert parameters["rnap_total"]["unit"] == "nM"
     assert parameters["translation_rate"]["unit"] == "1/s"
     assert parameters["rnap_total"]["source"] == "conservative_default"
+    assert parameters["rnap_total"]["parameter_origin"] == "default"
+    assert parameters["rnap_total"]["confidence_category"] == "default"
+    assert parameters["rnap_total"]["measurement_context"]["host"] == "Escherichia coli"
     assert result.tree_nodes["root"].candidate_topologies[0]["biokinetic_parameters"]["mining_summary"]["source_summary"]["conservative_default"] > 0
+    assert result.tree_nodes["root"].candidate_topologies[0]["biokinetic_parameters"]["mining_summary"]["origin_summary"]["default"] > 0
     assert result.biokinetic_context["unit_system"] == "nM and seconds"
     assert result.biokinetic_context["data_miner_enabled"] is True
 
@@ -114,6 +118,7 @@ def test_data_miner_can_use_vector_records_without_being_vector_retriever() -> N
                     "unit": "uM",
                     "source": "local_bionumbers_record",
                     "confidence": 0.8,
+                    "measurement_context": {"growth_phase": "log"},
                 }
             ][:k]
 
@@ -126,6 +131,12 @@ def test_data_miner_can_use_vector_records_without_being_vector_retriever() -> N
     assert kd["raw_value"] == 0.075
     assert kd["raw_unit"] == "uM"
     assert kd["source"] == "local_bionumbers_record"
+    assert kd["parameter_origin"] == "inferred"
+    assert kd["confidence_category"] == "inferred"
+    assert kd["data_boundary"] == "local_private"
+    assert kd["is_override"] is True
+    assert kd["override_policy"] == "do_not_replace_defaults_silently"
+    assert kd["measurement_context"]["growth_phase"] == "log"
 
 
 def test_unit_conversion_utility_handles_common_biokinetic_units() -> None:
@@ -144,6 +155,8 @@ def test_ode_benchmark_report_includes_parameter_provenance() -> None:
 
     assert "parameter_provenance" in topology
     assert topology["parameter_provenance"]["source_summary"]["conservative_default"] > 0
+    assert topology["parameter_provenance"]["origin_summary"]["default"] > 0
+    assert topology["parameter_provenance"]["data_boundary_summary"]["public"] > 0
     details = topology["benchmark_report"]["details"]
     assert any(detail["metric"] == "parameter_provenance" for detail in details)
 

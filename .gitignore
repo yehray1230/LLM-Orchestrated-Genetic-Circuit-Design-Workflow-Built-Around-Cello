@@ -17,6 +17,8 @@ ENV/
 
 # Local app/runtime state
 .streamlit/secrets.toml
+local_plans_private/
+# Non-sensitive summaries for @-mention context live in local_plans_context/.
 .llm_cache/
 .ode_cache/
 chroma_db/

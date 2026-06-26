@@ -33,13 +33,19 @@ POST /api/v1/comparisons
 POST /api/v1/evaluations
 GET  /api/v1/evaluation/profiles
 GET  /api/v1/simulation/models
+GET  /api/v1/tool-capabilities
 POST /api/v1/simulations
+POST /api/v1/simulations/compare-snapshot
 GET  /api/v1/benchmarks/datasets
 GET  /api/v1/benchmarks/datasets/{dataset_id}
 POST /api/v1/benchmarks/runs
 GET  /api/v1/benchmarks/runs
 GET  /api/v1/benchmarks/runs/{benchmark_run_id}
 POST /api/v1/benchmarks/comparisons
+POST /api/v1/benchmarks/parameter-fits
+GET  /api/v1/benchmarks/parameter-fits
+GET  /api/v1/benchmarks/parameter-fits/{snapshot_id}
+POST /api/v1/benchmarks/parameter-fits/{snapshot_id}/comparison
 GET  /api/v1/designs/{design_id}/exports/{format}
 POST /api/v2/backbones
 GET  /api/v2/backbones
@@ -71,6 +77,21 @@ revisions for synonymous CDS codon optimization under a host profile.
 `host-optimization/candidates` returns ranked trade-off candidates rather than
 validated expression predictions. Calibration endpoints store and summarize
 user-supplied measurements; they do not fit a validated host-cell model.
+Parameter-fit endpoints fit simple Hill-response CSV measurements and persist
+local/private override snapshots; they do not replace public defaults.
+Simulation requests may include `parameter_fit_snapshot_id` to explicitly apply
+one saved local/private override snapshot to that single simulation.
+Snapshot comparison reports run the same topology with default parameters and
+with one fitted snapshot, then return dynamic margin, SNR, kinetic score, and
+parameter-provenance deltas with report metadata and a stable report hash.
+Temporal inputs use a structured schema keyed by signal name. Supported
+patterns are `step`, `pulse`, `sine`, and staged value lists. Host-profile
+registration accepts optional biophysical constants such as `rnap_total`,
+`ribosome_total`, transcription/translation rates, degradation rates,
+Michaelis constants, and burden/toxicity thresholds. Sensitivity endpoints
+return schema-versioned reports for parameter sweeps and bifurcation sweeps.
+Layout critic reports use schema-versioned issue objects with `code`,
+`severity`, `subject_id`, and `message`.
 
 `optimization-workflow` chains sequence analysis, sequence-optimization
 revision creation, host-optimization candidate ranking, and readiness reporting
@@ -127,6 +148,7 @@ outputs/api_data/
   research.db
   benchmark_runs/
   benchmark_reports/
+  parameter_fit_snapshots/
   host_profiles/
   host_calibrations/
   runs/
@@ -140,8 +162,67 @@ feedback, results, artifacts, and reproducibility manifests use the persistent
 `RunStore`.
 
 Host profiles and host-calibration summaries are JSON records. The default
-`ecoli_k12_default` host profile is installed automatically when application
-services are created.
+`ecoli_k12_default`, `yeast_sc_default`, and `mammalian_cho_default` host
+profiles are installed automatically when application services are created.
+
+## Phase 2 Core Contracts
+
+Temporal input request shape:
+
+```json
+{
+  "temporal_inputs": {
+    "A": {
+      "type": "step",
+      "time": 30.0,
+      "start_value": 0.0,
+      "end_value": 200.0
+    },
+    "B": [
+      {"start": 0.0, "end": 10.0, "value": 0.0},
+      {"start": 10.0, "end": 20.0, "value": 50.0}
+    ]
+  }
+}
+```
+
+Host profile biophysical fields are optional, positive numeric parameters:
+`rnap_total`, `ribosome_total`, `transcription_rate`, `translation_rate`,
+`mrna_degradation_rate`, `protein_degradation_rate`, `growth_rate_dilution`,
+`km_rnap`, `km_ribosome`, `burden_soft_limit`, and `toxicity_threshold`.
+
+Sensitivity reports include:
+
+```json
+{
+  "report_type": "parameter_sensitivity_sweep",
+  "schema_version": "1.0.0",
+  "host_profile_id": "ecoli_k12_default",
+  "parameter_name": "copy_number",
+  "results": [
+    {
+      "schema_version": "1.0.0",
+      "value": 5.0,
+      "dynamic_margin": 0.0,
+      "signal_to_noise_ratio": 0.0,
+      "kinetic_score": 0.0,
+      "max_burden_nM": 0.0
+    }
+  ]
+}
+```
+
+Layout critic report issues include:
+
+```json
+{
+  "schema_version": "1.0.0",
+  "code": "MISSING_TERMINATOR",
+  "severity": "warning",
+  "subject_id": "p1",
+  "message": "Human-readable explanation."
+}
+```
 
 The public v1 design endpoint remains backward compatible. Use `/ir-v2` to
 inspect biological context, construct/plasmid layers, field provenance, and

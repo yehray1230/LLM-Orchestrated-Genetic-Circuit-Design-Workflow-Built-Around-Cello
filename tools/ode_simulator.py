@@ -216,10 +216,48 @@ class ResourceAwareSimulation:
     params: dict[str, float]
     solver: WarmStartResourceSolver
     resource_trace: list[dict[str, float]] = field(default_factory=list)
+    temporal_inputs: dict[str, Any] | None = None
 
     def __post_init__(self):
         self.dynamic_signals = [name for name in sorted(self.signals.keys()) if self.signals[name] in ("wire", "output")]
         self.signal_idx = {name: idx for idx, name in enumerate(self.dynamic_signals)}
+
+    def _get_input_value(self, name: str, t: float) -> float:
+        default_val = self.params.get(f"input_{name}", 0.0)
+        if not self.temporal_inputs:
+            return default_val
+        spec = self.temporal_inputs.get(name)
+        if not spec:
+            return default_val
+        
+        if isinstance(spec, list):
+            for stage in spec:
+                start = float(stage.get("start", 0.0))
+                end = float(stage.get("end", float("inf")))
+                if start <= t < end:
+                    return float(stage.get("value", default_val))
+            return default_val
+            
+        if isinstance(spec, dict):
+            pattern_type = str(spec.get("type", "")).lower()
+            if pattern_type == "step":
+                step_t = float(spec.get("time", 0.0))
+                val_start = float(spec.get("start_value", 0.0))
+                val_end = float(spec.get("end_value", default_val))
+                return val_end if t >= step_t else val_start
+            elif pattern_type == "pulse":
+                start_t = float(spec.get("start_time", 0.0))
+                end_t = float(spec.get("end_time", float("inf")))
+                val_active = float(spec.get("active_value", default_val))
+                val_basal = float(spec.get("basal_value", 0.0))
+                return val_active if start_t <= t <= end_t else val_basal
+            elif pattern_type == "sine":
+                amplitude = float(spec.get("amplitude", 1.0))
+                frequency = float(spec.get("frequency", 0.1))
+                bias = float(spec.get("bias", default_val))
+                return bias + amplitude * math.sin(2.0 * math.pi * frequency * t)
+                
+        return default_val
 
     def rhs(self, _time: float, y: np.ndarray) -> np.ndarray:
         y = np.maximum(y, 0.0)
@@ -231,7 +269,7 @@ class ResourceAwareSimulation:
         protein_env = {}
         for name, sig_type in self.signals.items():
             if sig_type == "input":
-                protein_env[name] = self.params.get(f"input_{name}", 0.0)
+                protein_env[name] = self._get_input_value(name, _time)
             else:
                 idx = self.signal_idx.get(name)
                 protein_env[name] = protein_mature[idx] if idx is not None else 0.0
@@ -363,6 +401,7 @@ class BatchODESimulator:
         noise_level: float | None = None,
         cache_dir: str | None = None,
         random_seed: int | None = None,
+        temporal_inputs: dict[str, Any] | None = None,
     ):
         self.simulation_time = simulation_time
         self.sample_count = sample_count
@@ -372,6 +411,7 @@ class BatchODESimulator:
         self.random_seed = random_seed
         self._memory = Memory(cache_dir, verbose=0) if cache_dir and Memory is not None else None
         self._local_cache: dict[tuple, dict[str, Any]] = {}
+        self.temporal_inputs = temporal_inputs
 
     def run(self, state: DesignState) -> DesignState:
         node = state.tree_nodes.get(state.current_node_id) if state.current_node_id else None
@@ -416,6 +456,7 @@ class BatchODESimulator:
             input_signals=input_signals,
             target_output=target_output,
             random_seed=self.random_seed,
+            temporal_inputs=self.temporal_inputs,
         )
 
         truth_table = topology.get("truth_table") or topology.get("truth_table_or_logic_matrix") or topology.get("logic_matrix") or []
@@ -650,7 +691,13 @@ class BatchODESimulator:
             rnap_free=params["rnap_total"],
             ribosome_free=params["ribosome_total"],
         )
-        simulation = ResourceAwareSimulation(signals=signals, deps=deps, params=params, solver=solver)
+        simulation = ResourceAwareSimulation(
+            signals=signals,
+            deps=deps,
+            params=params,
+            solver=solver,
+            temporal_inputs=getattr(self, "temporal_inputs", None)
+        )
         gene_count = len(simulation.dynamic_signals)
         if initial_state is None:
             initial_state = np.zeros(gene_count * 3)
@@ -900,22 +947,61 @@ def _flatten_parameters(raw: dict[str, Any]) -> dict[str, float]:
 
 def _parameter_provenance(raw: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(raw, dict):
-        return {"source_summary": {"conservative_default": len(DEFAULT_BIOKINETIC_PARAMETERS)}, "unit_system": "nM and seconds"}
+        return {
+            "source_summary": {"conservative_default": len(DEFAULT_BIOKINETIC_PARAMETERS)},
+            "origin_summary": {"default": len(DEFAULT_BIOKINETIC_PARAMETERS)},
+            "data_boundary_summary": {"public": len(DEFAULT_BIOKINETIC_PARAMETERS)},
+            "local_private_parameter_count": 0,
+            "override_count": 0,
+            "unit_system": "nM and seconds"
+        }
     summary = raw.get("mining_summary", {})
     if isinstance(summary, dict) and summary:
-        return {
+        res = {
             "source_summary": summary.get("source_summary", {}),
+            "origin_summary": summary.get("origin_summary", {}),
+            "data_boundary_summary": summary.get("data_boundary_summary", {}),
+            "local_private_parameter_count": summary.get("local_private_parameter_count", 0),
+            "override_count": summary.get("override_count", 0),
             "records_used": summary.get("records_used", []),
             "all_parameters_have_external_source": summary.get("all_parameters_have_external_source", False),
             "unit_system": summary.get("unit_system", "nM and seconds"),
         }
+        for k, v in summary.items():
+            if k not in res:
+                res[k] = v
+        return res
     parameters = raw.get("parameters", raw)
     source_summary: dict[str, int] = {}
+    origin_summary: dict[str, int] = {}
+    boundary_summary: dict[str, int] = {}
+    override_count = 0
+    local_private_count = 0
     if isinstance(parameters, dict):
         for parameter in parameters.values():
-            source = parameter.get("source", "unknown") if isinstance(parameter, dict) else "unknown"
-            source_summary[str(source)] = source_summary.get(str(source), 0) + 1
-    return {"source_summary": source_summary, "unit_system": "nM and seconds"}
+            if isinstance(parameter, dict):
+                source = str(parameter.get("source", "unknown"))
+                origin = str(parameter.get("parameter_origin", "unknown"))
+                boundary = str(parameter.get("data_boundary", "unknown"))
+                source_summary[source] = source_summary.get(source, 0) + 1
+                origin_summary[origin] = origin_summary.get(origin, 0) + 1
+                boundary_summary[boundary] = boundary_summary.get(boundary, 0) + 1
+                if parameter.get("is_override"):
+                    override_count += 1
+                if boundary == "local_private":
+                    local_private_count += 1
+            else:
+                source_summary["unknown"] = source_summary.get("unknown", 0) + 1
+                origin_summary["unknown"] = origin_summary.get("unknown", 0) + 1
+                boundary_summary["unknown"] = boundary_summary.get("unknown", 0) + 1
+    return {
+        "source_summary": source_summary,
+        "origin_summary": origin_summary,
+        "data_boundary_summary": boundary_summary,
+        "local_private_parameter_count": local_private_count,
+        "override_count": override_count,
+        "unit_system": "nM and seconds"
+    }
 
 
 def _perturb_biokinetic_parameters(

@@ -177,6 +177,29 @@ def test_readiness_separates_domains_and_keeps_future_scores_null() -> None:
     assert result.blockers == []
 
 
+def test_readiness_accepts_sequence_complete_evidence_without_assembly_plan() -> None:
+    result = evaluate_readiness(
+        _design(),
+        assembly_report={
+            "status": "sequence_complete",
+            "readiness_status": "sequence_complete",
+            "issues": [],
+        },
+        computational_evaluation={
+            "weighted_total_score": 0.74,
+            "dimension_scores": {
+                "logic_function": 0.8,
+                "dynamic_behavior": 0.7,
+            },
+        },
+    )
+
+    assert result.readiness_status == "sequence_complete"
+    assert result.next_required_stage == "assembly_planned"
+    assert result.completed_stages == ["conceptual", "sequence_complete"]
+    assert result.domain_scores["sequence_quality_score"] == 1.0
+
+
 def test_blocker_forces_blocked_status_despite_high_computational_score() -> None:
     result = evaluate_readiness(
         _design(),
@@ -210,6 +233,23 @@ def test_primer_stage_only_advances_when_deliverable_is_ready() -> None:
     assert result.domain_scores["primer_readiness_score"] == 1.0
     assert result.domain_scores["sequence_optimization_score"] is None
     assert result.domain_scores["experimental_readiness_score"] == 1.0
+
+
+def test_non_experimental_primer_gate_does_not_raise_experimental_readiness() -> None:
+    result = evaluate_readiness(
+        _design(),
+        assembly_report=_assembly_report(),
+        assembly_plan=_plan(),
+        primer_result={
+            "status": "ready",
+            "experimental_evidence": False,
+            "report_type": "demo_primer_readiness_gate",
+        },
+    )
+
+    assert result.readiness_status == "primer_ready"
+    assert result.domain_scores["primer_readiness_score"] == 1.0
+    assert result.domain_scores["experimental_readiness_score"] is None
 
 
 def test_readiness_reports_split_optimization_domains() -> None:

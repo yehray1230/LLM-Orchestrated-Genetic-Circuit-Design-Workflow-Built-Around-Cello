@@ -5,6 +5,10 @@ from typing import Any
 
 from agents.base import AgentProtocol
 from schemas.state import DesignState
+from schemas.parameter_governance import (
+    normalize_parameter_metadata,
+    summarize_parameter_governance,
+)
 from utils.unit_conversion import normalize_biokinetic_value
 
 
@@ -22,6 +26,7 @@ DEFAULT_BIOKINETIC_PARAMETERS: dict[str, dict[str, Any]] = {
     "leak_fraction": {"value": 0.02, "unit": "dimensionless", "source": "conservative_default", "confidence": 0.45},
     "burden_soft_limit": {"value": 45000.0, "unit": "nM", "source": "conservative_default", "confidence": 0.45},
     "toxicity_threshold": {"value": 65000.0, "unit": "nM", "source": "conservative_default", "confidence": 0.45},
+    "growth_rate_dilution": {"value": 0.0004, "unit": "1/s", "source": "conservative_default", "confidence": 0.45},
 }
 
 
@@ -75,8 +80,8 @@ class DataMinerAgent(AgentProtocol):
         context = self._build_context(state)
 
         for topology in topologies:
-            parameters = self._default_parameters()
             chassis_raw = topology.get("chassis") or state.host_organism
+            parameters = self._default_parameters(host=str(chassis_raw))
             chassis_normalized = _normalize_chassis(chassis_raw)
             if chassis_normalized in CHASSIS_SPECIFIC_DEFAULTS:
                 spec_vals = CHASSIS_SPECIFIC_DEFAULTS[chassis_normalized]
@@ -86,9 +91,14 @@ class DataMinerAgent(AgentProtocol):
                         if chassis_normalized != "Escherichia coli":
                             parameters[p_key]["source"] = "chassis_specific_default"
                             parameters[p_key]["confidence"] = 0.65
-            parameters.update(self._parameters_from_records(context))
+                            parameters[p_key] = normalize_parameter_metadata(
+                                parameters[p_key],
+                                default_origin="default",
+                                default_context=_measurement_context(str(chassis_raw)),
+                            )
+            parameters.update(self._parameters_from_records(context, host=str(chassis_raw)))
             gene_count = self._infer_gene_count(topology)
-            source_summary = _parameter_source_summary(parameters)
+            governance_summary = summarize_parameter_governance(parameters)
             topology["biokinetic_parameters"] = {
                 "host": state.host_organism,
                 "gene_count": gene_count,
@@ -100,8 +110,8 @@ class DataMinerAgent(AgentProtocol):
                         for value in parameters.values()
                         if value.get("source") != "conservative_default"
                     ],
-                    "source_summary": source_summary,
-                    "all_parameters_have_external_source": source_summary.get("conservative_default", 0) == 0,
+                    **governance_summary,
+                    "all_parameters_have_external_source": governance_summary["source_summary"].get("conservative_default", 0) == 0,
                     "unit_system": "nM and seconds",
                 },
             }
@@ -111,6 +121,7 @@ class DataMinerAgent(AgentProtocol):
             "unit_system": "nM and seconds",
             "parameter_keys": sorted(self.defaults.keys()),
             "data_miner_enabled": True,
+            "data_boundary": "public_defaults_with_optional_local_private_overrides",
         }
         if node:
             node.candidate_topologies = topologies
@@ -118,8 +129,15 @@ class DataMinerAgent(AgentProtocol):
         state.last_error = None
         return state
 
-    def _default_parameters(self) -> dict[str, dict[str, Any]]:
-        return {key: value.copy() for key, value in self.defaults.items()}
+    def _default_parameters(self, *, host: str) -> dict[str, dict[str, Any]]:
+        return {
+            key: normalize_parameter_metadata(
+                value,
+                default_origin="default",
+                default_context=_measurement_context(host),
+            )
+            for key, value in self.defaults.items()
+        }
 
     def _build_context(self, state: DesignState) -> str:
         pieces = [state.user_intent, state.host_organism]
@@ -127,17 +145,17 @@ class DataMinerAgent(AgentProtocol):
         pieces.extend(state.verilog_codes)
         return " ".join(piece for piece in pieces if piece)
 
-    def _parameters_from_records(self, context: str) -> dict[str, dict[str, Any]]:
+    def _parameters_from_records(self, context: str, *, host: str) -> dict[str, dict[str, Any]]:
         if not self.vector_retriever:
             return {}
         overrides: dict[str, dict[str, Any]] = {}
         for record in self.vector_retriever.search(context, k=8):
-            normalized = self._normalize_record(record)
+            normalized = self._normalize_record(record, host=host)
             if normalized:
                 overrides[normalized[0]] = normalized[1]
         return overrides
 
-    def _normalize_record(self, record: dict[str, Any]) -> tuple[str, dict[str, Any]] | None:
+    def _normalize_record(self, record: dict[str, Any], *, host: str) -> tuple[str, dict[str, Any]] | None:
         raw_name = str(record.get("name") or record.get("parameter") or record.get("key") or "").lower()
         key = PARAMETER_ALIASES.get(raw_name)
         if not key:
@@ -150,14 +168,18 @@ class DataMinerAgent(AgentProtocol):
             return None
 
         normalized = normalize_biokinetic_value(value, unit)
-        return key, {
+        return key, normalize_parameter_metadata({
             "value": normalized.value,
             "unit": normalized.unit,
             "raw_value": value,
             "raw_unit": unit,
             "source": str(record.get("source") or "local_vector_record"),
             "confidence": float(record.get("confidence", record.get("confidence_score", 0.65))),
-        }
+            "parameter_origin": record.get("parameter_origin"),
+            "confidence_category": record.get("confidence_category"),
+            "measurement_context": record.get("measurement_context"),
+            "data_boundary": record.get("data_boundary"),
+        }, default_origin="inferred", default_context=_measurement_context(host), is_override=True)
 
     def _infer_gene_count(self, topology: dict[str, Any]) -> int:
         if topology.get("gate_count"):
@@ -174,3 +196,11 @@ def _parameter_source_summary(parameters: dict[str, dict[str, Any]]) -> dict[str
         source = str(parameter.get("source") or "unknown")
         summary[source] = summary.get(source, 0) + 1
     return summary
+
+
+def _measurement_context(host: str) -> dict[str, Any]:
+    return {
+        "host": host or "unknown",
+        "unit_system": "nM and seconds",
+        "context_scope": "computational_screening",
+    }

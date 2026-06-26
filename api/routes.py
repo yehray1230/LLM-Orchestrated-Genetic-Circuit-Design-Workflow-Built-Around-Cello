@@ -13,12 +13,19 @@ from api.schemas import (
     GenBankImportRequest,
     ImportDraftRequest,
     JsonImportRequest,
+    ParameterFitRequest,
+    ParameterFitSnapshotComparisonRequest,
     RunFeedbackRequest,
     RunResumeRequest,
     RunStartRequest,
     SimulationRequest,
+    SimulationComparisonRequest,
+    ParameterSweepRequest,
+    BifurcationSweepRequest,
+    temporal_inputs_to_dict,
 )
 from application.services import ApplicationServices
+from mcp_server.service import list_tool_capabilities
 from repositories.json_repository import RepositoryError
 from schemas.import_draft import import_draft_from_json
 
@@ -37,6 +44,11 @@ def envelope(data: Any, warnings: list[str] | None = None) -> dict[str, Any]:
 @router.get("/health")
 def health() -> dict[str, Any]:
     return envelope({"status": "ok", "service": "genetic-circuit-api"})
+
+
+@router.get("/tool-capabilities")
+def get_tool_capabilities() -> dict[str, Any]:
+    return envelope(list_tool_capabilities())
 
 
 @router.post("/imports/drafts/validate")
@@ -228,13 +240,27 @@ def simulate_candidate(
     services: ApplicationServices = Depends(get_services),
 ) -> dict[str, Any]:
     try:
+        topology = request.topology
+        if request.parameter_fit_snapshot_id:
+            snapshot = services.evaluations.parameter_fit_snapshot(
+                request.parameter_fit_snapshot_id
+            )
+            if not snapshot:
+                raise ValueError(
+                    f"Parameter fit snapshot '{request.parameter_fit_snapshot_id}' not found."
+                )
+            topology = services.simulations.apply_parameter_fit_snapshot(
+                topology, snapshot
+            )
         result = services.simulations.simulate(
-            request.topology,
+            topology,
             simulation_time=request.simulation_time,
             sample_count=request.sample_count,
             monte_carlo_samples=request.monte_carlo_samples,
             noise_fraction=request.noise_fraction,
             random_seed=request.random_seed,
+            host_profile_id=request.host_profile_id,
+            temporal_inputs=temporal_inputs_to_dict(request.temporal_inputs),
         )
     except (KeyError, TypeError, ValueError) as exc:
         raise _bad_request("SIMULATION_INVALID", str(exc)) from exc
@@ -242,6 +268,71 @@ def simulate_candidate(
         result,
         ["Simulation outputs are screening estimates and require experimental validation."],
     )
+
+
+@router.post("/simulations/compare-snapshot")
+def compare_simulation_snapshot(
+    request: SimulationComparisonRequest,
+    services: ApplicationServices = Depends(get_services),
+) -> dict[str, Any]:
+    try:
+        result = services.simulations.compare_default_vs_fitted(
+            request.topology,
+            request.parameter_fit_snapshot_id,
+            simulation_time=request.simulation_time,
+            sample_count=request.sample_count,
+            monte_carlo_samples=request.monte_carlo_samples,
+            noise_fraction=request.noise_fraction,
+            random_seed=request.random_seed,
+            host_profile_id=request.host_profile_id,
+            temporal_inputs=temporal_inputs_to_dict(request.temporal_inputs),
+        )
+    except KeyError as exc:
+        raise _not_found("PARAMETER_FIT_NOT_FOUND", str(exc.args[0])) from exc
+    except (TypeError, ValueError) as exc:
+        raise _bad_request("SIMULATION_INVALID", str(exc)) from exc
+    return envelope(
+        result,
+        ["Simulation comparisons are computational estimates and require experimental validation."],
+    )
+
+
+@router.post("/simulations/sweep")
+def parameter_sweep(
+    request: ParameterSweepRequest,
+    services: ApplicationServices = Depends(get_services),
+) -> dict[str, Any]:
+    from tools.sensitivity_analysis import run_parameter_sweep
+    try:
+        result = run_parameter_sweep(
+            request.topology,
+            request.parameter_name,
+            request.sweep_values,
+            host_profile_id=request.host_profile_id,
+            host_profiles=services.simulations.host_profiles,
+        )
+    except Exception as exc:
+        raise _bad_request("SWEEP_INVALID", str(exc)) from exc
+    return envelope(result)
+
+
+@router.post("/simulations/bifurcation")
+def bifurcation_sweep(
+    request: BifurcationSweepRequest,
+    services: ApplicationServices = Depends(get_services),
+) -> dict[str, Any]:
+    from tools.sensitivity_analysis import run_bifurcation_sweep
+    try:
+        result = run_bifurcation_sweep(
+            request.topology,
+            request.input_name,
+            request.input_values,
+            host_profile_id=request.host_profile_id,
+            host_profiles=services.simulations.host_profiles,
+        )
+    except Exception as exc:
+        raise _bad_request("SWEEP_INVALID", str(exc)) from exc
+    return envelope(result)
 
 
 @router.get("/benchmarks/datasets")
@@ -322,6 +413,77 @@ def compare_benchmark_results(
     except (ValueError, RepositoryError) as exc:
         raise _bad_request("BENCHMARK_COMPARISON_INVALID", str(exc)) from exc
     return envelope(result)
+
+
+@router.post("/benchmarks/parameter-fits", status_code=status.HTTP_201_CREATED)
+def create_parameter_fit_snapshot(
+    request: ParameterFitRequest,
+    services: ApplicationServices = Depends(get_services),
+) -> dict[str, Any]:
+    try:
+        result = services.evaluations.create_parameter_fit_snapshot(
+            request.model_dump()
+        )
+    except (ValueError, RepositoryError) as exc:
+        raise _bad_request("PARAMETER_FIT_INVALID", str(exc)) from exc
+    return envelope(result, [warning["message"] for warning in result.get("warnings", [])])
+
+
+@router.get("/benchmarks/parameter-fits")
+def list_parameter_fit_snapshots(
+    services: ApplicationServices = Depends(get_services),
+) -> dict[str, Any]:
+    items = services.evaluations.parameter_fit_snapshots()
+    return envelope({"items": items, "count": len(items)})
+
+
+@router.get("/benchmarks/parameter-fits/{snapshot_id}")
+def get_parameter_fit_snapshot(
+    snapshot_id: str,
+    services: ApplicationServices = Depends(get_services),
+) -> dict[str, Any]:
+    try:
+        result = services.evaluations.parameter_fit_snapshot(snapshot_id)
+    except RepositoryError as exc:
+        raise _bad_request("PARAMETER_FIT_ID_INVALID", str(exc)) from exc
+    if result is None:
+        raise _not_found("PARAMETER_FIT_NOT_FOUND", snapshot_id)
+    warnings = [
+        warning["message"]
+        for warning in result.get("warnings", [])
+        if isinstance(warning, dict) and warning.get("message")
+    ]
+    return envelope(result, warnings)
+
+
+@router.post("/benchmarks/parameter-fits/{snapshot_id}/comparison")
+def create_parameter_fit_snapshot_comparison(
+    snapshot_id: str,
+    request: ParameterFitSnapshotComparisonRequest,
+    services: ApplicationServices = Depends(get_services),
+) -> dict[str, Any]:
+    try:
+        result = services.simulations.compare_default_vs_fitted(
+            request.topology,
+            snapshot_id,
+            simulation_time=request.simulation_time,
+            sample_count=request.sample_count,
+            monte_carlo_samples=request.monte_carlo_samples,
+            noise_fraction=request.noise_fraction,
+            random_seed=request.random_seed,
+            host_profile_id=request.host_profile_id,
+            temporal_inputs=temporal_inputs_to_dict(request.temporal_inputs),
+        )
+    except KeyError as exc:
+        raise _not_found("PARAMETER_FIT_NOT_FOUND", str(exc.args[0])) from exc
+    except (TypeError, ValueError) as exc:
+        raise _bad_request("SIMULATION_INVALID", str(exc)) from exc
+    return envelope(
+        result,
+        [
+            "Snapshot comparison reports are computational estimates and require experimental validation."
+        ],
+    )
 
 
 @router.post("/runs", status_code=status.HTTP_202_ACCEPTED)

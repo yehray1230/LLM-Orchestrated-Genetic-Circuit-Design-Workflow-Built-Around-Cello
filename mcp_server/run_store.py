@@ -370,7 +370,14 @@ class RunStore:
         temp_path = run_dir / f"metadata.{uuid.uuid4().hex}.tmp"
         with self._lock:
             write_json(temp_path, metadata)
-            temp_path.replace(metadata_path)
+            for i in range(10):
+                try:
+                    temp_path.replace(metadata_path)
+                    break
+                except PermissionError:
+                    if i == 9:
+                        raise
+                    time.sleep(0.05)
 
     def _finalize_manifest(
         self,
