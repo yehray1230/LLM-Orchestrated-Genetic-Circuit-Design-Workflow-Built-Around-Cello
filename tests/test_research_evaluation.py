@@ -91,6 +91,51 @@ def test_research_profile_penalizes_missing_evidence() -> None:
     assert unsupported["dimension_scores"]["evidence_quality"] == 0.05
 
 
+def test_research_v2_perfect_simulated_candidate_can_reach_full_score() -> None:
+    candidate = {
+        **_candidate(evidence_quality=1.0),
+        "ode_status": "simulated",
+        "semantic_faithfulness_score": 1.0,
+        "monte_carlo_terminal_output_cv": 0.0,
+        "retroactivity_max": 0.0,
+        "rbs_blocking_detected": False,
+        "gate_count": 1,
+    }
+
+    result = evaluate_candidate(candidate, profile_id="research-v2-preview")
+
+    assert result["score"] == pytest.approx(1.0)
+    assert result["grade"] == "Excellent"
+
+
+@pytest.mark.parametrize(
+    ("penalty", "expected_score"),
+    [
+        ({"monte_carlo_terminal_output_cv": 1.0}, 0.85),
+        ({"retroactivity_max": 1.0}, 0.85),
+        ({"rbs_blocking_detected": True}, 0.85),
+    ],
+)
+def test_research_v2_biophysical_risks_reduce_score(
+    penalty: dict,
+    expected_score: float,
+) -> None:
+    candidate = {
+        **_candidate(evidence_quality=1.0),
+        "ode_status": "simulated",
+        "semantic_faithfulness_score": 1.0,
+        "monte_carlo_terminal_output_cv": 0.0,
+        "retroactivity_max": 0.0,
+        "rbs_blocking_detected": False,
+        "gate_count": 1,
+        **penalty,
+    }
+
+    result = evaluate_candidate(candidate, profile_id="research-v2-preview")
+
+    assert result["score"] == pytest.approx(expected_score)
+
+
 def test_dataset_is_versioned_validated_and_content_addressed() -> None:
     dataset = load_benchmark_dataset("research_smoke_v1")
     listed = list_benchmark_datasets()

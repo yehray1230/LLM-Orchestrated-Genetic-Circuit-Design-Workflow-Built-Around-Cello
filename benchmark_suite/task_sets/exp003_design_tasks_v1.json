@@ -1,0 +1,148 @@
+{
+  "schema_version": "1.0",
+  "task_set_id": "exp003_design_tasks_v1",
+  "version": "1.0.0",
+  "name": "EXP-003 five-case genetic circuit design benchmark",
+  "description": "Fixed natural-language design tasks for the Phase 6-lite reproducibility harness.",
+  "license": "project-fixture",
+  "provenance": {
+    "kind": "synthetic_project_fixture",
+    "wet_lab_validated": false,
+    "created_for": "EXP-003 Phase 6-lite benchmark contract"
+  },
+  "tasks": [
+    {
+      "task_id": "reporter_a_or_b_v1",
+      "category": "reporter",
+      "name": "Two-input permissive reporter",
+      "request": "Activate a reporter when input A or input B is present.",
+      "expected": {
+        "evaluation_mode": "combinational_logic",
+        "logic_expression": "A OR B",
+        "inputs": ["A", "B"],
+        "outputs": ["reporter"],
+        "truth_table": [
+          {"A": 0, "B": 0, "reporter": 0},
+          {"A": 0, "B": 1, "reporter": 1},
+          {"A": 1, "B": 0, "reporter": 1},
+          {"A": 1, "B": 1, "reporter": 1}
+        ]
+      },
+      "constraints": {
+        "allow_project_default_chassis": true,
+        "allow_default_reporter_identity": true
+      },
+      "scoring_notes": [
+        "Penalize polarity inversion or a missing input row.",
+        "Do not claim Cello mapping unless an external Cello run exists."
+      ],
+      "tags": ["fixed", "reporter", "combinational"],
+      "source": {"type": "project_fixture", "demo_case": "02"}
+    },
+    {
+      "task_id": "toggle_set_reset_v1",
+      "category": "toggle",
+      "name": "Set-reset memory toggle",
+      "request": "Design a genetic toggle switch with SET and RESET inputs controlling a GFP output state.",
+      "expected": {
+        "evaluation_mode": "stateful_temporal",
+        "inputs": ["SET", "RESET"],
+        "outputs": ["GFP"],
+        "required_behaviors": [
+          "SET drives and latches the GFP state on.",
+          "RESET drives and latches the GFP state off.",
+          "The prior state is retained when SET and RESET are both absent."
+        ]
+      },
+      "constraints": {
+        "simultaneous_set_reset_policy": "must_be_reported",
+        "wet_lab_claims_allowed": false
+      },
+      "scoring_notes": [
+        "Evaluate state retention rather than only a static truth table.",
+        "Report unsupported behavior for simultaneous SET and RESET explicitly."
+      ],
+      "tags": ["fixed", "toggle", "stateful", "temporal"],
+      "source": {"type": "project_fixture"}
+    },
+    {
+      "task_id": "oscillator_repressilator_v1",
+      "category": "oscillator",
+      "name": "Three-node repressilator",
+      "request": "Design a three-node repressilator with a fluorescent output that exhibits sustained oscillatory behavior.",
+      "expected": {
+        "evaluation_mode": "oscillatory_temporal",
+        "topology": "three-node cyclic repression",
+        "required_behaviors": [
+          "The simulated trace contains repeated peaks after the initial transient.",
+          "Oscillation amplitude and period are reported with their evaluation window.",
+          "Damped or non-oscillatory traces are not labeled as sustained oscillation."
+        ]
+      },
+      "constraints": {
+        "minimum_regulatory_nodes": 3,
+        "wet_lab_claims_allowed": false
+      },
+      "scoring_notes": [
+        "Use temporal evidence; a cyclic diagram alone is insufficient.",
+        "Preserve simulator and parameter provenance."
+      ],
+      "tags": ["fixed", "oscillator", "temporal"],
+      "source": {"type": "project_fixture", "inspiration": "repressilator"}
+    },
+    {
+      "task_id": "cello_a_and_not_b_gfp_v1",
+      "category": "cello_logic",
+      "name": "Cello-style A AND NOT B logic",
+      "request": "Activate GFP only when input A is present and input B is absent.",
+      "expected": {
+        "evaluation_mode": "combinational_logic",
+        "logic_expression": "A AND NOT B",
+        "inputs": ["A", "B"],
+        "outputs": ["GFP"],
+        "truth_table": [
+          {"A": 0, "B": 0, "GFP": 0},
+          {"A": 0, "B": 1, "GFP": 0},
+          {"A": 1, "B": 0, "GFP": 1},
+          {"A": 1, "B": 1, "GFP": 0}
+        ]
+      },
+      "constraints": {
+        "allow_project_default_chassis": true,
+        "cello_mapping_required": false,
+        "mock_and_external_cello_must_be_distinguished": true
+      },
+      "scoring_notes": [
+        "Penalize loss of the B repression condition.",
+        "Treat direct topology simulation as not mapped when Cello is not run."
+      ],
+      "tags": ["fixed", "cello-style", "combinational"],
+      "source": {"type": "project_fixture", "demo_case": "01"}
+    },
+    {
+      "task_id": "ambiguous_stress_output_v1",
+      "category": "ambiguous",
+      "name": "Underspecified stress-response request",
+      "request": "Design a genetic circuit that responds to stress and produces a useful output.",
+      "expected": {
+        "evaluation_mode": "clarification_required",
+        "candidate_generation_allowed": false,
+        "required_clarifications": [
+          "stress signal or sensing mechanism",
+          "desired output identity and behavior",
+          "host or chassis context"
+        ]
+      },
+      "constraints": {
+        "unsupported_defaults_allowed": false,
+        "sequence_level_design_allowed": false
+      },
+      "scoring_notes": [
+        "A clarification response is the expected successful outcome.",
+        "Penalize invented stress sensors, outputs, hosts, or biological guarantees."
+      ],
+      "tags": ["fixed", "ambiguous", "clarification"],
+      "source": {"type": "project_fixture"}
+    }
+  ]
+}
