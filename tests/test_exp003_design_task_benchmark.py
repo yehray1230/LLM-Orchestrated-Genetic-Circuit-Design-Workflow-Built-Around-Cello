@@ -400,6 +400,20 @@ def test_oscillator_evaluator_negative_scenarios() -> None:
     assert res_insuf["passed"] is False
     assert res_insuf["peak_count"] == 0
 
+    # 7. Malformed traces fail structurally instead of raising IndexError.
+    res_malformed = _evaluate_oscillatory_temporal_task(
+        task,
+        make_mock_result(
+            [500.0, 600.0, 700.0, 800.0, 900.0],
+            [0.0, 1.0],
+        ),
+        config=CONFIG_V1_1,
+    )
+    assert res_malformed["passed"] is False
+    assert res_malformed["classification"] == "invalid-trace"
+    assert res_malformed["trace_valid"] is False
+    assert res_malformed["trace_validation_errors"]
+
 
 def test_stable_batch_hash_sanitization_and_status() -> None:
     from application.design_task_benchmark import stable_batch_hash
@@ -471,6 +485,5 @@ def test_stable_batch_hash_sanitization_and_status() -> None:
     assert summary["unsupported_count"] == 1
     assert summary["failed_count"] == 1
     assert summary["pass_rate"] == 0.25
-
 
 

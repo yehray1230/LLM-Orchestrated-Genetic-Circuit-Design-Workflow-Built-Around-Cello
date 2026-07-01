@@ -17,13 +17,9 @@ from benchmark_suite.scoring_profiles import (
 
 SCORE_WEIGHTS = LEGACY_PROFILE.dimension_weights
 
-RESEARCH_V2_BIOPHYSICAL_WEIGHTS = {
-    "logic": 0.40,
-    "noise_resilience": 0.15,
-    "retroactivity_resilience": 0.15,
-    "rbs_accessibility": 0.15,
-    "resource_burden": 0.15,
-}
+RESEARCH_V2_BIOPHYSICAL_WEIGHTS = dict(
+    SIMULATION_RESEARCH_PROFILE.biophysical_weights or {}
+)
 
 
 def _clamp_score(score: float) -> float:
@@ -143,6 +139,8 @@ def evaluate_candidate(
         RESEARCH_PROFILE.profile_id,
         SIMULATION_RESEARCH_PROFILE.profile_id,
     }
+    applied_score_weights = profile.dimension_weights
+    biophysical_component_scores = None
     if profile.profile_id == "research-v2-preview" and candidate.get("ode_status") == "simulated":
         component_scores_v2 = {
             "logic": _clamp_score(semantic_faithfulness_score),
@@ -154,8 +152,10 @@ def evaluate_candidate(
             else 1.0,
             "resource_burden": _clamp_score(metabolic_result.score),
         }
+        biophysical_component_scores = component_scores_v2
+        applied_score_weights = dict(profile.biophysical_weights or {})
         biophysical_score = sum(
-            RESEARCH_V2_BIOPHYSICAL_WEIGHTS[name] * component_score
+            applied_score_weights[name] * component_score
             for name, component_score in component_scores_v2.items()
         )
         score = _clamp_score(biophysical_score)
@@ -193,7 +193,8 @@ def evaluate_candidate(
         "semantic_faithfulness_score": semantic_faithfulness_score,
         "missed_edge_cases": missed_edge_cases,
         "component_scores": component_scores,
-        "score_weights": profile.dimension_weights,
+        "score_weights": applied_score_weights,
+        "biophysical_component_scores": biophysical_component_scores,
         "dimension_scores": dimension_scores,
         "dimension_applicability": applicability,
         "scoring_profile": profile.profile_id,

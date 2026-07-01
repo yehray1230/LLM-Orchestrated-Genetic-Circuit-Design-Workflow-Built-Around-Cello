@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 import json
 from pathlib import Path
 
@@ -106,6 +107,29 @@ def test_research_v2_perfect_simulated_candidate_can_reach_full_score() -> None:
 
     assert result["score"] == pytest.approx(1.0)
     assert result["grade"] == "Excellent"
+    assert result["score_weights"] == {
+        "logic": 0.40,
+        "noise_resilience": 0.15,
+        "retroactivity_resilience": 0.15,
+        "rbs_accessibility": 0.15,
+        "resource_burden": 0.15,
+    }
+    assert result["biophysical_component_scores"] == {
+        "logic": 1.0,
+        "noise_resilience": 1.0,
+        "retroactivity_resilience": 1.0,
+        "rbs_accessibility": 1.0,
+        "resource_burden": 1.0,
+    }
+
+
+def test_research_v2_configuration_hash_covers_biophysical_weights() -> None:
+    profile = get_scoring_profile("research-v2-preview")
+    changed_weights = dict(profile.biophysical_weights or {})
+    changed_weights["logic"] = 0.39
+    changed_profile = replace(profile, biophysical_weights=changed_weights)
+
+    assert changed_profile.configuration_hash != profile.configuration_hash
 
 
 @pytest.mark.parametrize(

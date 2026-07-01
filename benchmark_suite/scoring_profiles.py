@@ -14,11 +14,15 @@ class ScoringProfile:
     description: str
     dimension_weights: dict[str, float]
     grade_thresholds: dict[str, float]
+    biophysical_weights: dict[str, float] | None = None
 
     @property
     def configuration_hash(self) -> str:
+        configuration = asdict(self)
+        if configuration["biophysical_weights"] is None:
+            configuration.pop("biophysical_weights")
         payload = json.dumps(
-            asdict(self),
+            configuration,
             ensure_ascii=False,
             sort_keys=True,
             separators=(",", ":"),
@@ -79,6 +83,13 @@ SIMULATION_RESEARCH_PROFILE = ScoringProfile(
     ),
     dimension_weights=dict(RESEARCH_PROFILE.dimension_weights),
     grade_thresholds=dict(RESEARCH_PROFILE.grade_thresholds),
+    biophysical_weights={
+        "logic": 0.40,
+        "noise_resilience": 0.15,
+        "retroactivity_resilience": 0.15,
+        "rbs_accessibility": 0.15,
+        "resource_burden": 0.15,
+    },
 )
 
 

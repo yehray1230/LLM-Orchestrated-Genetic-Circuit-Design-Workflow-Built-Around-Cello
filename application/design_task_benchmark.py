@@ -505,12 +505,20 @@ def _evaluate_oscillatory_temporal_task(
     period_cv = 0.0
     amplitudes = []
     amplitude_retention = 0.0
+    trace_validation_errors = []
 
     transient_cutoff = config.oscillator_profile.transient_cutoff
     minimum_peak_count = config.oscillator_profile.minimum_peak_count
     minimum_amplitude = config.oscillator_profile.minimum_amplitude
 
-    if simulation_completed and len(times) > 3:
+    if len(times) != len(outputs):
+        trace_validation_errors.append(
+            "ode_trace.time and ode_trace.output_protein must have equal lengths."
+        )
+        classification = "invalid-trace"
+
+    trace_valid = not trace_validation_errors
+    if simulation_completed and trace_valid and len(times) > 3:
         for i in range(1, len(times) - 1):
             t = times[i]
             if t < transient_cutoff:
@@ -593,13 +601,18 @@ def _evaluate_oscillatory_temporal_task(
         "passed": passed,
         "simulation_completed": simulation_completed,
         "classification": classification,
-        "evaluation_window": [transient_cutoff, float(times[-1]) if times else 0.0],
+        "evaluation_window": [
+            transient_cutoff,
+            float(times[-1]) if trace_valid and times else 0.0,
+        ],
         "peak_count": len(peaks),
         "periods": [round(p, 4) for p in periods],
         "mean_period": round(mean_period, 4),
         "period_cv": round(period_cv, 4),
         "amplitudes": [round(a, 4) for a in amplitudes],
         "amplitude_retention": round(amplitude_retention, 4),
+        "trace_valid": trace_valid,
+        "trace_validation_errors": trace_validation_errors,
         "claim_level": "deterministic_fixture_evaluation",
         "evaluator_version": config.version,
         "evaluator_config": config.oscillator_profile.to_dict(),
