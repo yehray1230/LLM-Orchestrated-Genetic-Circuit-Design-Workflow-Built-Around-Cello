@@ -209,6 +209,40 @@ def parse_verilog_netlist(verilog: str) -> tuple[dict[str, str], dict[str, tuple
     return signals, deps
 
 
+def validate_operon_configuration(
+    raw_operons: Any,
+    dynamic_signals: list[str],
+) -> list[str]:
+    if raw_operons is None:
+        return []
+    if not isinstance(raw_operons, list):
+        return ["operons must be a list of non-empty gene lists."]
+
+    errors: list[str] = []
+    known_genes = set(dynamic_signals)
+    assigned_genes: set[str] = set()
+    for operon_index, operon in enumerate(raw_operons):
+        if not isinstance(operon, list) or not operon:
+            errors.append(f"operons[{operon_index}] must be a non-empty gene list.")
+            continue
+        for gene_index, raw_gene in enumerate(operon):
+            if not isinstance(raw_gene, str) or not raw_gene.strip():
+                errors.append(
+                    f"operons[{operon_index}][{gene_index}] must be a non-empty gene name."
+                )
+                continue
+            gene = raw_gene.strip()
+            if gene not in known_genes:
+                errors.append(
+                    f"operons[{operon_index}] references unknown gene '{gene}'."
+                )
+            elif gene in assigned_genes:
+                errors.append(f"gene '{gene}' appears in more than one operon.")
+            else:
+                assigned_genes.add(gene)
+    return errors
+
+
 @dataclass
 class ResourceAwareSimulation:
     signals: dict[str, str]
@@ -217,10 +251,104 @@ class ResourceAwareSimulation:
     solver: WarmStartResourceSolver
     resource_trace: list[dict[str, float]] = field(default_factory=list)
     temporal_inputs: dict[str, Any] | None = None
+    operons_config: list[list[str]] | None = None
 
     def __post_init__(self):
         self.dynamic_signals = [name for name in sorted(self.signals.keys()) if self.signals[name] in ("wire", "output")]
         self.signal_idx = {name: idx for idx, name in enumerate(self.dynamic_signals)}
+
+        # Pre-calculate regulator targets: maps regulator (signal name) to list of (target_gate_output, kd)
+        self.regulator_targets = {}
+        default_kd = self.params.get("kd", 1.0)
+        for out_sig, (gate_type, gate_inputs) in self.deps.items():
+            kd_val = self.params.get(f"kd_{out_sig}", default_kd)
+            for inp in gate_inputs:
+                self.regulator_targets.setdefault(inp, []).append((out_sig, kd_val))
+
+        # Tracking max retroactivity index for each regulator
+        self.max_retroactivity = {reg: 0.0 for reg in self.regulator_targets.keys()}
+        # Warm-start values for multi-target free regulator solver
+        self.regulator_free_prev = {reg: 0.0 for reg in self.regulator_targets.keys()}
+
+        # Parse operons
+        raw_operons = self.operons_config
+        if isinstance(raw_operons, list):
+            self.operons = [list(op) for op in raw_operons]
+            # Find any dynamic signals not covered by raw_operons
+            covered = {gene for op in self.operons for gene in op}
+            for name in self.dynamic_signals:
+                if name not in covered:
+                    self.operons.append([name])
+        else:
+            self.operons = [[name] for name in self.dynamic_signals]
+
+        self.num_operons = len(self.operons)
+
+        # Maps gene name to (operon_idx, position_in_operon)
+        self.gene_to_operon = {}
+        for op_idx, op in enumerate(self.operons):
+            for pos, gene in enumerate(op):
+                self.gene_to_operon[gene] = (op_idx, pos)
+
+    def _solve_free_regulator(
+        self,
+        regulator: str,
+        p_tot: float,
+        copy_number: float,
+        targets: list[tuple[str, float]],
+    ) -> float:
+        if p_tot <= 0.0:
+            return 0.0
+        if copy_number <= 0.0 or not targets:
+            return p_tot
+
+        m = len(targets)
+        if m == 1:
+            # Analytical quadratic solution
+            _, kd = targets[0]
+            b = kd + copy_number - p_tot
+            c = -kd * p_tot
+            disc = b * b - 4.0 * c
+            p_free = 0.5 * (-b + math.sqrt(max(disc, 0.0)))
+            return min(max(p_free, 0.0), p_tot)
+        else:
+            # Newton-Raphson with warm start
+            x_prev = self.regulator_free_prev.get(regulator, p_tot)
+            x = min(max(x_prev, 0.0), p_tot)
+
+            # Newton iterations
+            converged = False
+            for _ in range(8):
+                f_val = x - p_tot
+                f_prime = 1.0
+                for _, kd in targets:
+                    denom = kd + x
+                    f_val += copy_number * x / denom
+                    f_prime += copy_number * kd / (denom * denom)
+
+                if abs(f_val) < 1e-7 * p_tot:
+                    converged = True
+                    break
+                step = f_val / f_prime
+                x = x - step
+                x = min(max(x, 0.0), p_tot)
+
+            if not converged:
+                # Bisection fallback
+                lo, hi = 0.0, p_tot
+                for _ in range(16):
+                    mid = 0.5 * (lo + hi)
+                    f_mid = mid - p_tot
+                    for _, kd in targets:
+                        f_mid += copy_number * mid / (kd + mid)
+                    if f_mid > 0.0:
+                        hi = mid
+                    else:
+                        lo = mid
+                x = 0.5 * (lo + hi)
+
+            self.regulator_free_prev[regulator] = x
+            return x
 
     def _get_input_value(self, name: str, t: float) -> float:
         default_val = self.params.get(f"input_{name}", 0.0)
@@ -229,7 +357,7 @@ class ResourceAwareSimulation:
         spec = self.temporal_inputs.get(name)
         if not spec:
             return default_val
-        
+
         if isinstance(spec, list):
             for stage in spec:
                 start = float(stage.get("start", 0.0))
@@ -237,7 +365,7 @@ class ResourceAwareSimulation:
                 if start <= t < end:
                     return float(stage.get("value", default_val))
             return default_val
-            
+
         if isinstance(spec, dict):
             pattern_type = str(spec.get("type", "")).lower()
             if pattern_type == "step":
@@ -256,40 +384,57 @@ class ResourceAwareSimulation:
                 frequency = float(spec.get("frequency", 0.1))
                 bias = float(spec.get("bias", default_val))
                 return bias + amplitude * math.sin(2.0 * math.pi * frequency * t)
-                
+
         return default_val
 
     def rhs(self, _time: float, y: np.ndarray) -> np.ndarray:
         y = np.maximum(y, 0.0)
         n = len(self.dynamic_signals)
-        mrna = y[:n]
-        protein_immature = y[n:2*n]
-        protein_mature = y[2*n:]
+        num_op = self.num_operons
+        mrna = y[:num_op]
+        protein_immature = y[num_op:num_op+n]
+        protein_mature = y[num_op+n:]
 
-        protein_env = {}
+        protein_tot_env = {}
         for name, sig_type in self.signals.items():
             if sig_type == "input":
-                protein_env[name] = self._get_input_value(name, _time)
+                protein_tot_env[name] = self._get_input_value(name, _time)
             else:
                 idx = self.signal_idx.get(name)
-                protein_env[name] = protein_mature[idx] if idx is not None else 0.0
+                protein_tot_env[name] = protein_mature[idx] if idx is not None else 0.0
+
+        protein_env = {}
+        copy_number = self.params.get("copy_number", 1.0)
+        for name, p_tot in protein_tot_env.items():
+            if name in self.regulator_targets:
+                p_free = self._solve_free_regulator(
+                    name, p_tot, copy_number, self.regulator_targets[name]
+                )
+                protein_env[name] = p_free
+
+                # Update max retroactivity index for this regulator
+                if p_tot > 1e-9:
+                    ri = 1.0 - p_free / p_tot
+                    self.max_retroactivity[name] = max(self.max_retroactivity[name], ri)
+            else:
+                protein_env[name] = p_tot
 
         regulation = np.ones(n)
         promoter_demand = np.zeros(n)
-        
+
         kd_vec = np.zeros(n)
         hill_vec = np.zeros(n)
         leak_vec = np.zeros(n)
-        
+
         default_kd = self.params["kd"]
         default_hill = self.params["hill_coefficient"]
         default_leak = self.params["leak_fraction"]
-        
+
         for idx, name in enumerate(self.dynamic_signals):
             kd_vec[idx] = self.params.get(f"kd_{name}", default_kd)
             hill_vec[idx] = self.params.get(f"hill_coefficient_{name}", default_hill)
             leak_vec[idx] = self.params.get(f"leak_fraction_{name}", default_leak)
-            
+
         base_demand = self.params.get("promoter_resource_demand", max(1.0, self.params["km_rnap"] * 0.35))
         copy_number = self.params.get("copy_number", 1.0)
 
@@ -343,11 +488,23 @@ class ResourceAwareSimulation:
             regulation[idx] = reg_val
             promoter_demand[idx] = base_demand * reg_val * copy_number
 
+        promoter_demand_op = np.zeros(num_op)
+        for op_idx, op in enumerate(self.operons):
+            first_gene = op[0]
+            first_idx = self.signal_idx[first_gene]
+            promoter_demand_op[op_idx] = promoter_demand[first_idx]
+
         rnap_free, rnap_occupancy = self.solver.solve_rnap(
-            self.params["rnap_total"], promoter_demand, self.params["km_rnap"]
+            self.params["rnap_total"], promoter_demand_op, self.params["km_rnap"]
         )
+
+        translating_mrna = np.zeros(n)
+        for idx, name in enumerate(self.dynamic_signals):
+            op_idx, _ = self.gene_to_operon[name]
+            translating_mrna[idx] = mrna[op_idx]
+
         ribo_free, ribo_occupancy = self.solver.solve_ribosome(
-            self.params["ribosome_total"], mrna, self.params["km_ribosome"]
+            self.params["ribosome_total"], translating_mrna, self.params["km_ribosome"]
         )
 
         rnap_factor = rnap_free / (self.params["km_rnap"] + rnap_free)
@@ -358,26 +515,65 @@ class ResourceAwareSimulation:
         mu = mu_max * (ribo_free / max(ribo_total, 1e-9))
         k_mat = self.params.get("maturation_rate", 0.0011)
 
-        mrna_deg = np.zeros(n)
-        protein_deg = np.zeros(n)
         default_mrna_deg = self.params["mrna_degradation_rate"]
         default_protein_deg = self.params["protein_degradation_rate"]
+
+        d_mrna = np.zeros(num_op)
+        for op_idx, op in enumerate(self.operons):
+            first_gene = op[0]
+            first_idx = self.signal_idx[first_gene]
+
+            mrna_deg_val = self.params.get(f"mrna_degradation_rate_{first_gene}", default_mrna_deg)
+            trans_rate_val = self.params.get(f"transcription_rate_{first_gene}", self.params["transcription_rate"])
+
+            d_mrna[op_idx] = (
+                trans_rate_val * copy_number * regulation[first_idx] * rnap_factor
+                - (mrna_deg_val + mu) * mrna[op_idx]
+            )
+
+        translation_rates = np.zeros(n)
+        for op_idx, op in enumerate(self.operons):
+            for pos, gene in enumerate(op):
+                gene_idx = self.signal_idx[gene]
+                rbs_basal = self.params.get(f"translation_rate_{gene}", self.params["translation_rate"])
+
+                if pos == 0:
+                    rate = rbs_basal
+                else:
+                    up_gene = op[pos - 1]
+                    up_idx = self.signal_idx[up_gene]
+                    flux_up = translation_rates[up_idx]
+
+                    spacing = self.params.get(f"intergenic_spacing_{gene}", -4.0)
+                    if spacing <= 20.0:
+                        chi = 0.8
+                    elif spacing < 30.0:
+                        chi = 0.8 * math.exp(-0.3 * (spacing - 20.0))
+                    else:
+                        chi = 0.0
+
+                    rate = rbs_basal + chi * flux_up
+
+                lambda_val = self.params.get("polarity_decay_constant", 0.1)
+                rate_effective = rate * math.exp(-lambda_val * pos)
+                translation_rates[gene_idx] = rate_effective
+
+        protein_deg = np.zeros(n)
         for idx, name in enumerate(self.dynamic_signals):
-            mrna_deg[idx] = self.params.get(f"mrna_degradation_rate_{name}", default_mrna_deg)
             protein_deg[idx] = self.params.get(f"protein_degradation_rate_{name}", default_protein_deg)
 
-        d_mrna = (
-            self.params["transcription_rate"] * copy_number * regulation * rnap_factor
-            - (mrna_deg + mu) * mrna
-        )
-        d_protein_immature = (
-            self.params["translation_rate"] * mrna * ribo_factor
-            - (protein_deg + k_mat + mu) * protein_immature
-        )
-        d_protein_mature = (
-            k_mat * protein_immature
-            - (protein_deg + mu) * protein_mature
-        )
+        d_protein_immature = np.zeros(n)
+        d_protein_mature = np.zeros(n)
+        for idx, name in enumerate(self.dynamic_signals):
+            op_idx, _ = self.gene_to_operon[name]
+            d_protein_immature[idx] = (
+                translation_rates[idx] * mrna[op_idx] * ribo_factor
+                - (protein_deg[idx] + k_mat + mu) * protein_immature[idx]
+            )
+            d_protein_mature[idx] = (
+                k_mat * protein_immature[idx]
+                - (protein_deg[idx] + mu) * protein_mature[idx]
+            )
 
         self.resource_trace.append(
             {
@@ -429,6 +625,7 @@ class BatchODESimulator:
         return selected
 
     def _simulate_topology(self, topology: dict[str, Any], index: int) -> None:
+        self.current_operons = topology.get("operons")
         verilog = str(topology.get("verilog") or "")
         signals, deps = parse_verilog_netlist(verilog)
         dynamic_signals = [name for name in sorted(signals.keys()) if signals[name] in ("wire", "output")]
@@ -472,6 +669,51 @@ class BatchODESimulator:
         params["promoter_resource_demand"] = max(1.0, params["km_rnap"] * 0.35)
         physical_assignment_metrics = _physical_assignment_metrics(topology)
 
+        operon_errors = validate_operon_configuration(
+            topology.get("operons"),
+            dynamic_signals,
+        )
+        if operon_errors:
+            error_msg = "Invalid operon configuration: " + " ".join(operon_errors)
+            simulation_result = SimulationResult(
+                status="failed",
+                configuration_hash=spec.configuration_hash,
+                parameter_set_hash=spec.parameter_set_hash,
+                scenario_set_hash=spec.scenario_set_hash,
+                error=error_msg,
+                solver={"methods": spec.solver_methods},
+            )
+            topology.update(
+                {
+                    "ode_status": "failed",
+                    "kinetic_score": 0.0,
+                    "robustness_score": 0.0,
+                    "signal_to_noise_ratio": 0.0,
+                    "monte_carlo_runs": self.monte_carlo_samples,
+                    "score": 0.0,
+                    "error": error_msg,
+                    "warnings": operon_errors,
+                    "simulation_model_version": SIMULATION_MODEL_VERSION,
+                    "simulation_spec": spec.to_dict(),
+                    "simulation_result": simulation_result.to_dict(),
+                    "benchmark_report": {
+                        "score": 0.0,
+                        "robustness_score": 0.0,
+                        "signal_to_noise_ratio": 0.0,
+                        "monte_carlo_runs": self.monte_carlo_samples,
+                        **physical_assignment_metrics,
+                        "details": [
+                            {
+                                "metric": "kinetic",
+                                "status": "input_validation_failed",
+                                "error": error_msg,
+                            }
+                        ],
+                    },
+                }
+            )
+            return
+
         cache_key = _cache_key(
             topology,
             index,
@@ -508,6 +750,8 @@ class BatchODESimulator:
             other_keys = [k for k in first_row.keys() if k not in input_signals]
             output_key = other_keys[0] if other_keys else None
 
+        overall_max_retroactivity = {}
+
         for row in truth_table:
             row_params = params.copy()
             for inp in input_signals:
@@ -525,10 +769,13 @@ class BatchODESimulator:
                 error_msg = getattr(result, "message", "ODE simulation failed.")
                 break
 
-            row_metrics = _simulation_metrics(result.y, simulation.resource_trace, row_params, target_idx)
+            for reg, val in getattr(simulation, "max_retroactivity", {}).items():
+                overall_max_retroactivity[reg] = max(overall_max_retroactivity.get(reg, 0.0), val)
+
+            row_metrics = _simulation_metrics(result.y, simulation.resource_trace, row_params, target_idx, gene_count)
             all_row_metrics.append(row_metrics)
 
-            final_val = float(result.y[2 * gene_count + target_idx, -1]) if target_idx != -1 else 0.0
+            final_val = float(result.y[result.y.shape[0] - gene_count + target_idx, -1]) if target_idx != -1 else 0.0
             expected_out = parse_logic_value(row[output_key], True) if output_key is not None else True
             if expected_out:
                 on_values.append(final_val)
@@ -584,6 +831,25 @@ class BatchODESimulator:
         max_off = max(off_values) if off_values else 0.0
         dynamic_margin = min_on - max_off
 
+        # Calculate Stoichiometric Balance Score
+        regulator_values = []
+        for name in dynamic_signals:
+            if name in simulation.regulator_targets:
+                idx = simulation.signal_idx[name]
+                final_val = float(best_result.y[best_result.y.shape[0] - gene_count + idx, -1])
+                regulator_values.append(final_val)
+
+        if len(regulator_values) > 1:
+            mean_val = float(np.mean(regulator_values))
+            std_val = float(np.std(regulator_values))
+            if mean_val > 1e-9:
+                cv = std_val / mean_val
+                stoichiometry_score = float(np.exp(-cv))
+            else:
+                stoichiometry_score = 0.0
+        else:
+            stoichiometry_score = 1.0
+
         metrics = {
             "max_burden_nM": max_burden,
             "output_cv": avg_cv,
@@ -593,6 +859,7 @@ class BatchODESimulator:
             "ribosome_occupancy_max": max_ribo_occ,
             "rnap_free_min": min_rnap_free,
             "ribosome_free_min": min_ribo_free,
+            "stoichiometry_score": stoichiometry_score,
             "resource_capacity_factor": min(
                 1.0,
                 0.5 * params["rnap_total"] / DEFAULT_BIOKINETIC_PARAMETERS["rnap_total"]["value"]
@@ -602,7 +869,7 @@ class BatchODESimulator:
             "toxicity_penalty": _sigmoid_penalty(max_burden, params["toxicity_threshold"], 0.00022),
         }
 
-        ode_trace = _simulation_trace(t_eval, best_result.y, best_resource_trace, target_idx)
+        ode_trace = _simulation_trace(t_eval, best_result.y, best_resource_trace, target_idx, gene_count)
         if self.monte_carlo_samples > 1:
             metrics.update(self._monte_carlo_metrics(signals, deps, params, t_eval, target_idx, input_signals, truth_table))
 
@@ -624,6 +891,7 @@ class BatchODESimulator:
             {"metric": "signal_to_noise_ratio", "value": metrics["signal_to_noise_ratio"]},
             {"metric": "max_burden", "value": metrics["max_burden_nM"], "unit": "nM"},
             {"metric": "output_cv", "value": metrics["output_cv"]},
+            {"metric": "stoichiometry_score", "value": stoichiometry_score},
             {"metric": "resource_occupancy", "value": resource_occupancy},
             {"metric": "parameter_provenance", "value": parameter_provenance},
         ]
@@ -637,6 +905,40 @@ class BatchODESimulator:
                     "failure_rate": metrics["monte_carlo_failure_rate"],
                 }
             )
+
+        simulation_warnings = []
+        for reg, val in overall_max_retroactivity.items():
+            if val > 0.3:
+                simulation_warnings.append(
+                    f"Retroactivity warning: regulator {reg} has high load sequestration "
+                    f"(max Ri = {val:.2f}). This may cause signal delay or loss of memory state."
+                )
+
+        rbs_warnings = []
+        rbs_seqs = topology.get("rbs_sequences") or {}
+        from tools.tool_adapters import RNAFoldingAdapter
+        folding_adapter = RNAFoldingAdapter()
+        for gene, seq in rbs_seqs.items():
+            if gene in dynamic_signals:
+                result_fold = folding_adapter.run({"sequence": seq})
+                mfe = result_fold.output.get("mfe", 0.0)
+                if mfe < -8.0:
+                    op_idx, pos = simulation.gene_to_operon.get(gene, (None, None))
+                    is_blocked = False
+                    if pos == 0 or pos is None:
+                        is_blocked = True
+                    else:
+                        up_gene = simulation.operons[op_idx][pos - 1]
+                        up_rate = params.get(f"translation_rate_{up_gene}", params.get("translation_rate", 1.0))
+                        if up_rate < 0.5:
+                            is_blocked = True
+                    if is_blocked:
+                        rbs_warnings.append(
+                            f"RBS blocking warning: gene {gene} has low RBS accessibility "
+                            f"(MFE = {mfe:.2f} kcal/mol) and insufficient upstream translation flux."
+                        )
+        simulation_warnings.extend(rbs_warnings)
+
         simulation_result = SimulationResult(
             status="simulated",
             configuration_hash=spec.configuration_hash,
@@ -644,7 +946,9 @@ class BatchODESimulator:
             scenario_set_hash=spec.scenario_set_hash,
             metrics=metrics,
             solver={"methods": spec.solver_methods},
+            warnings=simulation_warnings,
         )
+        max_ri = max(overall_max_retroactivity.values()) if overall_max_retroactivity else 0.0
         updates = {
             "ode_status": "simulated",
             "gene_count": gene_count,
@@ -659,6 +963,11 @@ class BatchODESimulator:
             "ode_trace": ode_trace,
             "resource_occupancy": resource_occupancy,
             "parameter_provenance": parameter_provenance,
+            "warnings": simulation_warnings,
+            "stoichiometry_score": stoichiometry_score,
+            "retroactivity_max": max_ri,
+            "retroactivity_score": 1.0 - max_ri,
+            "rbs_blocking_detected": True if rbs_warnings else False,
             "monte_carlo_samples": self.monte_carlo_samples,
             "monte_carlo_noise_fraction": self.noise_fraction,
             "simulation_model_version": SIMULATION_MODEL_VERSION,
@@ -669,6 +978,10 @@ class BatchODESimulator:
                 "robustness_score": robustness_score,
                 "signal_to_noise_ratio": metrics["signal_to_noise_ratio"],
                 "monte_carlo_runs": self.monte_carlo_samples,
+                "stoichiometry_score": stoichiometry_score,
+                "retroactivity_max": max_ri,
+                "retroactivity_score": 1.0 - max_ri,
+                "rbs_blocking_detected": True if rbs_warnings else False,
                 **physical_assignment_metrics,
                 "details": details,
             },
@@ -696,11 +1009,12 @@ class BatchODESimulator:
             deps=deps,
             params=params,
             solver=solver,
-            temporal_inputs=getattr(self, "temporal_inputs", None)
+            temporal_inputs=getattr(self, "temporal_inputs", None),
+            operons_config=getattr(self, "current_operons", None),
         )
         gene_count = len(simulation.dynamic_signals)
         if initial_state is None:
-            initial_state = np.zeros(gene_count * 3)
+            initial_state = np.zeros(simulation.num_operons + gene_count * 2)
         return simulation, self._integrate(simulation, initial_state, t_eval)
 
     def simulate_noisy_response(
@@ -709,6 +1023,7 @@ class BatchODESimulator:
         noise_level: float | None = None,
         rng: np.random.Generator | None = None,
     ) -> dict[str, float | bool | str]:
+        self.current_operons = topology.get("operons")
         verilog = str(topology.get("verilog") or "")
         signals, deps = parse_verilog_netlist(verilog)
         dynamic_signals = [name for name in sorted(signals.keys()) if signals[name] in ("wire", "output")]
@@ -777,7 +1092,7 @@ class BatchODESimulator:
                 error_msg = getattr(result, "message", "ODE simulation failed.")
                 break
 
-            final_val = float(result.y[2 * gene_count + target_idx, -1]) if target_idx != -1 else 0.0
+            final_val = float(result.y[result.y.shape[0] - gene_count + target_idx, -1]) if target_idx != -1 else 0.0
             expected_out = parse_logic_value(row[output_key], True) if output_key is not None else True
             if expected_out:
                 on_values.append(final_val)
@@ -870,7 +1185,7 @@ class BatchODESimulator:
                 if result is None or not result.success:
                     continue
 
-                final_val = float(result.y[2 * gene_count + target_idx, -1]) if target_idx != -1 else 0.0
+                final_val = float(result.y[result.y.shape[0] - gene_count + target_idx, -1]) if target_idx != -1 else 0.0
                 row_outputs.append(final_val)
                 expected_out = parse_logic_value(row[output_key], True) if output_key is not None else True
                 row_expected.append(expected_out)
@@ -893,6 +1208,422 @@ class BatchODESimulator:
         return {
             "monte_carlo_terminal_output_cv": cv,
             "monte_carlo_failure_rate": failures / max(1, self.monte_carlo_samples),
+        }
+
+    def simulate_stochastic(
+        self,
+        topology: dict[str, Any],
+        runs: int = 50,
+        scale_factor: float = 10.0,
+        max_steps: int = 15000,
+    ) -> dict[str, Any]:
+        if not isinstance(topology, dict) or not topology:
+            raise ValueError("Stochastic simulation requires a non-empty topology dictionary.")
+        if isinstance(runs, bool) or not isinstance(runs, int) or runs <= 0:
+            raise ValueError("runs must be a positive integer.")
+        if isinstance(scale_factor, bool):
+            raise ValueError("scale_factor must be a finite number greater than zero.")
+        scale_factor = float(scale_factor)
+        if not math.isfinite(scale_factor) or scale_factor <= 0.0:
+            raise ValueError("scale_factor must be a finite number greater than zero.")
+        if isinstance(max_steps, bool) or not isinstance(max_steps, int) or max_steps <= 0:
+            raise ValueError("max_steps must be a positive integer.")
+
+        # 1. Parse Verilog and set up simulation object
+        verilog = str(topology.get("verilog") or "")
+        signals, deps = parse_verilog_netlist(verilog)
+        dynamic_signals = [name for name in sorted(signals.keys()) if signals[name] in ("wire", "output")]
+        gene_count = len(dynamic_signals)
+
+        if gene_count == 0:
+            raise ValueError(
+                "topology.verilog must define at least one wire or output signal."
+            )
+
+        operon_errors = validate_operon_configuration(
+            topology.get("operons"),
+            dynamic_signals,
+        )
+        if operon_errors:
+            raise ValueError("Invalid operon configuration: " + " ".join(operon_errors))
+
+        biokinetic_parameters = topology.get("biokinetic_parameters", {})
+        params = _flatten_parameters(biokinetic_parameters)
+        params["copy_number"] = float(topology.get("copy_number", 1.0))
+        params["promoter_resource_demand"] = max(1.0, params["km_rnap"] * 0.35)
+
+        solver = WarmStartResourceSolver(
+            rnap_free=params["rnap_total"],
+            ribosome_free=params["ribosome_total"],
+        )
+
+        # Set up a ResourceAwareSimulation instance
+        simulation = ResourceAwareSimulation(
+            signals=signals,
+            deps=deps,
+            params=params,
+            solver=solver,
+            temporal_inputs=self.temporal_inputs,
+            operons_config=topology.get("operons"),
+        )
+
+        num_op = simulation.num_operons
+
+        # Define species list
+        species_names = []
+        for j in range(num_op):
+            op_genes = "-".join(simulation.operons[j])
+            species_names.append(f"mRNA_{op_genes}")
+        for name in dynamic_signals:
+            species_names.append(f"protein_immature_{name}")
+        for name in dynamic_signals:
+            species_names.append(f"protein_mature_{name}")
+
+        num_species = len(species_names)
+
+        # We want to resample the trajectories onto a common time grid
+        t_max = self.simulation_time
+        t_eval = np.linspace(0.0, t_max, self.sample_count)
+
+        trajectories = []
+        run_statuses = []
+        rng = np.random.default_rng(self.random_seed)
+
+        initial_counts = np.zeros(num_species)
+        if "initial_molecules" in topology:
+            for spec_name, val in topology["initial_molecules"].items():
+                if spec_name in species_names:
+                    idx = species_names.index(spec_name)
+                    initial_counts[idx] = float(val)
+        else:
+            # Check if there is a way to set sequential logic initial state
+            if "Q" in dynamic_signals:
+                q_idx = num_op + gene_count + dynamic_signals.index("Q")
+                initial_counts[q_idx] = 20.0 * scale_factor  # 20 nM
+            if "Qbar" in dynamic_signals:
+                qb_idx = num_op + gene_count + dynamic_signals.index("Qbar")
+                initial_counts[qb_idx] = 0.0
+
+        # Run stochastic Gillespie simulations
+        for run_idx in range(runs):
+            state = initial_counts.copy()
+            t = 0.0
+
+            # Record trajectory points for interpolation
+            trajectory_t = [0.0]
+            trajectory_y = [state.copy()]
+
+            # Gillespie SSA Loop
+            step = 0
+            while t < t_max and step < max_steps:
+                # 1. Convert state to concentrations
+                mrna_conc = state[:num_op] / scale_factor
+                protein_mature_conc = state[num_op+gene_count:] / scale_factor
+
+                # 2. Get input concentrations
+                protein_tot_env = {}
+                for name, sig_type in simulation.signals.items():
+                    if sig_type == "input":
+                        protein_tot_env[name] = simulation._get_input_value(name, t)
+                    else:
+                        idx = simulation.signal_idx.get(name)
+                        protein_tot_env[name] = protein_mature_conc[idx] if idx is not None else 0.0
+
+                # 3. Solve free regulators
+                protein_env = {}
+                copy_number = simulation.params.get("copy_number", 1.0)
+                for name, p_tot in protein_tot_env.items():
+                    if name in simulation.regulator_targets:
+                        p_free = simulation._solve_free_regulator(
+                            name, p_tot, copy_number, simulation.regulator_targets[name]
+                        )
+                        protein_env[name] = p_free
+                    else:
+                        protein_env[name] = p_tot
+
+                # 4. Evaluate promoter regulation
+                regulation = np.ones(gene_count)
+                promoter_demand = np.zeros(gene_count)
+
+                kd_vec = np.zeros(gene_count)
+                hill_vec = np.zeros(gene_count)
+                leak_vec = np.zeros(gene_count)
+                default_kd = simulation.params["kd"]
+                default_hill = simulation.params["hill_coefficient"]
+                default_leak = simulation.params["leak_fraction"]
+
+                for idx, name in enumerate(simulation.dynamic_signals):
+                    kd_vec[idx] = simulation.params.get(f"kd_{name}", default_kd)
+                    hill_vec[idx] = simulation.params.get(f"hill_coefficient_{name}", default_hill)
+                    leak_vec[idx] = simulation.params.get(f"leak_fraction_{name}", default_leak)
+
+                base_demand = simulation.params.get("promoter_resource_demand", max(1.0, simulation.params["km_rnap"] * 0.35))
+
+                for idx, name in enumerate(simulation.dynamic_signals):
+                    gate_type, gate_inputs = simulation.deps.get(name, (None, []))
+                    reg_val = 1.0
+                    kd = max(kd_vec[idx], 1e-9)
+                    hill = max(hill_vec[idx], 1.0)
+                    leak = max(0.0, min(1.0, leak_vec[idx]))
+
+                    if gate_type and gate_inputs:
+                        gate_type = gate_type.lower()
+                        if gate_type == "not" and len(gate_inputs) == 1:
+                            rep_p = protein_env.get(gate_inputs[0], 0.0)
+                            reg_val = leak + (1.0 - leak) / (1.0 + np.power(rep_p / kd, hill))
+                        elif gate_type == "nor" and len(gate_inputs) >= 1:
+                            for inp in gate_inputs:
+                                rep_p = protein_env.get(inp, 0.0)
+                                reg_val *= (leak + (1.0 - leak) / (1.0 + np.power(rep_p / kd, hill)))
+                        elif gate_type == "nand" and len(gate_inputs) >= 1:
+                            active_frac = 1.0
+                            for inp in gate_inputs:
+                                rep_p = protein_env.get(inp, 0.0)
+                                active_frac *= (np.power(rep_p, hill) / (np.power(kd, hill) + np.power(rep_p, hill)))
+                            reg_val = 1.0 - (1.0 - leak) * active_frac
+                        elif gate_type == "and" and len(gate_inputs) >= 1:
+                            active_frac = 1.0
+                            for inp in gate_inputs:
+                                rep_p = protein_env.get(inp, 0.0)
+                                active_frac *= (np.power(rep_p, hill) / (np.power(kd, hill) + np.power(rep_p, hill)))
+                            reg_val = leak + (1.0 - leak) * active_frac
+                        elif gate_type == "or" and len(gate_inputs) >= 1:
+                            inactive_frac = 1.0
+                            for inp in gate_inputs:
+                                rep_p = protein_env.get(inp, 0.0)
+                                inactive_frac *= (1.0 - (np.power(rep_p, hill) / (np.power(kd, hill) + np.power(rep_p, hill))))
+                            reg_val = leak + (1.0 - leak) * (1.0 - inactive_frac)
+                        elif gate_type in ("buf", "bufif1", "bufif0") and len(gate_inputs) == 1:
+                            rep_p = protein_env.get(gate_inputs[0], 0.0)
+                            reg_val = leak + (1.0 - leak) * (np.power(rep_p, hill) / (np.power(kd, hill) + np.power(rep_p, hill)))
+                        else:
+                            if len(gate_inputs) == 1:
+                                rep_p = protein_env.get(gate_inputs[0], 0.0)
+                                reg_val = leak + (1.0 - leak) / (1.0 + np.power(rep_p / kd, hill))
+                            else:
+                                for inp in gate_inputs:
+                                    rep_p = protein_env.get(inp, 0.0)
+                                    reg_val *= (leak + (1.0 - leak) / (1.0 + np.power(rep_p / kd, hill)))
+
+                    regulation[idx] = reg_val
+                    promoter_demand[idx] = base_demand * reg_val * copy_number
+
+                # 5. Solve resources
+                promoter_demand_op = np.zeros(num_op)
+                for op_idx, op in enumerate(simulation.operons):
+                    first_gene = op[0]
+                    first_idx = simulation.signal_idx[first_gene]
+                    promoter_demand_op[op_idx] = promoter_demand[first_idx]
+
+                rnap_free, _ = simulation.solver.solve_rnap(
+                    simulation.params["rnap_total"], promoter_demand_op, simulation.params["km_rnap"]
+                )
+
+                translating_mrna = np.zeros(gene_count)
+                for idx, name in enumerate(simulation.dynamic_signals):
+                    op_idx, _ = simulation.gene_to_operon[name]
+                    translating_mrna[idx] = mrna_conc[op_idx]
+
+                ribo_free, _ = simulation.solver.solve_ribosome(
+                    simulation.params["ribosome_total"], translating_mrna, simulation.params["km_ribosome"]
+                )
+
+                rnap_factor = rnap_free / (simulation.params["km_rnap"] + rnap_free)
+                ribo_factor = ribo_free / (simulation.params["km_ribosome"] + ribo_free)
+
+                mu_max = simulation.params.get("growth_rate_dilution", 0.0004)
+                ribo_total = simulation.params.get("ribosome_total", 20000.0)
+                mu = mu_max * (ribo_free / max(ribo_total, 1e-9))
+                k_mat = simulation.params.get("maturation_rate", 0.0011)
+
+                default_mrna_deg = simulation.params["mrna_degradation_rate"]
+                default_protein_deg = simulation.params["protein_degradation_rate"]
+
+                # 6. Calculate translation rates
+                translation_rates = np.zeros(gene_count)
+                for op_idx, op in enumerate(simulation.operons):
+                    for pos, gene in enumerate(op):
+                        g_idx = simulation.signal_idx[gene]
+                        rbs_basal = simulation.params.get(f"translation_rate_{gene}", simulation.params["translation_rate"])
+                        if pos == 0:
+                            rate = rbs_basal
+                        else:
+                            up_gene = op[pos - 1]
+                            up_idx = simulation.signal_idx[up_gene]
+                            flux_up = translation_rates[up_idx]
+                            spacing = simulation.params.get(f"intergenic_spacing_{gene}", -4.0)
+                            if spacing <= 20.0:
+                                chi = 0.8
+                            elif spacing < 30.0:
+                                chi = 0.8 * math.exp(-0.3 * (spacing - 20.0))
+                            else:
+                                chi = 0.0
+                            rate = rbs_basal + chi * flux_up
+                        lambda_val = simulation.params.get("polarity_decay_constant", 0.1)
+                        translation_rates[g_idx] = rate * math.exp(-lambda_val * pos)
+
+                protein_deg = np.zeros(gene_count)
+                for idx, name in enumerate(simulation.dynamic_signals):
+                    protein_deg[idx] = simulation.params.get(f"protein_degradation_rate_{name}", default_protein_deg)
+
+                # 7. Construct Reactions and Propensities list
+                propensities = []
+                reactions = []
+
+                # Operon reactions
+                for op_idx, op in enumerate(simulation.operons):
+                    first_gene = op[0]
+                    first_idx = simulation.signal_idx[first_gene]
+                    mrna_deg_val = simulation.params.get(f"mrna_degradation_rate_{first_gene}", default_mrna_deg)
+                    trans_rate_val = simulation.params.get(f"transcription_rate_{first_gene}", simulation.params["transcription_rate"])
+
+                    # Transcription
+                    a_tx = trans_rate_val * copy_number * regulation[first_idx] * rnap_factor * scale_factor
+                    propensities.append(a_tx)
+                    change = np.zeros(num_species)
+                    change[op_idx] = 1
+                    reactions.append(change)
+
+                    # mRNA Degradation
+                    a_deg_m = (mrna_deg_val + mu) * state[op_idx]
+                    propensities.append(a_deg_m)
+                    change = np.zeros(num_species)
+                    change[op_idx] = -1
+                    reactions.append(change)
+
+                # Gene reactions
+                for idx, name in enumerate(simulation.dynamic_signals):
+                    op_idx, _ = simulation.gene_to_operon[name]
+
+                    # Translation
+                    a_tl = translation_rates[idx] * state[op_idx] * ribo_factor
+                    propensities.append(a_tl)
+                    change = np.zeros(num_species)
+                    change[num_op + idx] = 1
+                    reactions.append(change)
+
+                    # Maturation
+                    a_mat = k_mat * state[num_op + idx]
+                    propensities.append(a_mat)
+                    change = np.zeros(num_species)
+                    change[num_op + idx] = -1
+                    change[num_op + gene_count + idx] = 1
+                    reactions.append(change)
+
+                    # Immature Degradation
+                    a_deg_pi = (protein_deg[idx] + mu) * state[num_op + idx]
+                    propensities.append(a_deg_pi)
+                    change = np.zeros(num_species)
+                    change[num_op + idx] = -1
+                    reactions.append(change)
+
+                    # Mature Degradation
+                    a_deg_pm = (protein_deg[idx] + mu) * state[num_op + gene_count + idx]
+                    propensities.append(a_deg_pm)
+                    change = np.zeros(num_species)
+                    change[num_op + gene_count + idx] = -1
+                    reactions.append(change)
+
+                # 8. Gillespie Step
+                prop_sum = sum(propensities)
+                if prop_sum <= 1e-12:
+                    t = t_max
+                    break
+
+                tau = -math.log(rng.random()) / prop_sum
+                t += tau
+                if t > t_max:
+                    break
+
+                r = rng.random() * prop_sum
+                accum = 0.0
+                fired_idx = 0
+                for idx_p, p in enumerate(propensities):
+                    accum += p
+                    if r <= accum:
+                        fired_idx = idx_p
+                        break
+
+                state += reactions[fired_idx]
+                state = np.maximum(state, 0.0)
+
+                trajectory_t.append(t)
+                trajectory_y.append(state.copy())
+                step += 1
+
+            truncated = step >= max_steps and t < t_max
+            if not truncated and trajectory_t[-1] < t_max:
+                trajectory_t.append(t_max)
+                trajectory_y.append(trajectory_y[-1].copy())
+            run_statuses.append(
+                {
+                    "run_index": run_idx,
+                    "status": "truncated" if truncated else "completed",
+                    "steps": step,
+                    "simulated_until": min(t, t_max),
+                }
+            )
+
+            trajectory_y_arr = np.array(trajectory_y)
+            resampled_run_concs = np.zeros((num_species, len(t_eval)))
+            for s_idx in range(num_species):
+                resampled_run_concs[s_idx, :] = np.interp(t_eval, trajectory_t, trajectory_y_arr[:, s_idx]) / scale_factor
+
+            trajectories.append(resampled_run_concs)
+
+        trajectories_arr = np.array(trajectories)
+        mean_trajectory_arr = np.mean(trajectories_arr, axis=0)
+        var_trajectory_arr = np.var(trajectories_arr, axis=0)
+
+        fano_factors = {}
+        for idx, name in enumerate(dynamic_signals):
+            mature_idx = num_op + gene_count + idx
+            final_mean = float(mean_trajectory_arr[mature_idx, -1])
+            final_var = float(var_trajectory_arr[mature_idx, -1])
+            fano_factors[name] = final_var / max(final_mean, 1e-9)
+
+        memory_stability = 1.0
+        if "Q" in dynamic_signals and "Qbar" in dynamic_signals:
+            q_idx = num_op + gene_count + dynamic_signals.index("Q")
+            qb_idx = num_op + gene_count + dynamic_signals.index("Qbar")
+
+            stable_runs = 0
+            for run_idx in range(runs):
+                q_trace = trajectories_arr[run_idx, q_idx, :]
+                qb_trace = trajectories_arr[run_idx, qb_idx, :]
+                if np.all(q_trace >= qb_trace):
+                    stable_runs += 1
+            memory_stability = stable_runs / runs
+
+        switching_failure_probability = 0.0
+
+        runs_output = []
+        for run_idx in range(min(5, runs)):
+            run_data = {"time": t_eval.tolist()}
+            for s_idx, spec_name in enumerate(species_names):
+                run_data[spec_name] = trajectories_arr[run_idx, s_idx, :].tolist()
+            runs_output.append(run_data)
+
+        mean_trajectory = {"time": t_eval.tolist()}
+        for s_idx, spec_name in enumerate(species_names):
+            mean_trajectory[spec_name] = mean_trajectory_arr[s_idx, :].tolist()
+
+        truncated_run_count = sum(
+            status["status"] == "truncated" for status in run_statuses
+        )
+
+        return {
+            "simulation_status": "truncated" if truncated_run_count else "completed",
+            "runs": runs_output,
+            "mean_trajectory": mean_trajectory,
+            "fano_factors": fano_factors,
+            "memory_stability": memory_stability,
+            "switching_failure_probability": switching_failure_probability,
+            "species_names": species_names,
+            "completed_run_count": runs - truncated_run_count,
+            "truncated_run_count": truncated_run_count,
+            "max_steps_per_run": max_steps,
+            "run_statuses": run_statuses,
         }
 
     def _integrate(
@@ -1073,9 +1804,12 @@ def _simulation_metrics(
     trace: list[dict[str, float]],
     params: dict[str, float],
     target_idx: int,
+    gene_count: int | None = None,
 ) -> dict[str, float]:
-    gene_count = y.shape[0] // 3
-    protein = np.maximum(y[2 * gene_count:, :], 0.0)
+    if gene_count is None:
+        gene_count = y.shape[0] // 3
+    num_op = y.shape[0] - 2 * gene_count
+    protein = np.maximum(y[num_op + gene_count:, :], 0.0)
     output = protein[target_idx, :] if (protein.size and target_idx != -1) else np.zeros(y.shape[1])
     output_mean = float(np.mean(output))
     output_std = float(np.std(output))
@@ -1101,11 +1835,14 @@ def _simulation_trace(
     y: np.ndarray,
     trace: list[dict[str, float]],
     target_idx: int,
+    gene_count: int | None = None,
 ) -> dict[str, list[float]]:
-    midpoint = y.shape[0] // 3
-    mrna = np.maximum(y[:midpoint, :], 0.0)
-    protein_immature = np.maximum(y[midpoint:2*midpoint, :], 0.0)
-    protein_mature = np.maximum(y[2*midpoint:, :], 0.0)
+    if gene_count is None:
+        gene_count = y.shape[0] // 3
+    num_op = y.shape[0] - 2 * gene_count
+    mrna = np.maximum(y[:num_op, :], 0.0)
+    protein_immature = np.maximum(y[num_op:num_op+gene_count, :], 0.0)
+    protein_mature = np.maximum(y[num_op+gene_count:, :], 0.0)
     output = protein_mature[target_idx, :] if (protein_mature.size and target_idx != -1) else np.zeros(y.shape[1])
     sampled_trace = _resample_resource_trace(trace, len(t_eval))
     return {
