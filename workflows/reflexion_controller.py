@@ -1,11 +1,12 @@
 import logging
 import uuid
+from copy import deepcopy
 from typing import Any, Callable
 
 from benchmark_suite.benchmark_controller import evaluate_candidate
 from schemas.state import DesignState, SearchNode
 
-# Assuming agent imports are handled by an app or factory, 
+# Assuming agent imports are handled by an app or factory,
 # but we will define the workflow loop here.
 
 MAX_CONSECUTIVE_ERROR_TYPE = 3
@@ -86,6 +87,79 @@ def _apply_weighted_benchmark(topology: dict[str, Any]) -> None:
         "details": existing_details + weighted_details,
         "ode_report": existing_report,
     }
+
+
+def _apply_self_healing_to_best_topology(node: SearchNode) -> tuple[bool, str]:
+    from tools.self_healing import (
+        run_self_healing_action,
+        validate_self_healing_recommendation,
+    )
+
+    recommendation = node.last_recommendation
+    best_topology = node.best_topology
+    if not recommendation or best_topology is None:
+        return False, "No best topology or self-healing recommendation is available."
+
+    validation_errors = validate_self_healing_recommendation(
+        best_topology,
+        recommendation,
+    )
+    if validation_errors:
+        node.self_healing_history.append(
+            {
+                "status": "skipped",
+                "recommendation": deepcopy(recommendation),
+                "errors": list(validation_errors),
+            }
+        )
+        return False, "Invalid self-healing recommendation: " + " ".join(
+            validation_errors
+        )
+
+    best_index = next(
+        (
+            index
+            for index, topology in enumerate(node.candidate_topologies)
+            if topology is best_topology
+        ),
+        None,
+    )
+    if best_index is None:
+        node.self_healing_history.append(
+            {
+                "status": "skipped",
+                "recommendation": deepcopy(recommendation),
+                "errors": ["The evaluated best topology is not in candidate_topologies."],
+            }
+        )
+        return False, "The evaluated best topology is not in candidate_topologies."
+
+    before = deepcopy(best_topology)
+    repaired_topology = run_self_healing_action(best_topology, recommendation)
+    node.candidate_topologies[best_index] = repaired_topology
+    node.best_topology = repaired_topology
+    repair_fields = {
+        "copy_number",
+        "rbs_sequences",
+        "biokinetic_parameters",
+    }
+    changes = {
+        key: {
+            "before": deepcopy(before.get(key)),
+            "after": deepcopy(repaired_topology.get(key)),
+        }
+        for key in sorted(repair_fields)
+        if before.get(key) != repaired_topology.get(key)
+    }
+    node.self_healing_history.append(
+        {
+            "status": "applied",
+            "candidate_index": best_index,
+            "recommendation": deepcopy(recommendation),
+            "changes": changes,
+        }
+    )
+    return True, str(recommendation.get("recommended_action"))
 
 
 def _record_failed_attempt(state: DesignState, node: SearchNode) -> None:
@@ -173,13 +247,13 @@ def run_reflexion_workflow(
     state.requires_human_input = False
     state.pause_reason = None
     state.human_feedback_prompt = None
-    
+
     if not state.active_frontier and not state.tree_nodes:
         root_node = SearchNode(node_id="root", search_mode="Exploration")
         state.tree_nodes["root"] = root_node
         state.active_frontier.append("root")
     _emit(progress_callback, "workflow", "running", 0.05, "Reflexion workflow started.")
-    
+
     while state.active_frontier:
         if state.used_budget >= state.compute_budget:
             state = _pause_for_human_input(
@@ -193,7 +267,7 @@ def run_reflexion_workflow(
                 ),
             )
             return _extract_skill_memory(state, skill_extractor)
-            
+
         current_node_id = state.active_frontier.pop(0)
         node = state.tree_nodes[current_node_id]
         state.current_node_id = current_node_id
@@ -205,9 +279,9 @@ def run_reflexion_workflow(
             f"Processing search node {current_node_id}.",
             {"node_id": current_node_id, "search_mode": node.search_mode},
         )
-        
+
         logging.info(f"Processing Node: {current_node_id} (Mode: {node.search_mode})")
-        
+
         # Determine parameters based on search_mode
         if node.search_mode == "Exploration":
             temperature = 0.7
@@ -222,7 +296,7 @@ def run_reflexion_workflow(
         elif node.search_mode == "Exploitation":
             temperature = 0.1
             # Inherit skill_context from parent if possible, or just default
-            
+
         # 1. Builder
         if node.search_mode != "Exploitation":
             _emit(progress_callback, "builder", "running", 0.18, "Generating logic proposals.")
@@ -232,7 +306,7 @@ def run_reflexion_workflow(
                 node.last_error = state.last_error
                 _record_dead_end(state, node)
                 continue
-                
+
         # 2. Translator
         _emit(progress_callback, "translator", "running", 0.32, "Translating the proposal to Verilog.")
         translator.kwargs["temperature"] = temperature
@@ -241,7 +315,7 @@ def run_reflexion_workflow(
             node.last_error = state.last_error
             _record_dead_end(state, node)
             continue
-            
+
         # 3. Cello (assuming it reads node.verilog_codes via state)
         _emit(progress_callback, "cello", "running", 0.48, "Evaluating Cello mapping and constraints.")
         state = cello_wrapper.run(state)
@@ -249,7 +323,7 @@ def run_reflexion_workflow(
             node.last_error = state.last_error
             _record_dead_end(state, node)
             continue
-            
+
         # 4. Optional biokinetic data mining, then batch ODE/DAE simulation
         if data_miner:
             _emit(progress_callback, "data_mining", "running", 0.58, "Collecting kinetic context.")
@@ -264,7 +338,7 @@ def run_reflexion_workflow(
 
         for topo in node.candidate_topologies:
             _apply_weighted_benchmark(topo)
-        
+
         # Evaluate Best Topology inside the node
         best_topo = None
         best_score = -9999.0
@@ -272,18 +346,56 @@ def run_reflexion_workflow(
             if topo.get("score", -9999) > best_score:
                 best_score = topo.get("score", -9999)
                 best_topo = topo
-                
+
         node.best_topology = best_topo
         node.score = best_score
         node.sync_evaluation_metrics(best_topo)
         if best_topo:
             state.best_topology = best_topo
-            
+
         # 5. Critic
         _emit(progress_callback, "critic", "running", 0.84, "Reviewing candidate quality and constraints.")
         state = critic.run(state)
         node.status = "Evaluated"
-        
+
+        # Self-healing loop intercept
+        if not node.is_approved and node.last_recommendation and node.candidate_topologies:
+            repair_applied, repair_message = _apply_self_healing_to_best_topology(node)
+            if repair_applied:
+                node.last_recommendation = None
+                _emit(progress_callback, "self_healing", "running", 0.88, f"Executing self-healing: {repair_message}")
+                state = batch_ode_simulator.run(state)
+
+                for topo in node.candidate_topologies:
+                    _apply_weighted_benchmark(topo)
+
+                best_topo = None
+                best_score = -9999.0
+                for topo in node.candidate_topologies:
+                    if topo.get("score", -9999) > best_score:
+                        best_score = topo.get("score", -9999)
+                        best_topo = topo
+                node.best_topology = best_topo
+                node.score = best_score
+                node.sync_evaluation_metrics(best_topo)
+                if best_topo:
+                    state.best_topology = best_topo
+
+                _emit(progress_callback, "critic", "running", 0.90, "Re-evaluating repaired design.")
+                state = critic.run(state)
+            else:
+                node.critic_feedbacks.append(
+                    f"Self-healing recommendation skipped: {repair_message}"
+                )
+                _emit(
+                    progress_callback,
+                    "self_healing",
+                    "failed",
+                    0.88,
+                    repair_message,
+                )
+                node.last_recommendation = None
+
         # Branching based on Critic evaluation
         if node.is_approved:
             logging.info(f"Node {current_node_id} PASS! Goal reached.")
@@ -298,7 +410,7 @@ def run_reflexion_workflow(
                 {"node_id": current_node_id, "score": node.score},
             )
             break
-            
+
         # If not approved, handle errors
         state.used_budget += 1
         _record_failed_attempt(state, node)
@@ -325,13 +437,13 @@ def run_reflexion_workflow(
                 ),
             )
             return _extract_skill_memory(state, skill_extractor)
-        
+
         if node.error_type in ["LOGIC_ERROR", "BOTH"]:
             # Generate Repair child
             repair_id = f"{current_node_id}_repair_{uuid.uuid4().hex[:4]}"
             repair_node = SearchNode(
-                node_id=repair_id, 
-                parent_id=current_node_id, 
+                node_id=repair_id,
+                parent_id=current_node_id,
                 search_mode="Repair",
                 critic_feedbacks=node.critic_feedbacks.copy(), # Pass historical context
                 failed_attempts=node.failed_attempts.copy(),
@@ -340,7 +452,7 @@ def run_reflexion_workflow(
             node.children_ids.append(repair_id)
             state.tree_nodes[repair_id] = repair_node
             state.active_frontier.append(repair_id)
-            
+
             # If budget permits, generate Exploration child
             if state.used_budget < state.compute_budget - 1:
                 explore_id = f"{current_node_id}_explore_{uuid.uuid4().hex[:4]}"
@@ -355,7 +467,7 @@ def run_reflexion_workflow(
                 node.children_ids.append(explore_id)
                 state.tree_nodes[explore_id] = explore_node
                 state.active_frontier.append(explore_id)
-                
+
         elif node.error_type == "PART_ERROR":
             # If score is high but mapping failed, generate Exploitation
             if state.used_budget <= state.compute_budget:
@@ -407,7 +519,7 @@ def run_reflexion_workflow(
         if best_node and best_node.best_topology:
             state.best_topology = best_node.best_topology
             state.current_node_id = best_node.node_id
-            
+
     # 6. Consolidator
     _emit(progress_callback, "consolidator", "running", 0.96, "Consolidating the selected design.")
     state = consolidator.run(state)
