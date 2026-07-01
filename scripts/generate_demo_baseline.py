@@ -9,8 +9,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from application.demo_baseline import run_demo_baseline_freeze
-from application.services import create_application_services
+from application.demo_baseline import run_demo_baseline_freeze  # noqa: E402
+from application.services import create_application_services  # noqa: E402
 
 
 def main() -> int:

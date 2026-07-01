@@ -1417,7 +1417,6 @@ def create_application_services(
     run_store = RunStore(base_dir=selected / "runs")
     host_profiles = HostProfileRegistryService(host_profile_repository)
     simulation_service = SimulationService(parameter_fit_repository, host_profiles)
-    tool_capability_service = ToolCapabilityService()
     backbones = BackboneRegistryService(backbone_repository)
     plasmid_assemblies = PlasmidAssemblyService(designs, backbones)
     assembly_plans = AssemblyPlanningService(plasmid_assemblies, backbones)

@@ -595,7 +595,7 @@ def _render_tutorial() -> None:
                 """
                 ### 歡迎使用基因電路設計器！
                 這是一個將自然語言轉換為基因電路的自動化工具。以下是簡單的使用步驟：
-                
+
                 1. **輸入需求**：在左側的「設計需求」框中，用自然語言描述想要的基因電路功能（例如：A 和 B 同時存在時輸出 Y）。
                 2. **設定參數**：選擇宿主生物、調整計算預算，並開關邏輯設計知識、ODE 模擬等功能。
                 3. **執行生成**：
@@ -857,7 +857,7 @@ def _render_human_loop_panel(state: DesignState) -> None:
         err_summary = proposal.get("error_summary_cn", "系統遇到設計瓶頸")
         ui_msg = proposal.get("ui_message", "請問您希望如何調整？")
         selected_node = _selected_node(state)
-        
+
         st.markdown(
             f"""
             <div class="hitl-panel" style="border-left:5px solid #ea580c;">
@@ -881,7 +881,7 @@ def _render_human_loop_panel(state: DesignState) -> None:
             action = opt.get("action", "Repair")
             constraints = opt.get("constraints", [])
             extra_budget = opt.get("extra_budget", 2)
-            
+
             if st.button(f"👉 {opt_id}: {label}", key=f"pm_opt_{opt_id}", use_container_width=True, type="primary" if opt_id == "A" else "secondary"):
                 state.human_constraints.extend(constraints)
                 if extra_budget:
@@ -891,7 +891,7 @@ def _render_human_loop_panel(state: DesignState) -> None:
                     state.is_completed = state.best_topology is not None
                 else:
                     _create_guided_child(state, "Repair")
-                
+
                 state.requires_human_input = False
                 state.pm_stage = "engine_running"
                 state.pause_reason = None
@@ -1224,8 +1224,8 @@ def _render_inspector(state: DesignState) -> None:
         )
         return
 
-    explanation_tab, proposal_tab, verilog_tab, topology_tab, compare_tab, ode_tab, charts_tab, critic_tab, skill_tab, raw_tab = st.tabs(
-        ["解釋", "提案", "Verilog", "拓樸", "比較", "ODE 模擬", "圖表", "評審", "設計知識", "原始狀態"]
+    explanation_tab, proposal_tab, verilog_tab, topology_tab, compare_tab, ode_tab, charts_tab, critic_tab, stochastic_tab, skill_tab, raw_tab = st.tabs(
+        ["解釋", "提案", "Verilog", "拓樸", "比較", "ODE 模擬", "圖表", "評審", "隨機驗證", "設計知識", "原始狀態"]
     )
 
     with explanation_tab:
@@ -1282,6 +1282,9 @@ def _render_inspector(state: DesignState) -> None:
             st.info("目前尚無評審回饋。")
         if node.last_error:
             st.error(node.last_error)
+
+    with stochastic_tab:
+        _render_stochastic_tab(node, state)
 
     with skill_tab:
         skill_context = getattr(state, "skill_context", "") or state.rag_context
@@ -1902,7 +1905,7 @@ def _render_layout_audit(node: SearchNode, state: DesignState, topology: dict[st
         # Migrate to V2
         migration_res = migrate_design_payload_to_v2(design_v1.to_dict())
         design_v2 = migration_res.design
-        
+
         # Ensure we have at least one plasmid to analyze
         if not design_v2.plasmids:
             # Create a mock plasmid that contains all constructs in the design
@@ -1947,7 +1950,7 @@ def _render_ode_simulation_tab(node: SearchNode, state: DesignState) -> None:
     selected_index = labels.index(selected_label)
     topology = topologies[selected_index]
     _render_ode_explanation(topology)
-    
+
     # Render Layout Audit panel
     _render_layout_audit(node, state, topology)
 
@@ -2013,7 +2016,7 @@ def _render_ode_simulation_tab(node: SearchNode, state: DesignState) -> None:
                 ["Constant (恆定)", "Step (階梯)", "Pulse (脈衝)", "Sine (弦波)"],
                 key=f"temp_profile_type_{node.node_id}_{selected_index}_{inp}"
             )
-            
+
             if profile_type.startswith("Constant"):
                 temporal_inputs[inp] = {"type": "step", "time": 0.0, "start_value": 200.0, "end_value": 200.0}
             elif profile_type.startswith("Step"):
@@ -2468,6 +2471,12 @@ def _render_ode_metric_summary(topology: dict[str, Any]) -> None:
     cols[2].metric("SNR", _format_metric(topology.get("signal_to_noise_ratio")))
     cols[3].metric("Output CV", _format_metric(topology.get("metrics_cv")))
 
+    sim_res = topology.get("simulation_result") or {}
+    sim_warnings = sim_res.get("warnings") or topology.get("warnings") or []
+    if sim_warnings:
+        for w in sim_warnings:
+            st.warning(w)
+
 
 def _valid_ode_trace(trace: Any) -> bool:
     if not isinstance(trace, dict):
@@ -2763,6 +2772,80 @@ def _render_topology_charts(node: SearchNode, state: DesignState) -> None:
     if metric_cols:
         st.caption("實作複雜度與動態裕度")
         st.line_chart(chart_df[metric_cols], use_container_width=True)
+
+
+def _render_stochastic_tab(node: SearchNode, state: DesignState) -> None:
+    if pd is None:
+        st.info("請安裝 pandas 以啟用 Streamlit 圖表渲染。")
+        return
+
+    topologies = node.candidate_topologies or state.candidate_topologies
+    if not topologies:
+        st.info("目前沒有可用於隨機驗證的拓樸候選。")
+        return
+
+    # Select topology to run stochastic simulation on
+    top_options = [f"候選 {i}: {top.get('verilog', '')[:40]}..." for i, top in enumerate(topologies)]
+    selected_idx = st.selectbox("選擇拓樸候選", range(len(top_options)), format_func=lambda i: top_options[i])
+    topology = topologies[selected_idx]
+
+    col1, col2 = st.columns(2)
+    runs = col1.number_input("隨機模擬次數 (runs)", min_value=1, max_value=100, value=20, step=5)
+    scale_factor = col2.number_input("分子個數縮放因子 (scale)", min_value=1.0, max_value=100.0, value=10.0, step=1.0)
+
+    if st.button("執行隨機驗證 (Run Stochastic Audit)"):
+        with st.spinner("執行 Gillespie 隨機模擬中..."):
+            from tools.tool_adapters import StochasticSimulationAdapter
+            adapter = StochasticSimulationAdapter()
+            res = adapter.run({"topology": topology, "runs": int(runs), "scale_factor": scale_factor})
+
+            if res.status == "ok":
+                st.success("隨機模擬完成！")
+                stoch_res = res.output["stochastic_result"]
+
+                # Show overall metrics
+                m_cols = st.columns(2)
+                m_cols[0].metric("記憶體穩定性 (Memory Stability)", f"{stoch_res.get('memory_stability', 1.0) * 100:.1f}%")
+                m_cols[1].metric("切換失敗率 (P_fail)", f"{stoch_res.get('switching_failure_probability', 0.0) * 100:.1f}%")
+
+                # Show Fano factors
+                st.caption("Fano 因子 (Fano Factors) - 評估分子噪聲雜訊強度")
+                fano_df = pd.DataFrame([
+                    {"基因": gene, "Fano 因子": fano}
+                    for gene, fano in stoch_res.get("fano_factors", {}).items()
+                ])
+                if not fano_df.empty:
+                    st.dataframe(fano_df.set_index("基因"))
+
+                # Plot trajectories
+                # We can plot the mean trajectory first
+                mean_traj = stoch_res.get("mean_trajectory") or {}
+                if mean_traj and "time" in mean_traj:
+                    st.caption("平均分子濃度軌跡 (Mean Trajectory)")
+                    plot_data = pd.DataFrame(mean_traj).set_index("time")
+                    st.line_chart(plot_data, use_container_width=True)
+
+                    # Plot single cell runs
+                    st.caption("單細胞隨機軌跡範例 (Sample Single-Cell Traces)")
+                    sample_runs = stoch_res.get("runs") or []
+                    if sample_runs:
+                        for idx_run, run in enumerate(sample_runs[:3]):
+                            with st.expander(f"細胞軌跡 {idx_run + 1}"):
+                                run_df = pd.DataFrame(run).set_index("time")
+                                st.line_chart(run_df, use_container_width=True)
+            else:
+                st.error("隨機模擬執行失敗！")
+                if hasattr(res, "warnings"):
+                    for w in res.warnings:
+                        st.warning(_tool_warning_message(w))
+
+
+def _tool_warning_message(warning: Any) -> str:
+    if isinstance(warning, dict):
+        return str(warning.get("message") or "未知錯誤")
+    message = getattr(warning, "message", None)
+    return str(message or warning or "未知錯誤")
+
 
 
 def _run_demo_iteration(state: DesignState) -> None:
@@ -3623,31 +3706,31 @@ def _generate_mermaid_from_spec(spec: dict[str, Any]) -> str:
     outputs = spec.get("outputs", [])
     logic = spec.get("logic_relation", "")
     chassis = spec.get("chassis", "Unknown Host")
-    
+
     # 建立 Logic Engine 節點
     logic_label = f"\"🧬 {chassis} 電路核心<br/>規格: {logic}\"" if logic else f"\"🧬 {chassis} 電路核心\""
     lines.append(f"    Logic[{logic_label}]")
-    
+
     # 建立 Inputs 連結
     for index, inp in enumerate(inputs):
         name = inp.get("name", f"Input_{index}")
         promoter = inp.get("sensor_promoter", "")
         label = f"\"{name} (感測器: {promoter})\"" if promoter else f"\"{name}\""
         lines.append(f"    In_{index}[{label}] --> Logic")
-        
+
     # 建立 Outputs 連結
     for index, out in enumerate(outputs):
         name = out.get("name", f"Output_{index}")
         label = f"\"{name} (報告基因)\""
         lines.append(f"    Logic --> Out_{index}[{label}]")
-        
+
     # 美化樣式
     lines.append("    style Logic fill:#f1f5f9,stroke:#334155,stroke-width:2px")
     for index in range(len(inputs)):
         lines.append(f"    style In_{index} fill:#eff6ff,stroke:#2563eb,stroke-width:1px")
     for index in range(len(outputs)):
         lines.append(f"    style Out_{index} fill:#ecfdf5,stroke:#059669,stroke-width:2px")
-        
+
     return "\n".join(lines)
 
 
@@ -3709,7 +3792,7 @@ def _render_pm_elicitation_dashboard(state: DesignState) -> None:
         api_key = config.get("api_key", "").strip() or None
         model_name = config.get("model_name", "gpt-4o-mini").strip()
         api_base = config.get("api_base", "").strip() or None
-        
+
         # 顯示載入中
         with st.spinner("設計經理正在分析意圖並規劃生物學預設推薦..."):
             call_pm_agent(state, api_key=api_key, model_name=model_name, api_base=api_base)
@@ -3737,7 +3820,7 @@ def _render_pm_elicitation_dashboard(state: DesignState) -> None:
         ui_msg = proposal.get("ui_message", f"我為您推薦了 {missing_field} 欄位的預設值，請問您同意嗎？")
         source = proposal.get("source", "unknown")
         confidence = proposal.get("confidence", "unknown")
-        
+
         st.markdown(
             f"""
             <div class="hitl-panel" style="margin-top:15px; margin-bottom:15px; border-left:5px solid #2563eb; background-color:#f1f5f9;">
@@ -3761,7 +3844,7 @@ def _render_pm_elicitation_dashboard(state: DesignState) -> None:
                 state.pm_chat_history.append({"role": "assistant", "content": f"已儲存 {missing_field} 設定。"})
                 # 清除提案，以便下一步尋找新的缺失項
                 state.pending_proposal = {}
-                
+
                 config = st.session_state.get("llm_config", {})
                 api_key = config.get("api_key", "").strip() or None
                 model_name = config.get("model_name", "gpt-4o-mini").strip()
@@ -3789,13 +3872,13 @@ def _render_pm_elicitation_dashboard(state: DesignState) -> None:
                             parsed_val = [x.strip() for x in custom_input.split(",")]
                         else:
                             parsed_val = custom_input
-                    
+
                     state.structured_spec[missing_field] = parsed_val
                     state.pm_chat_history.append({"role": "user", "content": f"我想要改為：{custom_input}"})
                     state.pm_chat_history.append({"role": "assistant", "content": f"已自訂 {missing_field} 為: {json.dumps(parsed_val, ensure_ascii=False)}。"})
                     state.pending_proposal = {}
                     st.session_state.pm_show_custom_input = False
-                    
+
                     config = st.session_state.get("llm_config", {})
                     api_key = config.get("api_key", "").strip() or None
                     model_name = config.get("model_name", "gpt-4o-mini").strip()
@@ -3842,4 +3925,3 @@ def _escape_html(value: str) -> str:
 
 if __name__ == "__main__":
     main()
-
