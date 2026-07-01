@@ -310,6 +310,21 @@ def export_sbol3_turtle(
         lines.extend(_statement(provenance_uri, predicates))
 
     content = "\n".join(lines).rstrip() + "\n"
+
+    # Run optional SBOL3 validation if sbol3 package is installed
+    try:
+        import sbol3
+        doc = sbol3.Document()
+        doc.read_string(content, "turtle")
+        val_errors = doc.validate()
+        if val_errors:
+            for err in val_errors:
+                warnings.append(f"SBOL3 validation error: {err}")
+    except ImportError:
+        pass
+    except Exception as e:
+        warnings.append(f"SBOL3 validation parsing failed: {e}")
+
     return ExportResult(
         ok=True,
         format="SBOL3 Turtle",

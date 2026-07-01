@@ -262,15 +262,15 @@ def run(protocol: protocol_api.ProtocolContext):
     for i, frag in enumerate(fragments):
         name = frag.get("name") or frag.get("fragment_id") or f"Fragment_{i+1}"
         transfer_lines.append(f"    # Transfer {name}")
-        transfer_lines.append(f"    p20.pick_up_tip()")
+        transfer_lines.append("    p20.pick_up_tip()")
         transfer_lines.append(f"    p20.transfer(2.0, dna_plate.wells_by_name()['A{well_idx}'], assembly_plate.wells_by_name()['A1'], new_tip='never')")
-        transfer_lines.append(f"    p20.drop_tip()")
+        transfer_lines.append("    p20.drop_tip()")
         well_idx += 1
         
-    transfer_lines.append(f"    # Transfer Assembly Master Mix")
-    transfer_lines.append(f"    p20.pick_up_tip()")
-    transfer_lines.append(f"    p20.transfer(10.0, assembly_mix, assembly_plate.wells_by_name()['A1'], mix_after=(3, 10), new_tip='never')")
-    transfer_lines.append(f"    p20.drop_tip()")
+    transfer_lines.append("    # Transfer Assembly Master Mix")
+    transfer_lines.append("    p20.pick_up_tip()")
+    transfer_lines.append("    p20.transfer(10.0, assembly_mix, assembly_plate.wells_by_name()['A1'], mix_after=(3, 10), new_tip='never')")
+    transfer_lines.append("    p20.drop_tip()")
     
     protocol_code += "\n".join(transfer_lines)
     protocol_code += "\n"
@@ -285,6 +285,6 @@ def _echo_transfer_list(payload: dict[str, Any]) -> str:
     for i, frag in enumerate(fragments):
         lines.append(f"DNA_Plate,A{well_idx},Assembly_Plate,A1,2000")
         well_idx += 1
-    lines.append(f"Reagent_Plate,A1,Assembly_Plate,A1,10000")
+    lines.append("Reagent_Plate,A1,Assembly_Plate,A1,10000")
     return "\n".join(lines)
 
