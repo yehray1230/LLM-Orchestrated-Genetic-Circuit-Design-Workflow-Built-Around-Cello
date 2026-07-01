@@ -18,6 +18,7 @@ ENV/
 # Local app/runtime state
 .streamlit/secrets.toml
 local_plans_private/
+PROJECT_PROFILE.md
 # Non-sensitive summaries for @-mention context live in local_plans_context/.
 .llm_cache/
 .ode_cache/
@@ -38,3 +39,4 @@ Thumbs.db
 *.log
 *.tmp
 *.bak
+scratch/

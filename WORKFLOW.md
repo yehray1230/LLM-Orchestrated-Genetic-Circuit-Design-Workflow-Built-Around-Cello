@@ -385,6 +385,14 @@ Use this record to explain what the workflow learned or why it changed direction
 
 使用此記錄來解釋工作流學到了什麼，或者為什麼改變了方向。
 
+### `self_healing_history`
+
+Programmatic self-healing is applied only to the topology that the Critic actually evaluated as `best_topology`. The recommendation is validated before execution: targeted actions require a known gene, and action parameters must use supported values. Other candidates remain unchanged so the search retains candidate diversity.
+
+Each applied or skipped recommendation is stored on the `SearchNode` in `self_healing_history`. Applied entries include the candidate index, recommendation, and before/after values for changed copy-number, RBS-sequence, or biokinetic-parameter fields. Skipped entries retain validation errors.
+
+程式化 self-healing 只會修改 Critic 實際評估的 `best_topology`；其他候選保持不變。每次套用或跳過的建議都記錄在 `SearchNode.self_healing_history`，供後續稽核與結果解釋。
+
 ## 9. Repair and Routing Behavior
 ## 9. 修復與路由行為
 

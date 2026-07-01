@@ -31,6 +31,21 @@ Core purpose:
 - expose failure modes and route candidates through repair or consolidation;
 - preserve artifacts for review rather than making biological guarantees.
 
+Current implemented extensions that may be missed by a shallow review:
+
+- guided external-design import, DesignIR revision comparison, and validated part replacement;
+- persistent asynchronous runs with events, feedback/resume, artifacts, and HTML monitoring;
+- temporal-input simulation, parameter fitting snapshots, sensitivity/parameter sweeps, and simplified bifurcation reports;
+- stochastic SSA, retroactivity screening, operon coupling/polarity, and heuristic RBS-accessibility warnings;
+- validated best-topology self-healing with applied/skipped repair provenance;
+- sequence analysis, synonymous E. coli optimization, host-profile ranking, calibration records, and split readiness domains;
+- backbone-aware assembly planning and conservative assembly-deliverable packages;
+- FastAPI, server-rendered web, Streamlit, and MCP entry points.
+
+Treat every item above as a computational preview. Check availability metadata,
+fallback warnings, evidence provenance, and the relevant limitation document
+before describing it as operational or biologically meaningful.
+
 Best short description:
 
 > An LLM-orchestrated computational workflow around Cello for translating

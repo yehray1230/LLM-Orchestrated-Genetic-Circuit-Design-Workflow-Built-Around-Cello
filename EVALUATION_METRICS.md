@@ -62,6 +62,23 @@ Benchmark dataset manifests are content-addressed and versioned. The bundled
 `research_smoke_v1` dataset contains synthetic infrastructure fixtures, not
 wet-lab validated circuits. JSON, CSV, and Markdown reports preserve dataset
 and scoring hashes, case results, dimension summaries, and expectation checks.
+
+## v2 Preview Biophysical Score
+
+For candidates with `ode_status="simulated"`, `research-v2-preview@1.9.0` uses five bounded 0-1 sub-scores whose weights sum to one:
+
+```text
+biophysical_score =
+  0.40 * semantic_faithfulness
++ 0.15 * (1 - clamp01(terminal_output_cv^2))
++ 0.15 * (1 - clamp01(retroactivity_max))
++ 0.15 * rbs_accessibility
++ 0.15 * metabolic_burden_score
+```
+
+`rbs_accessibility` is `0` when the implemented RBS-blocking check fires and `1` otherwise. This is a computational ranking score, not calibrated biological probability. A candidate with perfect implemented inputs can reach `1.0`; noise, retroactivity, RBS blocking, and burden reduce it monotonically.
+
+`research-v2-preview` 將語義忠實度、噪聲耐受性、retroactivity 耐受性、RBS 可及性與代謝負荷組合為 0–1 分數。此分數只用於計算排序，不是經實驗校準的成功機率。
 # 評估指標
 
 This document explains how the current benchmark system scores candidate genetic-circuit designs. The metrics are intended for computational triage: they rank and compare candidate designs inside the Reflexion loop so weak candidates can be repaired, rejected, or deprioritized.
@@ -441,9 +458,13 @@ kinetic_score =
   )
 ```
 
-This ODE model is intentionally simplified. It is designed for early ranking and failure detection inside a search loop, not for complete biological prediction. It does not model full plasmid architecture, copy-number dynamics, host growth, DNA supercoiling, RNA folding, codon usage, protein maturation, or experimentally calibrated toxicity feedback.
+This ODE model is intentionally simplified. It is designed for early ranking and failure detection inside a search loop, not for complete biological prediction. It does not model full plasmid architecture, dynamic copy-number control, detailed host physiology, DNA supercoiling, full thermodynamic RNA folding, dynamic codon/ribosome traffic, detailed protein-folding pathways, or experimentally calibrated toxicity feedback. Implemented approximations include static copy-number scaling, ribosome-coupled dilution, a first-order protein-maturation delay, and heuristic RBS-accessibility warnings.
 
-此 ODE 模型被刻意簡化。它旨在用於搜尋迴圈內的早期排序和失效檢測，而非完整的生物學預測。它不模擬完整的質體架構、複製數動力學、宿主生長、DNA 超螺旋、RNA 折疊、密碼子使用偏好、蛋白質成熟或經實驗校準的毒性反饋。
+此 ODE 模型被刻意簡化，僅用於早期排序與失效檢測。它包含靜態複製數縮放、核糖體耦合稀釋、一階蛋白質成熟延遲與啟發式 RBS 可及性警告，但不等同完整宿主、生物物理或熱力學模型。
+
+The stochastic audit additionally reports `simulation_status`, `completed_run_count`, `truncated_run_count`, `max_steps_per_run`, and per-run status records. If any run reaches the safety step limit before the requested end time, the overall status is `truncated`; the tool adapter returns `SSA_STEP_LIMIT_REACHED` and must not be interpreted as a completed stochastic verification.
+
+隨機稽核若在要求的終止時間前達到安全步數上限，會回報 `simulation_status="truncated"` 與 `SSA_STEP_LIMIT_REACHED`；此結果不得視為完整的隨機驗證。
 
 ## 5. Static Plausibility Score
 ## 5. 靜態合理性分數

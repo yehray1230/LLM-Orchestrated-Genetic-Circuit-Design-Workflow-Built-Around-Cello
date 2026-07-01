@@ -13,6 +13,19 @@ The current framework successfully orchestrates LLMs and deterministic computati
 
 To meet the high standards of academic publication and utility for wet-lab scientists, future development must focus on **experimental calibration**, **biophysical context modeling**, **robustness characterization**, and **interoperability with standard biological formats**.
 
+### Current implementation boundary (2026-06-27)
+
+Several roadmap themes now have conservative preview implementations, but the academic-grade versions remain future work:
+
+- Parameter-fit snapshots, comparisons, and provenance are implemented; general CSV/Excel plate-reader ingestion and automatic dynamic part-library recalibration are not.
+- Default host profiles, simplified layout checks, temporal inputs, parameter sweeps, and bifurcation-style reports are implemented; calibrated multi-chassis physiology, Sobol/Morris global sensitivity, and numerical continuation are not.
+- GenBank import/export and SBOL3 Turtle export/optional semantic validation are implemented; universal bidirectional SBOL/GenBank/SBML conversion is not.
+- Local heuristic RNA-folding/RBS-accessibility warnings are implemented; ViennaRNA/NUPACK-equivalent thermodynamic validation and codon-pair/tRNA-aware expression prediction are not.
+- Stochastic SSA, retroactivity, operon coupling/polarity, versioned biophysical scoring, and validated best-candidate self-healing are implemented as computational screening paths; none are wet-lab calibrated predictors.
+- The current cross-phase integration candidate passes 311 local tests and Ruff as of 2026-06-27; fixed five-case benchmark evidence, CI review, and commit-level review remain pending.
+
+This boundary takes precedence over older checklist labels such as `[Implemented]` when those labels appear to imply a broader capability.
+
 本專案目前成功利用多智能體（Reflexion 迴圈）與確定性計算工具，將自然語言轉化為基因電路候選方案。為了達到學術發表與濕實驗室應用的高標準，未來的升級應著重於**實驗校準**、**生物物理環境建模**、**魯棒性表徵**以及**標準生物學格式的互操作性**。
 
 ---
@@ -73,24 +86,24 @@ A genetic circuit's performance is heavily influenced by the spatial layout of t
 
 ---
 
-### Phase 3: Academic Standards & Interoperability / 第三階段：學術標準與互操作性
+### Phase 3: Academic Standards & Interoperability / 第三階段：學術標準與互操作性 (Partially Implemented Preview / 部分完成預覽)
 
 Academic tools must integrate seamlessly into the broader bioinformatics software ecosystem.
 
 學術工具必須能與現有的生物資訊學生態系統無縫對接，支持國際標準格式。
 
-*   **Standard Formats Export: SBOL 3.0 & GenBank (標準格式導出：SBOL 3.0 與 GenBank)**
-    *   Implement bidirectional XML/JSON-LD exporters compliant with the **Synthetic Biology Open Language (SBOL 3.0)** standard.
-    *   Generate fully annotated `.gb` (GenBank) files combining the regulatory topology with actual biological sequences (including assembly scars, promoters, RBSs, and backbones) for direct import into SnapGene.
-    *   實作符合 SBOL 3.0 國際標準的設計圖形與文件匯出；自動拼接元件序列，生成帶有完整註記的 GenBank 檔案（`.gb`），使用戶能直接匯入 SnapGene 進行後續模擬或定購。
-*   **Advanced Codon Optimization & RNA Folding Validation (進階密碼子優化與 RNA 折疊驗證)**
-    *   Integrate thermodynamic tools (e.g., NUPACK or ViennaRNA) to check RBS translation rates and avoid secondary structures that block ribosome binding.
-    *   Evaluate Codon Pair Bias (CPB) and host-specific tRNA availability to refine expression prediction.
-    *   整合 NUPACK 或 ViennaRNA 等熱力學預測工具，驗證 mRNA 二級結構以防止 RBS 被鎖定，並將密碼子對偏好性（Codon Pair Bias）納入優化考量。
+*   **Standard Formats Export: SBOL 3.0 & GenBank (標準格式導出：SBOL 3.0 與 GenBank)** [Preview Implemented]
+    *   The current preview exports SBOL3 Turtle with optional `sbol3` semantic validation and produces richly annotated GenBank records with round-trip regression coverage.
+    *   Universal bidirectional SBOL XML/JSON-LD import/export, broader external-tool compatibility testing, and SBML conversion remain future work.
+    *   目前預覽版支援 SBOL3 Turtle 匯出與可選的 `sbol3` 語意驗證，並可產生具有豐富註記及 round-trip 回歸測試的 GenBank 記錄；全面雙向 SBOL XML/JSON-LD、更多外部工具相容性驗證與 SBML 轉換仍屬未來工作。
+*   **Advanced Codon Optimization & RNA Folding Validation (進階密碼子優化與 RNA 折疊驗證)** [Partially Implemented Preview]
+    *   The current preview reports host-specific CAI and rare-codon metrics and provides heuristic RNA/RBS accessibility checks with optional ViennaRNA execution when available.
+    *   NUPACK integration, codon-pair bias, calibrated tRNA-aware expression prediction, and thermodynamic equivalence claims are not implemented.
+    *   目前預覽版提供宿主特異性 CAI、稀有密碼子指標，以及啟發式 RNA/RBS 可及性檢查；環境允許時可選用 ViennaRNA。NUPACK、密碼子對偏好、經校準的 tRNA 表現量預測及熱力學等效性主張尚未完成。
 
 ---
 
-### Phase 4: Agent Reasoning & Explainable Critic / 第四階段：智能體推理與可解釋性優化
+### Phase 4: Agent Reasoning & Explainable Critic / 第四階段：智能體推理與可解釋性優化 (Partially Completed: Self-Healing & Biophysical Scoring / 部分已完成：自我修復與生化評分)
 
 Improve the transparency of agent decisions to build trust with wet-lab biologists.
 

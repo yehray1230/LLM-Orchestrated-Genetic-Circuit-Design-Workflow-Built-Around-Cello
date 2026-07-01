@@ -30,6 +30,25 @@ limitations and next checks
 | 02 | `A OR B` | `reporter` | Simple two-input permissive logic baseline. | [case_02_a_or_b_reporter.md](case_02_a_or_b_reporter.md) |
 | 03 | `NOT A` | `GFP` | Minimal single-input inverter/control case. | [case_03_not_a_gfp.md](case_03_not_a_gfp.md) |
 
+These three reports are the presentation-facing demo set. The Phase 6-lite
+EXP-003 benchmark has a separate versioned five-task contract in
+`benchmark_suite/task_sets/exp003_design_tasks_v1.json`; it adds toggle,
+oscillator, and ambiguous-request coverage and treats Case 03 as an optional
+control rather than one of the five canonical benchmark categories.
+
+Run the current deterministic EXP-003 harness with:
+
+```powershell
+venv\Scripts\python.exe scripts\run_exp003_benchmark.py
+```
+
+The default temporal evaluator is V1.1. Use
+`--temporal-evaluator-version 1.0` only for legacy-compatible comparisons.
+The aggregate report distinguishes passed, failed, provisional, and unsupported
+tasks. Toggle retention and sustained-oscillation checks are supported via
+task-level temporal evaluators, returning detailed phase metrics/simultaneous-
+input policies and multi-peak/period CV/amplitude/decay classifications.
+
 ## Recommended Order
 
 1. Run Case 01 first and make it complete.

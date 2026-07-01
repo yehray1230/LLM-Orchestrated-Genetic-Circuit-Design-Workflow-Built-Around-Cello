@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-06-27
+
+- **Phase 3 Academic Standards and Interoperability**:
+  - Optional SBOL 3.0 Semantic Validation: Added validation checks using the `sbol3` library if available, ensuring generated Turtle documents comply with standard semantic specifications.
+  - Rich GenBank Feature Mapping: Expanded recognized feature types to map backbone, scar, linker, insulator, and operator domains to standard GenBank feature keys (such as `misc_feature` and `protein_bind`).
+  - Codon Adaptation Index (CAI) & Rare Codon Metrics: Integrated host-specific CAI and rare codon calculation into sequence optimization reports as non-blocking informational logs.
+  - Exporter Round-trip Validation: Added tests to ensure exported GenBank annotations correctly parse back to original draft specifications.
+- **Phase 4b Scoring Reconstruction and Self-Healing**:
+  - Reconstructed Biophysical Scorer: Integrated stochastic noise ($CV^2$), retroactivity load index ($R_{max}$), RBS hairpin blocking ($P_{blocked}$), and metabolic burden into a single unified biophysical scoring formula under the `research-v2-preview` profile.
+  - Exposed diagnostic tags: `HIGH_RETROACTIVITY`, `RBS_HAIRPIN_DETECTED`, `NOISE_FLIP_RISK`.
+  - Self-Healing Action Toolkit: Built programmatic functions to modify topologies (`adjust_copy_number`, `mutate_intergenic_sequence`, `insert_insulator`, `swap_part_by_affinity`, `append_degradation_tag`).
+  - Reflexion Controller Integration: Integrated the Critic JSON recommendation output and Reflexion controller repair router to intercept failures and execute targeted self-healing operations automatically.
+  - Corrected the `research-v2-preview` score normalization so perfect implemented inputs can reach `1.0` while noise, retroactivity, RBS blocking, and burden reduce the score monotonically.
+  - Restricted self-healing to the Critic-evaluated best topology, added recommendation validation, and persisted applied/skipped repair provenance in `SearchNode.self_healing_history`.
+- **Simulation and Workflow Reliability**:
+  - Added strict stochastic input and operon validation with structured failure results.
+  - Added explicit SSA truncation metadata and `SSA_STEP_LIMIT_REACHED` reporting when a run reaches its safety step limit.
+  - Fixed Streamlit rendering for dataclass-backed tool warnings.
+  - Added Ruff and `feature/**` push coverage to CI.
+  - Synchronized README, AI-review guidance, quickstart entry points, model assumptions, limitations, and evaluation documentation with the implemented preview capabilities.
+  - Classified `PROJECT_PROFILE.md` as a local-only ignored document.
+
 ## 2026-06-16
 
 - Added Product Manager (PM) Agent to orchestrate user interactions and design specifications:

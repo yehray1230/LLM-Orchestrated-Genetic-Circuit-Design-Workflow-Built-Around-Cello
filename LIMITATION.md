@@ -51,6 +51,12 @@ The current prototype can:
   從 Cello UCF 解析表徵門控參數（$y_{\text{min}}, y_{\text{max}}, K_d, n$）並將其映射至 ODE 希爾動力學。
 - Perform log-normal perturbation of plasmid copy numbers preserving arithmetic mean during Monte Carlo robustness analysis.
   在 Monte Carlo 魯棒性分析中對質體複製數進行保留算術平均數的對數常態微擾。
+- Run bounded Gillespie stochastic audits with explicit completed/truncated run metadata; truncated runs are rejected as complete verification evidence.
+  執行具有完成／截斷狀態的 Gillespie 隨機稽核；截斷結果不會被視為完整驗證證據。
+- Screen simplified retroactivity, operon translational coupling/polarity, and heuristic RBS accessibility within the implemented simulation assumptions.
+  在既有模擬假設下篩選簡化的 retroactivity、operon 轉譯耦合／極性與啟發式 RBS 可及性。
+- Apply validated programmatic self-healing only to the Critic-evaluated best candidate while preserving repair provenance and the other candidate alternatives.
+  僅對 Critic 評估的最佳候選執行經驗證的程式化 self-healing，並保留修復 provenance 與其他候選方案。
 
 These capabilities are useful for research prototyping, workflow design, and early candidate triage.
 
@@ -80,8 +86,8 @@ The current prototype cannot:
   證明宿主相容性、生物安全或法規符合性。
 - Select experimentally characterized parts reliably unless appropriate data are provided.
   除非提供適當的數據，否則無法可靠地選擇經實驗表徵的元件。
-- Account for all relevant biological mechanisms, such as detailed/dynamic host growth, dynamic copy-number variation, experimental toxicity calibration, RNA folding, and codon-pair bias. Note: E. coli synonymous codon optimization, simplified copy-number scaling, first-order protein maturation delay, ribosome-coupled growth dilution, Cello UCF characterized Hill parameters, degradation tag rates, and log-normal copy-number perturbation are now modeled.
-  考量所有相關的生物學機制，例如詳細/動態的宿主生長、動態複製數變異、實驗毒性校準、RNA 折疊以及密碼子對偏好。註：目前已建模大腸桿菌同義密碼子優化、簡化質體複製數縮放、一階蛋白質成熟延遲、與游離核糖體耦合的生長稀釋、Cello UCF 表徵 Hill 參數、降解標籤速率以及複製數對數常態微擾。
+- Account for all relevant biological mechanisms, such as detailed/dynamic host growth, dynamic copy-number variation, experimentally calibrated toxicity/noise, full thermodynamic RNA folding, and codon-pair bias. Note: the preview includes heuristic RBS-folding warnings, E. coli synonymous codon optimization, simplified copy-number scaling, first-order protein maturation delay, ribosome-coupled growth dilution, Cello UCF characterized Hill parameters, degradation tag rates, and log-normal copy-number perturbation.
+  考量所有相關的生物學機制，例如詳細／動態宿主生長、動態複製數變異、經實驗校準的毒性／雜訊、完整熱力學 RNA 折疊與密碼子對偏好。註：目前僅包含啟發式 RBS 折疊警告及其他簡化模型，並非完整生物物理預測。
 - Optimize promoter/RBS strength, RNA folding, codon-pair bias, chromosomal context, or real expression balance during codon optimization.
   在密碼子優化過程中優化啟動子/RBS 強度、RNA 折疊、密碼子對偏好、染色體環境或真實的表達平衡。
 - Fit a dynamic host-cell model or automatically recalibrate the ODE simulator using experimental measurements.
