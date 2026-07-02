@@ -29,6 +29,13 @@ def test_stochastic_adapter_parameter_validation() -> None:
     assert res.status == "failed"
     assert "INVALID_RANDOM_SEED" in {warning.code for warning in res.warnings}
 
+    # Non-integral seeds must not be silently truncated.
+    res = StochasticSimulationAdapter().run(
+        {"topology": topology, "random_seed": 1.5}
+    )
+    assert res.status == "failed"
+    assert "INVALID_RANDOM_SEED" in {warning.code for warning in res.warnings}
+
     # Invalid simulation_time
     res = StochasticSimulationAdapter().run(
         {"topology": topology, "simulation_time": -10.0}
@@ -38,6 +45,13 @@ def test_stochastic_adapter_parameter_validation() -> None:
 
     # Invalid sample_count
     res = StochasticSimulationAdapter().run({"topology": topology, "sample_count": 0})
+    assert res.status == "failed"
+    assert "INVALID_SAMPLE_COUNT" in {warning.code for warning in res.warnings}
+
+    # Non-integral sample counts must not be silently truncated.
+    res = StochasticSimulationAdapter().run(
+        {"topology": topology, "sample_count": 2.5}
+    )
     assert res.status == "failed"
     assert "INVALID_SAMPLE_COUNT" in {warning.code for warning in res.warnings}
 

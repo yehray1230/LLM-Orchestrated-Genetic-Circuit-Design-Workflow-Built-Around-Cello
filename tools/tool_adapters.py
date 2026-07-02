@@ -656,28 +656,16 @@ class StochasticSimulationAdapter:
         # Validate random_seed if present
         if "random_seed" in payload:
             random_seed = payload["random_seed"]
-            if random_seed is not None:
-                if isinstance(random_seed, bool) or not isinstance(
-                    random_seed, (int, float)
-                ):
-                    warnings.append(
-                        normalize_tool_warning(
-                            "INVALID_RANDOM_SEED",
-                            "random_seed must be an integer.",
-                            "error",
-                        )
+            if random_seed is not None and (
+                isinstance(random_seed, bool) or not isinstance(random_seed, int)
+            ):
+                warnings.append(
+                    normalize_tool_warning(
+                        "INVALID_RANDOM_SEED",
+                        "random_seed must be an integer.",
+                        "error",
                     )
-                else:
-                    try:
-                        int(random_seed)
-                    except (TypeError, ValueError):
-                        warnings.append(
-                            normalize_tool_warning(
-                                "INVALID_RANDOM_SEED",
-                                "random_seed must be an integer.",
-                                "error",
-                            )
-                        )
+                )
 
         # Validate simulation_time if present
         if "simulation_time" in payload:
@@ -709,7 +697,7 @@ class StochasticSimulationAdapter:
         # Validate sample_count if present
         if "sample_count" in payload:
             sc = payload["sample_count"]
-            if isinstance(sc, bool) or not isinstance(sc, (int, float)):
+            if isinstance(sc, bool) or not isinstance(sc, int) or sc <= 0:
                 warnings.append(
                     normalize_tool_warning(
                         "INVALID_SAMPLE_COUNT",
@@ -717,21 +705,6 @@ class StochasticSimulationAdapter:
                         "error",
                     )
                 )
-            else:
-                try:
-                    sc_int = int(sc)
-                    valid_sc = sc_int > 0
-                except (TypeError, ValueError):
-                    valid_sc = False
-                if not valid_sc:
-                    warnings.append(
-                        normalize_tool_warning(
-                            "INVALID_SAMPLE_COUNT",
-                            "sample_count must be a positive integer.",
-                            "error",
-                        )
-                    )
-
         # Validate temporal_inputs if present
         if "temporal_inputs" in payload:
             temp_in = payload["temporal_inputs"]
