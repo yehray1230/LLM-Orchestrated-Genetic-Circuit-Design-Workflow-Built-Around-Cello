@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-import pytest
-import math
 from tools.tool_adapters import StochasticSimulationAdapter
-from tools.ode_simulator import BatchODESimulator
 
 
 def test_stochastic_adapter_available_reporting() -> None:
@@ -23,47 +20,37 @@ def test_stochastic_adapter_available_reporting() -> None:
 
 
 def test_stochastic_adapter_parameter_validation() -> None:
-    topology = {
-        "verilog": "module buffer(input A, output Y); assign Y = A; endmodule"
-    }
+    topology = {"verilog": "module buffer(input A, output Y); assign Y = A; endmodule"}
 
     # Invalid random_seed
-    res = StochasticSimulationAdapter().run({
-        "topology": topology,
-        "random_seed": "not-an-integer"
-    })
+    res = StochasticSimulationAdapter().run(
+        {"topology": topology, "random_seed": "not-an-integer"}
+    )
     assert res.status == "failed"
     assert "INVALID_RANDOM_SEED" in {warning.code for warning in res.warnings}
 
     # Invalid simulation_time
-    res = StochasticSimulationAdapter().run({
-        "topology": topology,
-        "simulation_time": -10.0
-    })
+    res = StochasticSimulationAdapter().run(
+        {"topology": topology, "simulation_time": -10.0}
+    )
     assert res.status == "failed"
     assert "INVALID_SIMULATION_TIME" in {warning.code for warning in res.warnings}
 
     # Invalid sample_count
-    res = StochasticSimulationAdapter().run({
-        "topology": topology,
-        "sample_count": 0
-    })
+    res = StochasticSimulationAdapter().run({"topology": topology, "sample_count": 0})
     assert res.status == "failed"
     assert "INVALID_SAMPLE_COUNT" in {warning.code for warning in res.warnings}
 
     # Invalid temporal_inputs
-    res = StochasticSimulationAdapter().run({
-        "topology": topology,
-        "temporal_inputs": "not-a-dict"
-    })
+    res = StochasticSimulationAdapter().run(
+        {"topology": topology, "temporal_inputs": "not-a-dict"}
+    )
     assert res.status == "failed"
     assert "INVALID_TEMPORAL_INPUTS" in {warning.code for warning in res.warnings}
 
 
 def test_stochastic_reproducibility() -> None:
-    topology = {
-        "verilog": "module buffer(input A, output Y); assign Y = A; endmodule"
-    }
+    topology = {"verilog": "module buffer(input A, output Y); assign Y = A; endmodule"}
 
     payload1 = {
         "topology": topology,
@@ -71,7 +58,7 @@ def test_stochastic_reproducibility() -> None:
         "scale_factor": 5.0,
         "random_seed": 42,
         "simulation_time": 80.0,
-        "sample_count": 10
+        "sample_count": 10,
     }
 
     payload2 = {
@@ -80,7 +67,7 @@ def test_stochastic_reproducibility() -> None:
         "scale_factor": 5.0,
         "random_seed": 42,
         "simulation_time": 80.0,
-        "sample_count": 10
+        "sample_count": 10,
     }
 
     res1 = StochasticSimulationAdapter().run(payload1)
@@ -116,9 +103,7 @@ def test_stochastic_reproducibility() -> None:
 
 
 def test_stochastic_seed_variation() -> None:
-    topology = {
-        "verilog": "module buffer(input A, output Y); assign Y = A; endmodule"
-    }
+    topology = {"verilog": "module buffer(input A, output Y); assign Y = A; endmodule"}
 
     payload_seed_42 = {
         "topology": topology,
@@ -126,7 +111,7 @@ def test_stochastic_seed_variation() -> None:
         "scale_factor": 5.0,
         "random_seed": 42,
         "simulation_time": 80.0,
-        "sample_count": 10
+        "sample_count": 10,
     }
 
     payload_seed_99 = {
@@ -135,7 +120,7 @@ def test_stochastic_seed_variation() -> None:
         "scale_factor": 5.0,
         "random_seed": 99,
         "simulation_time": 80.0,
-        "sample_count": 10
+        "sample_count": 10,
     }
 
     res1 = StochasticSimulationAdapter().run(payload_seed_42)
@@ -152,9 +137,7 @@ def test_stochastic_seed_variation() -> None:
 
 
 def test_stochastic_provenance() -> None:
-    topology = {
-        "verilog": "module buffer(input A, output Y); assign Y = A; endmodule"
-    }
+    topology = {"verilog": "module buffer(input A, output Y); assign Y = A; endmodule"}
 
     payload = {
         "topology": topology,
@@ -163,7 +146,12 @@ def test_stochastic_provenance() -> None:
         "random_seed": 12345,
         "simulation_time": 150.0,
         "sample_count": 25,
-        "temporal_inputs": {"A": [{"start": 0.0, "end": 50.0, "value": 10.0}, {"start": 50.0, "end": 150.0, "value": 0.0}]}
+        "temporal_inputs": {
+            "A": [
+                {"start": 0.0, "end": 50.0, "value": 10.0},
+                {"start": 50.0, "end": 150.0, "value": 0.0},
+            ]
+        },
     }
 
     res = StochasticSimulationAdapter().run(payload)
@@ -176,10 +164,20 @@ def test_stochastic_provenance() -> None:
     assert stoch["random_seed"] == 12345
     assert stoch["simulation_time"] == 150.0
     assert stoch["sample_count"] == 25
-    assert stoch["temporal_inputs"] == {"A": [{"start": 0.0, "end": 50.0, "value": 10.0}, {"start": 50.0, "end": 150.0, "value": 0.0}]}
+    assert stoch["temporal_inputs"] == {
+        "A": [
+            {"start": 0.0, "end": 50.0, "value": 10.0},
+            {"start": 50.0, "end": 150.0, "value": 0.0},
+        ]
+    }
 
     # Check provenance in metrics
     assert metrics["random_seed"] == 12345
     assert metrics["simulation_time"] == 150.0
     assert metrics["sample_count"] == 25
-    assert metrics["temporal_inputs"] == {"A": [{"start": 0.0, "end": 50.0, "value": 10.0}, {"start": 50.0, "end": 150.0, "value": 0.0}]}
+    assert metrics["temporal_inputs"] == {
+        "A": [
+            {"start": 0.0, "end": 50.0, "value": 10.0},
+            {"start": 50.0, "end": 150.0, "value": 0.0},
+        ]
+    }

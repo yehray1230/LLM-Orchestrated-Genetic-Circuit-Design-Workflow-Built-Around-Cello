@@ -74,7 +74,9 @@ def test_unknown_operon_gene_returns_structured_validation_failure() -> None:
     assert result["score"] == 0.0
     assert result["simulation_result"]["status"] == "failed"
     assert "unknown gene 'NOT_A_GENE'" in result["simulation_result"]["error"]
-    assert result["benchmark_report"]["details"][0]["status"] == "input_validation_failed"
+    assert (
+        result["benchmark_report"]["details"][0]["status"] == "input_validation_failed"
+    )
 
 
 def test_stochastic_adapter_rejects_unknown_operon_gene() -> None:
@@ -102,15 +104,13 @@ def test_translational_coupling_and_polarity() -> None:
           nor g2(Y2, A);
         endmodule
         """,
-        "truth_table": [
-            {"A": "0", "Y2": "1"}
-        ],
+        "truth_table": [{"A": "0", "Y2": "1"}],
         "operons": [["Y1", "Y2"]],
         "biokinetic_parameters": {
             "intergenic_spacing_Y2": {"value": -4.0, "unit": "bp"},
             "translation_rate_Y1": {"value": 5.0, "unit": "hr-1"},
             "translation_rate_Y2": {"value": 1.0, "unit": "hr-1"},  # low basal
-        }
+        },
     }
 
     # Spacing large (coupling off)
@@ -122,15 +122,13 @@ def test_translational_coupling_and_polarity() -> None:
           nor g2(Y2, A);
         endmodule
         """,
-        "truth_table": [
-            {"A": "0", "Y2": "1"}
-        ],
+        "truth_table": [{"A": "0", "Y2": "1"}],
         "operons": [["Y1", "Y2"]],
         "biokinetic_parameters": {
             "intergenic_spacing_Y2": {"value": 40.0, "unit": "bp"},
             "translation_rate_Y1": {"value": 5.0, "unit": "hr-1"},
             "translation_rate_Y2": {"value": 1.0, "unit": "hr-1"},
-        }
+        },
     }
 
     simulator = BatchODESimulator(simulation_time=200.0, sample_count=21)
@@ -161,7 +159,7 @@ def test_rbs_blocking_warning() -> None:
         """,
         "rbs_sequences": {
             "Y": "GGGGCATCGCCCC"  # forms -9.0 MFE hairpin loop
-        }
+        },
     }
 
     simulator = BatchODESimulator(simulation_time=100.0, sample_count=11)

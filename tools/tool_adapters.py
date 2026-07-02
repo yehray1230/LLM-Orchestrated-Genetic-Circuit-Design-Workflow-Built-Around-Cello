@@ -147,14 +147,11 @@ class ToolAdapter(Protocol):
     adapter_name: str
     capability: str
 
-    def available(self) -> ToolAvailability:
-        ...
+    def available(self) -> ToolAvailability: ...
 
-    def validate_input(self, payload: dict[str, Any]) -> list[ToolWarning]:
-        ...
+    def validate_input(self, payload: dict[str, Any]) -> list[ToolWarning]: ...
 
-    def run(self, payload: dict[str, Any]) -> ToolAdapterResult:
-        ...
+    def run(self, payload: dict[str, Any]) -> ToolAdapterResult: ...
 
 
 def normalize_tool_warning(
@@ -308,7 +305,9 @@ class CelloLogicSynthesisAdapter:
             else {}
         )
         availability = self.available()
-        status = "ok" if topology.get("mapping_status") == "mapped" else availability.status
+        status = (
+            "ok" if topology.get("mapping_status") == "mapped" else availability.status
+        )
         warnings = list(validation_warnings)
         warnings.extend(availability.warnings)
         if topology.get("cello_warning"):
@@ -391,7 +390,9 @@ class ODESimulationAdapter:
         status = "ok" if topology.get("ode_status") == "simulated" else "failed"
         warnings = validation_warnings + availability.warnings
         if topology.get("ode_error"):
-            warnings.append(normalize_tool_warning("TOOL_FAILED", topology["ode_error"]))
+            warnings.append(
+                normalize_tool_warning("TOOL_FAILED", topology["ode_error"])
+            )
         return ToolAdapterResult(
             availability=availability,
             status=status,
@@ -481,7 +482,10 @@ class RNAFoldingAdapter:
         return availability
 
     def validate_input(self, payload: dict[str, Any]) -> list[ToolWarning]:
-        if not isinstance(payload.get("sequence"), str) or not payload["sequence"].strip():
+        if (
+            not isinstance(payload.get("sequence"), str)
+            or not payload["sequence"].strip()
+        ):
             return [
                 normalize_tool_warning(
                     "MISSING_INPUT",
@@ -509,13 +513,16 @@ class RNAFoldingAdapter:
             # Real ViennaRNA folding
             try:
                 import RNA
+
                 struct, mfe = RNA.fold(sequence)
                 output["structure"] = struct
                 output["mfe"] = float(mfe)
                 output["free_energy"] = float(mfe)
             except Exception as e:
                 status = "failed"
-                validation_warnings.append(normalize_tool_warning("TOOL_FAILED", f"ViennaRNA fold failed: {e}"))
+                validation_warnings.append(
+                    normalize_tool_warning("TOOL_FAILED", f"ViennaRNA fold failed: {e}")
+                )
         else:
             # Fallback heuristic folding energy estimation
             mfe = _heuristic_rna_folding_energy(sequence)
@@ -552,7 +559,7 @@ class StochasticSimulationAdapter:
                     "Using the built-in pure-Python Gillespie SSA stochastic simulator.",
                     "info",
                 )
-            ]
+            ],
         )
 
     def validate_input(self, payload: dict[str, Any]) -> list[ToolWarning]:
@@ -650,7 +657,9 @@ class StochasticSimulationAdapter:
         if "random_seed" in payload:
             random_seed = payload["random_seed"]
             if random_seed is not None:
-                if isinstance(random_seed, bool) or not isinstance(random_seed, (int, float)):
+                if isinstance(random_seed, bool) or not isinstance(
+                    random_seed, (int, float)
+                ):
                     warnings.append(
                         normalize_tool_warning(
                             "INVALID_RANDOM_SEED",
@@ -683,7 +692,9 @@ class StochasticSimulationAdapter:
                 )
             else:
                 try:
-                    valid_time = math.isfinite(float(sim_time)) and float(sim_time) > 0.0
+                    valid_time = (
+                        math.isfinite(float(sim_time)) and float(sim_time) > 0.0
+                    )
                 except (TypeError, ValueError):
                     valid_time = False
                 if not valid_time:
@@ -709,7 +720,7 @@ class StochasticSimulationAdapter:
             else:
                 try:
                     sc_int = int(sc)
-                    valid_sc = (sc_int > 0)
+                    valid_sc = sc_int > 0
                 except (TypeError, ValueError):
                     valid_sc = False
                 if not valid_sc:
@@ -803,7 +814,11 @@ class StochasticSimulationAdapter:
         except Exception as e:
             output = {}
             status = "failed"
-            validation_warnings.append(normalize_tool_warning("TOOL_FAILED", f"Stochastic simulation failed: {e}"))
+            validation_warnings.append(
+                normalize_tool_warning(
+                    "TOOL_FAILED", f"Stochastic simulation failed: {e}"
+                )
+            )
 
         return ToolAdapterResult(
             availability=availability,
@@ -812,7 +827,9 @@ class StochasticSimulationAdapter:
             metrics={
                 "fano_factors": output.get("fano_factors", {}),
                 "memory_stability": output.get("memory_stability", 1.0),
-                "switching_failure_probability": output.get("switching_failure_probability", 0.0),
+                "switching_failure_probability": output.get(
+                    "switching_failure_probability", 0.0
+                ),
                 "simulation_status": output.get("simulation_status"),
                 "completed_run_count": output.get("completed_run_count", 0),
                 "truncated_run_count": output.get("truncated_run_count", 0),

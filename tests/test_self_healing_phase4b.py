@@ -20,13 +20,11 @@ from workflows.reflexion_controller import (
 def test_programmatic_self_healing_actions() -> None:
     topology = {
         "copy_number": 10.0,
-        "rbs_sequences": {
-            "Y1": "AGGAGGGGGGGATG"
-        },
+        "rbs_sequences": {"Y1": "AGGAGGGGGGGATG"},
         "biokinetic_parameters": {
             "translation_rate_Y1": 10.0,
-            "protein_degradation_rate_Y1": 0.5
-        }
+            "protein_degradation_rate_Y1": 0.5,
+        },
     }
 
     # 1. Adjust copy number
@@ -39,7 +37,9 @@ def test_programmatic_self_healing_actions() -> None:
 
     # 3. Insert insulator (prepend RiboJ)
     res = insert_insulator(topology, "Y1")
-    assert res["rbs_sequences"]["Y1"].startswith("AGCTGTCACCGGATGTGCTTTCCGGTCTGATGAGTCCGTG")
+    assert res["rbs_sequences"]["Y1"].startswith(
+        "AGCTGTCACCGGATGTGCTTTCCGGTCTGATGAGTCCGTG"
+    )
 
     # 4. Swap part by affinity
     res = swap_part_by_affinity(topology, "Y1", "low")
@@ -51,17 +51,12 @@ def test_programmatic_self_healing_actions() -> None:
 
 
 def test_self_healing_action_router() -> None:
-    topology = {
-        "copy_number": 10.0,
-        "rbs_sequences": {
-            "Y1": "AGGAGGGGGGGATG"
-        }
-    }
+    topology = {"copy_number": 10.0, "rbs_sequences": {"Y1": "AGGAGGGGGGGATG"}}
 
     recommendation = {
         "recommended_action": "adjust_copy_number",
         "target_node": "Y1",
-        "parameters": {"scale": 0.2}
+        "parameters": {"scale": 0.2},
     }
 
     res = run_self_healing_action(topology, recommendation)
@@ -140,10 +135,12 @@ def test_reflexion_self_healing_controller_loop() -> None:
     root_node = SearchNode(
         node_id="root",
         search_mode="Exploration",
-        candidate_topologies=[{
-            "verilog": "module c(input A, output Y); assign Y = A; endmodule",
-            "copy_number": 10.0
-        }]
+        candidate_topologies=[
+            {
+                "verilog": "module c(input A, output Y); assign Y = A; endmodule",
+                "copy_number": 10.0,
+            }
+        ],
     )
     state.tree_nodes["root"] = root_node
     state.active_frontier = ["root"]
@@ -159,6 +156,7 @@ def test_reflexion_self_healing_controller_loop() -> None:
             topo["mapping_status"] = "assigned"
             topo["rbs_sequences"] = {"Y": "AGGAGG"}
         return s
+
     cello_wrapper = MockAgent(cello_run)
 
     # Mock simulator: simulates and updates copy number / load index
@@ -178,15 +176,17 @@ def test_reflexion_self_healing_controller_loop() -> None:
                 "cello_assignment_score": 0.9,
                 "cello_buildable": True,
                 "semantic_faithfulness_score": 1.0,
-                "details": []
+                "details": [],
             }
         return s
+
     batch_ode_simulator = MockAgent(sim_run)
 
     # Critic run:
     # First time: recommends copy number adjustment, sets is_approved = False
     # Second time: since copy number is adjusted, approves!
     run_count = 0
+
     def critic_run(s):
         nonlocal run_count
         run_count += 1
@@ -196,12 +196,13 @@ def test_reflexion_self_healing_controller_loop() -> None:
             node.last_recommendation = {
                 "recommended_action": "adjust_copy_number",
                 "target_node": "Y",
-                "parameters": {"scale": 0.5}
+                "parameters": {"scale": 0.5},
             }
         else:
             node.is_approved = True
             node.last_recommendation = None
         return s
+
     critic = MockAgent(critic_run)
     consolidator = MockAgent(lambda s: s)
 
@@ -214,7 +215,7 @@ def test_reflexion_self_healing_controller_loop() -> None:
         batch_ode_simulator,
         critic,
         consolidator,
-        None
+        None,
     )
 
     # Verify that self-healing loop was executed

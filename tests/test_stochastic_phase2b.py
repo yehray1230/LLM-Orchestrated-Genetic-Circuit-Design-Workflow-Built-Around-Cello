@@ -49,9 +49,7 @@ def test_stochastic_adapter_rejects_invalid_inputs(
 
 
 def test_stochastic_simulator_rejects_invalid_scale_before_numpy() -> None:
-    topology = {
-        "verilog": "module buffer(input A, output Y); assign Y = A; endmodule"
-    }
+    topology = {"verilog": "module buffer(input A, output Y); assign Y = A; endmodule"}
 
     with pytest.raises(ValueError, match="scale_factor"):
         BatchODESimulator().simulate_stochastic(
@@ -65,9 +63,7 @@ def test_stochastic_simulation_buffer() -> None:
     # A simple buffer circuit: A -> Y
     topology = {
         "verilog": "module buffer(input A, output Y); assign Y = A; endmodule",
-        "truth_table": [
-            {"A": "1", "Y": "1"}
-        ]
+        "truth_table": [{"A": "1", "Y": "1"}],
     }
 
     # Run stochastic simulation
@@ -122,9 +118,7 @@ def test_stochastic_step_limit_is_reported_as_truncated() -> None:
     assert direct["truncated_run_count"] >= 1
     assert any(item["status"] == "truncated" for item in direct["run_statuses"])
     assert adapted.status == "failed"
-    assert "SSA_STEP_LIMIT_REACHED" in {
-        warning.code for warning in adapted.warnings
-    }
+    assert "SSA_STEP_LIMIT_REACHED" in {warning.code for warning in adapted.warnings}
 
 
 def test_stochastic_latch_memory_retention() -> None:

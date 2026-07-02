@@ -64,7 +64,9 @@ def test_multi_target_solver() -> None:
     p_free = sim._solve_free_regulator("A", 40.0, 10.0, [("B", 5.0), ("C", 15.0)])
 
     # Verify conservation equation holds
-    err = p_free + 10.0 * p_free / (5.0 + p_free) + 10.0 * p_free / (15.0 + p_free) - 40.0
+    err = (
+        p_free + 10.0 * p_free / (5.0 + p_free) + 10.0 * p_free / (15.0 + p_free) - 40.0
+    )
     assert abs(err) < 1e-4
     assert p_free <= 40.0
 

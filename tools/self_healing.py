@@ -56,15 +56,21 @@ def validate_self_healing_recommendation(
         except (TypeError, ValueError):
             scale = float("nan")
         if not math.isfinite(scale) or scale <= 0.0:
-            errors.append("adjust_copy_number requires a finite scale greater than zero.")
+            errors.append(
+                "adjust_copy_number requires a finite scale greater than zero."
+            )
     elif action == "swap_part_by_affinity":
         affinity = str(parameters.get("affinity", "low")).lower()
         if affinity not in {"low", "medium", "high"}:
-            errors.append("swap_part_by_affinity requires low, medium, or high affinity.")
+            errors.append(
+                "swap_part_by_affinity requires low, medium, or high affinity."
+            )
     elif action == "append_degradation_tag":
         tag_type = str(parameters.get("tag_type", "LVA")).upper()
         if tag_type not in {"LVA", "AAV", "ASV"}:
-            errors.append("append_degradation_tag requires an LVA, AAV, or ASV tag_type.")
+            errors.append(
+                "append_degradation_tag requires an LVA, AAV, or ASV tag_type."
+            )
     return errors
 
 
@@ -76,7 +82,9 @@ def adjust_copy_number(topology: dict[str, Any], scale: float) -> dict[str, Any]
     return updated
 
 
-def mutate_intergenic_sequence(topology: dict[str, Any], target_gene: str) -> dict[str, Any]:
+def mutate_intergenic_sequence(
+    topology: dict[str, Any], target_gene: str
+) -> dict[str, Any]:
     """Synonymously mutates the RBS spacer of the target gene to break hairpins."""
     updated = dict(topology)
     rbs_seqs = dict(updated.get("rbs_sequences", {}))
@@ -86,7 +94,7 @@ def mutate_intergenic_sequence(topology: dict[str, Any], target_gene: str) -> di
         # Standard Shine-Dalgarno is AGGAGG. Find it and mutate the spacer after it to be AT-rich
         sd_idx = seq.find("AGGAGG")
         if sd_idx != -1:
-            prefix = seq[:sd_idx + 6]
+            prefix = seq[: sd_idx + 6]
             # Replace spacer with AT-rich nucleotides (e.g., AAAA)
             suffix = "AAAAATG"
             rbs_seqs[target_gene] = prefix + suffix
@@ -104,7 +112,9 @@ def insert_insulator(topology: dict[str, Any], target_gene: str) -> dict[str, An
     rbs_seqs = dict(updated.get("rbs_sequences", {}))
 
     # Standard RiboJ sequence
-    riboj_seq = "AGCTGTCACCGGATGTGCTTTCCGGTCTGATGAGTCCGTGAGGACGAAACAGCCTCTACAAATAATTTTGTTTAA"
+    riboj_seq = (
+        "AGCTGTCACCGGATGTGCTTTCCGGTCTGATGAGTCCGTGAGGACGAAACAGCCTCTACAAATAATTTTGTTTAA"
+    )
 
     if target_gene in rbs_seqs:
         rbs_seqs[target_gene] = riboj_seq + rbs_seqs[target_gene]
@@ -115,24 +125,24 @@ def insert_insulator(topology: dict[str, Any], target_gene: str) -> dict[str, An
     return updated
 
 
-def swap_part_by_affinity(topology: dict[str, Any], target_gene: str, affinity: str) -> dict[str, Any]:
+def swap_part_by_affinity(
+    topology: dict[str, Any], target_gene: str, affinity: str
+) -> dict[str, Any]:
     """Swaps promoter/RBS parameters for target_gene to adjust binding/translation affinity."""
     updated = dict(topology)
     params = dict(updated.get("biokinetic_parameters", {}))
 
     # Map affinity class to relative scaling factors
-    factors = {
-        "high": 5.0,
-        "medium": 1.0,
-        "low": 0.2
-    }
+    factors = {"high": 5.0, "medium": 1.0, "low": 0.2}
     scale = factors.get(affinity.lower(), 1.0)
 
     # Scale translation rate parameter
     rbs_key = f"translation_rate_{target_gene}"
     if rbs_key in params:
         if isinstance(params[rbs_key], dict) and "value" in params[rbs_key]:
-            params[rbs_key] = dict(params[rbs_key], value=params[rbs_key]["value"] * scale)
+            params[rbs_key] = dict(
+                params[rbs_key], value=params[rbs_key]["value"] * scale
+            )
         else:
             params[rbs_key] = float(params[rbs_key]) * scale
     else:
@@ -142,7 +152,9 @@ def swap_part_by_affinity(topology: dict[str, Any], target_gene: str, affinity: 
     return updated
 
 
-def append_degradation_tag(topology: dict[str, Any], target_gene: str, tag_type: str = "LVA") -> dict[str, Any]:
+def append_degradation_tag(
+    topology: dict[str, Any], target_gene: str, tag_type: str = "LVA"
+) -> dict[str, Any]:
     """Appends a degradation tag by increasing the protein degradation rate of target_gene."""
     updated = dict(topology)
     params = dict(updated.get("biokinetic_parameters", {}))
@@ -151,14 +163,16 @@ def append_degradation_tag(topology: dict[str, Any], target_gene: str, tag_type:
     factors = {
         "LVA": 8.0,  # Fast degradation
         "AAV": 4.0,  # Medium degradation
-        "ASV": 2.0   # Slow degradation
+        "ASV": 2.0,  # Slow degradation
     }
     multiplier = factors.get(tag_type.upper(), 5.0)
 
     deg_key = f"protein_degradation_rate_{target_gene}"
     if deg_key in params:
         if isinstance(params[deg_key], dict) and "value" in params[deg_key]:
-            params[deg_key] = dict(params[deg_key], value=params[deg_key]["value"] * multiplier)
+            params[deg_key] = dict(
+                params[deg_key], value=params[deg_key]["value"] * multiplier
+            )
         else:
             params[deg_key] = float(params[deg_key]) * multiplier
     else:
@@ -169,11 +183,15 @@ def append_degradation_tag(topology: dict[str, Any], target_gene: str, tag_type:
     return updated
 
 
-def run_self_healing_action(topology: dict[str, Any], recommendation: dict[str, Any]) -> dict[str, Any]:
+def run_self_healing_action(
+    topology: dict[str, Any], recommendation: dict[str, Any]
+) -> dict[str, Any]:
     """Targeted Repair Router that executes the programmatic self-healing action."""
     validation_errors = validate_self_healing_recommendation(topology, recommendation)
     if validation_errors:
-        raise ValueError("Invalid self-healing recommendation: " + " ".join(validation_errors))
+        raise ValueError(
+            "Invalid self-healing recommendation: " + " ".join(validation_errors)
+        )
 
     action = recommendation.get("recommended_action")
     target = recommendation.get("target_node")

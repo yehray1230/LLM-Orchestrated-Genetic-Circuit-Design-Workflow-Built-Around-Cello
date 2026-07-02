@@ -106,7 +106,7 @@ def test_stable_batch_hash_changes_directly_with_runner_evaluator_config() -> No
         "runner": {
             "version": "1.0",
             "temporal_evaluator_version": "1.0",
-            "temporal_evaluator_config": {"some": "config"}
+            "temporal_evaluator_config": {"some": "config"},
         },
         "task_set": {"content_hash": "hash"},
         "summary": {"task_count": 1},
@@ -130,6 +130,7 @@ def test_exp003_benchmark_profiles_and_strict_peak_gate(tmp_path: Path) -> None:
         OscillatorProfile,
         TemporalEvaluatorConfig,
     )
+
     services = create_application_services(tmp_path / "api_data")
 
     # Run the legacy-compatible v1.0 profile explicitly.
@@ -168,7 +169,7 @@ def test_exp003_benchmark_profiles_and_strict_peak_gate(tmp_path: Path) -> None:
             minimum_amplitude=10.0,
             maximum_period_cv=0.25,
             minimum_amplitude_retention=0.7,
-        )
+        ),
     )
 
     packet_strict = run_exp003_design_task_benchmark(
@@ -250,8 +251,6 @@ def test_temporal_evaluator_config_rejects_invalid_values() -> None:
         get_temporal_evaluator_config("9.9")
 
 
-
-
 def test_toggle_evaluator_negative_scenarios() -> None:
     from application.design_task_benchmark import _evaluate_stateful_temporal_task
     from benchmark_suite.design_task_dataset import DesignTask
@@ -282,18 +281,32 @@ def test_toggle_evaluator_negative_scenarios() -> None:
                     "output_protein": outputs,
                 }
             },
-            "simulation_result": {
-                "status": "simulated"
-            }
+            "simulation_result": {"status": "simulated"},
         }
 
     # 1. Fake toggle (no feedback) - decays during HOLD_SET (1000 to 2000)
     # SET phase end (950-1000) is high (150.0). HOLD_SET (1100-2000) decays to 10.0
-    times_fake = [950.0, 1000.0, 1100.0, 1500.0, 2000.0, 2950.0, 3000.0, 3100.0, 4000.0, 4900.0, 5000.0]
+    times_fake = [
+        950.0,
+        1000.0,
+        1100.0,
+        1500.0,
+        2000.0,
+        2950.0,
+        3000.0,
+        3100.0,
+        4000.0,
+        4900.0,
+        5000.0,
+    ]
     outputs_fake = [150.0, 150.0, 10.0, 10.0, 10.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0]
-    res_fake = _evaluate_stateful_temporal_task(task, make_mock_result(times_fake, outputs_fake))
+    res_fake = _evaluate_stateful_temporal_task(
+        task, make_mock_result(times_fake, outputs_fake)
+    )
     assert res_fake["passed"] is False
-    assert any(d["phase"] == "HOLD_SET" and d["passed"] is False for d in res_fake["details"])
+    assert any(
+        d["phase"] == "HOLD_SET" and d["passed"] is False for d in res_fake["details"]
+    )
 
     # 2. SET followed by rapid decay in HOLD_SET (same as above, specifically checking HOLD_SET failure)
     # We can test that SET passes (passed = True) but HOLD_SET fails
@@ -304,21 +317,41 @@ def test_toggle_evaluator_negative_scenarios() -> None:
 
     # 3. RESET followed by re-rising in HOLD_RESET (3100 to 4000)
     # SET (950-1000) high, HOLD_SET (1100-2000) high, RESET (2950-3000) low (5.0), but HOLD_RESET rises to 80.0
-    times_rise = [950.0, 1000.0, 1100.0, 2000.0, 2950.0, 3000.0, 3100.0, 3500.0, 4000.0, 4900.0, 5000.0]
+    times_rise = [
+        950.0,
+        1000.0,
+        1100.0,
+        2000.0,
+        2950.0,
+        3000.0,
+        3100.0,
+        3500.0,
+        4000.0,
+        4900.0,
+        5000.0,
+    ]
     outputs_rise = [150.0, 150.0, 150.0, 150.0, 5.0, 5.0, 80.0, 80.0, 80.0, 5.0, 5.0]
-    res_rise = _evaluate_stateful_temporal_task(task, make_mock_result(times_rise, outputs_rise))
+    res_rise = _evaluate_stateful_temporal_task(
+        task, make_mock_result(times_rise, outputs_rise)
+    )
     assert res_rise["passed"] is False
     reset_metrics = next(d for d in res_rise["details"] if d["phase"] == "RESET")
-    hold_reset_metrics = next(d for d in res_rise["details"] if d["phase"] == "HOLD_RESET")
+    hold_reset_metrics = next(
+        d for d in res_rise["details"] if d["phase"] == "HOLD_RESET"
+    )
     assert reset_metrics["passed"] is True
     assert hold_reset_metrics["passed"] is False
 
     # 4. Missing phase samples (e.g. no time points between 1100 and 2000)
     times_gap = [950.0, 1000.0, 2950.0, 3000.0, 3100.0, 4000.0, 4900.0, 5000.0]
     outputs_gap = [150.0, 150.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0]
-    res_gap = _evaluate_stateful_temporal_task(task, make_mock_result(times_gap, outputs_gap))
+    res_gap = _evaluate_stateful_temporal_task(
+        task, make_mock_result(times_gap, outputs_gap)
+    )
     assert res_gap["passed"] is False
-    hold_set_gap_metrics = next(d for d in res_gap["details"] if d["phase"] == "HOLD_SET")
+    hold_set_gap_metrics = next(
+        d for d in res_gap["details"] if d["phase"] == "HOLD_SET"
+    )
     assert hold_set_gap_metrics["sample_count"] == 0
     assert hold_set_gap_metrics["passed"] is False
 
@@ -352,36 +385,42 @@ def test_oscillator_evaluator_negative_scenarios() -> None:
                     "output_protein": outputs,
                 }
             },
-            "simulation_result": {
-                "status": "simulated"
-            }
+            "simulation_result": {"status": "simulated"},
         }
 
     # 1. Single overshoot: only 1 peak at t=1000.0, transient cutoff=500.0
     times_single = [0.0, 500.0, 1000.0, 1500.0, 2000.0]
     outputs_single = [0.0, 50.0, 150.0, 50.0, 50.0]
-    res_single = _evaluate_oscillatory_temporal_task(task, make_mock_result(times_single, outputs_single), config=CONFIG_V1_1)
+    res_single = _evaluate_oscillatory_temporal_task(
+        task, make_mock_result(times_single, outputs_single), config=CONFIG_V1_1
+    )
     assert res_single["passed"] is False
     assert res_single["classification"] == "non-oscillatory"
 
     # 2. Two peaks: peaks at 1000.0 and 2000.0. Under V1.1 (requires 3 peaks) it fails
     times_two = [0.0, 500.0, 1000.0, 1500.0, 2000.0, 2500.0, 3000.0]
     outputs_two = [0.0, 50.0, 150.0, 50.0, 150.0, 50.0, 50.0]
-    res_two = _evaluate_oscillatory_temporal_task(task, make_mock_result(times_two, outputs_two), config=CONFIG_V1_1)
+    res_two = _evaluate_oscillatory_temporal_task(
+        task, make_mock_result(times_two, outputs_two), config=CONFIG_V1_1
+    )
     assert res_two["passed"] is False
     assert res_two["peak_count"] == 2
 
     # 3. Low amplitude: 3 peaks, but amplitudes are below 10.0 (e.g. peak value 105.0, valley value 100.0 -> amp 5.0)
     times_low = [0.0, 500.0, 1000.0, 1500.0, 2000.0, 2500.0, 3000.0, 3500.0, 4000.0]
     outputs_low = [100.0, 100.0, 105.0, 100.0, 105.0, 100.0, 105.0, 100.0, 100.0]
-    res_low = _evaluate_oscillatory_temporal_task(task, make_mock_result(times_low, outputs_low), config=CONFIG_V1_1)
+    res_low = _evaluate_oscillatory_temporal_task(
+        task, make_mock_result(times_low, outputs_low), config=CONFIG_V1_1
+    )
     assert res_low["passed"] is False
     assert res_low["classification"] == "non-oscillatory"
 
     # 4. Damped oscillation: 3 peaks, but amplitude decays (first amp 100.0, last amp 10.0 -> retention 0.1 < 0.7)
     times_damped = [0.0, 500.0, 1000.0, 1500.0, 2000.0, 2500.0, 3000.0, 3500.0, 4000.0]
     outputs_damped = [0.0, 0.0, 150.0, 50.0, 90.0, 60.0, 70.0, 60.0, 60.0]
-    res_damped = _evaluate_oscillatory_temporal_task(task, make_mock_result(times_damped, outputs_damped), config=CONFIG_V1_1)
+    res_damped = _evaluate_oscillatory_temporal_task(
+        task, make_mock_result(times_damped, outputs_damped), config=CONFIG_V1_1
+    )
     assert res_damped["passed"] is False
     assert res_damped["classification"] == "damped"
     assert res_damped["amplitude_retention"] < 0.7
@@ -389,14 +428,18 @@ def test_oscillator_evaluator_negative_scenarios() -> None:
     # 5. Irregular oscillation: 3 peaks, but periods are highly irregular (CV > 0.25)
     times_irreg = [0.0, 500.0, 1000.0, 1100.0, 1200.0, 2100.0, 3000.0, 3500.0, 4000.0]
     outputs_irreg = [0.0, 0.0, 150.0, 50.0, 150.0, 50.0, 150.0, 50.0, 50.0]
-    res_irreg = _evaluate_oscillatory_temporal_task(task, make_mock_result(times_irreg, outputs_irreg), config=CONFIG_V1_1)
+    res_irreg = _evaluate_oscillatory_temporal_task(
+        task, make_mock_result(times_irreg, outputs_irreg), config=CONFIG_V1_1
+    )
     assert res_irreg["passed"] is False
     assert res_irreg["classification"] == "irregular"
 
     # 6. Insufficient simulation time: no peaks found
     times_insuf = [0.0, 100.0, 200.0, 300.0, 400.0]
     outputs_insuf = [10.0, 12.0, 14.0, 16.0, 18.0]
-    res_insuf = _evaluate_oscillatory_temporal_task(task, make_mock_result(times_insuf, outputs_insuf), config=CONFIG_V1_1)
+    res_insuf = _evaluate_oscillatory_temporal_task(
+        task, make_mock_result(times_insuf, outputs_insuf), config=CONFIG_V1_1
+    )
     assert res_insuf["passed"] is False
     assert res_insuf["peak_count"] == 0
 
@@ -426,7 +469,7 @@ def test_stable_batch_hash_sanitization_and_status() -> None:
         "runner": {
             "version": "1.0",
             "temporal_evaluator_version": "1.0",
-            "temporal_evaluator_config": {"some": "config"}
+            "temporal_evaluator_config": {"some": "config"},
         },
         "task_set": {"content_hash": "hash"},
         "summary": {"task_count": 1},
@@ -448,14 +491,16 @@ def test_stable_batch_hash_sanitization_and_status() -> None:
                 },
                 "response": {
                     "raw_output": "Sequence optimization log at C:\\Users\\yehra\\Desktop\\project\\logs\\opt.log Done.",
-                }
+                },
             }
         ],
     }
 
     # 1. Changing volatile paths/timestamps should result in the EXACT same stable hash
     batch_changed_paths = deepcopy(batch_base)
-    batch_changed_paths["results"][0]["response"]["raw_output"] = "Sequence optimization log at C:\\Users\\another_user\\Desktop\\side_project\\logs\\opt.log Done."
+    batch_changed_paths["results"][0]["response"]["raw_output"] = (
+        "Sequence optimization log at C:\\Users\\another_user\\Desktop\\side_project\\logs\\opt.log Done."
+    )
 
     hash_base = stable_batch_hash(batch_base)
     hash_changed_paths = stable_batch_hash(batch_changed_paths)
@@ -473,6 +518,7 @@ def test_stable_batch_hash_sanitization_and_status() -> None:
 
     # 4. Test status aggregate in _batch_summary
     from application.design_task_benchmark import _batch_summary
+
     results = [
         {"status": "passed"},
         {"status": "provisional"},
