@@ -485,5 +485,3 @@ def test_stable_batch_hash_sanitization_and_status() -> None:
     assert summary["unsupported_count"] == 1
     assert summary["failed_count"] == 1
     assert summary["pass_rate"] == 0.25
-
-

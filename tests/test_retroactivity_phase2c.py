@@ -62,7 +62,7 @@ def test_multi_target_solver() -> None:
     # Targets: ("B", 5.0), ("C", 15.0)
     # f(x) = x + 10 * x / (5 + x) + 10 * x / (15 + x) - 40 = 0
     p_free = sim._solve_free_regulator("A", 40.0, 10.0, [("B", 5.0), ("C", 15.0)])
-    
+
     # Verify conservation equation holds
     err = p_free + 10.0 * p_free / (5.0 + p_free) + 10.0 * p_free / (15.0 + p_free) - 40.0
     assert abs(err) < 1e-4
@@ -116,7 +116,7 @@ def test_latch_bistability_shift_simulation() -> None:
     topo_low = latch_topology.copy()
     topo_low["copy_number"] = 1.0
     res_low = simulator_low.simulate_topology(topo_low)
-    
+
     assert res_low["ode_status"] == "simulated"
     # Ensure warnings are empty or not present for low retroactivity
     warnings_low = res_low.get("warnings", [])
@@ -132,7 +132,7 @@ def test_latch_bistability_shift_simulation() -> None:
     topo_high = latch_topology.copy()
     topo_high["copy_number"] = 80.0
     res_high = simulator_high.simulate_topology(topo_high)
-    
+
     assert res_high["ode_status"] == "simulated"
     warnings_high = res_high.get("warnings", [])
     # Since copy number is high, retroactivity warnings should be raised for Q or Qbar

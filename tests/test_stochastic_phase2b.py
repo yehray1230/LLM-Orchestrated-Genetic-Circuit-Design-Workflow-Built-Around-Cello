@@ -69,21 +69,21 @@ def test_stochastic_simulation_buffer() -> None:
             {"A": "1", "Y": "1"}
         ]
     }
-    
+
     # Run stochastic simulation
     simulator = BatchODESimulator(simulation_time=100.0, sample_count=11)
     res = simulator.simulate_stochastic(topology, runs=5, scale_factor=5.0)
-    
+
     assert "runs" in res
     assert "mean_trajectory" in res
     assert "fano_factors" in res
     assert "memory_stability" in res
-    
+
     # 5 runs returned for plotting
     assert len(res["runs"]) == 5
     # The time points count should match sample_count (11)
     assert len(res["mean_trajectory"]["time"]) == 11
-    
+
     # Check that Y is in fano_factors
     assert "Y" in res["fano_factors"]
     assert res["fano_factors"]["Y"] >= 0.0
@@ -138,18 +138,18 @@ def test_stochastic_latch_memory_retention() -> None:
         """,
         "operons": [["Q"], ["Qbar"]],
     }
-    
+
     simulator = BatchODESimulator(simulation_time=150.0, sample_count=16)
-    
+
     # We want to start in a state where Q is high and Qbar is low
     # Initialize Q = 20 nM (200 molecules at scale = 10), Qbar = 0
     topology["initial_molecules"] = {
         "protein_mature_Q": 200.0,
         "protein_mature_Qbar": 0.0,
     }
-    
+
     res = simulator.simulate_stochastic(topology, runs=10, scale_factor=10.0)
-    
+
     assert "runs" in res
     assert "mean_trajectory" in res
     # Memory retention stability should be reported

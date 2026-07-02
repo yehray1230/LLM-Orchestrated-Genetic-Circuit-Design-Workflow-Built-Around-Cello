@@ -80,7 +80,7 @@ def mutate_intergenic_sequence(topology: dict[str, Any], target_gene: str) -> di
     """Synonymously mutates the RBS spacer of the target gene to break hairpins."""
     updated = dict(topology)
     rbs_seqs = dict(updated.get("rbs_sequences", {}))
-    
+
     if target_gene in rbs_seqs:
         seq = rbs_seqs[target_gene]
         # Standard Shine-Dalgarno is AGGAGG. Find it and mutate the spacer after it to be AT-rich
@@ -93,7 +93,7 @@ def mutate_intergenic_sequence(topology: dict[str, Any], target_gene: str) -> di
         else:
             # If no SD consensus is found, replace the entire sequence with a standard low-folding RBS
             rbs_seqs[target_gene] = "AGGAGGAAAAATG"
-            
+
     updated["rbs_sequences"] = rbs_seqs
     return updated
 
@@ -102,15 +102,15 @@ def insert_insulator(topology: dict[str, Any], target_gene: str) -> dict[str, An
     """Prepends a RiboJ insulator sequence upstream of the RBS for target_gene."""
     updated = dict(topology)
     rbs_seqs = dict(updated.get("rbs_sequences", {}))
-    
+
     # Standard RiboJ sequence
     riboj_seq = "AGCTGTCACCGGATGTGCTTTCCGGTCTGATGAGTCCGTGAGGACGAAACAGCCTCTACAAATAATTTTGTTTAA"
-    
+
     if target_gene in rbs_seqs:
         rbs_seqs[target_gene] = riboj_seq + rbs_seqs[target_gene]
     else:
         rbs_seqs[target_gene] = riboj_seq + "AGGAGGAAAAATG"
-        
+
     updated["rbs_sequences"] = rbs_seqs
     return updated
 
@@ -119,7 +119,7 @@ def swap_part_by_affinity(topology: dict[str, Any], target_gene: str, affinity: 
     """Swaps promoter/RBS parameters for target_gene to adjust binding/translation affinity."""
     updated = dict(topology)
     params = dict(updated.get("biokinetic_parameters", {}))
-    
+
     # Map affinity class to relative scaling factors
     factors = {
         "high": 5.0,
@@ -127,7 +127,7 @@ def swap_part_by_affinity(topology: dict[str, Any], target_gene: str, affinity: 
         "low": 0.2
     }
     scale = factors.get(affinity.lower(), 1.0)
-    
+
     # Scale translation rate parameter
     rbs_key = f"translation_rate_{target_gene}"
     if rbs_key in params:
@@ -137,7 +137,7 @@ def swap_part_by_affinity(topology: dict[str, Any], target_gene: str, affinity: 
             params[rbs_key] = float(params[rbs_key]) * scale
     else:
         params[rbs_key] = {"value": 120.0 * scale, "unit": "hr-1"}
-        
+
     updated["biokinetic_parameters"] = params
     return updated
 
@@ -146,7 +146,7 @@ def append_degradation_tag(topology: dict[str, Any], target_gene: str, tag_type:
     """Appends a degradation tag by increasing the protein degradation rate of target_gene."""
     updated = dict(topology)
     params = dict(updated.get("biokinetic_parameters", {}))
-    
+
     # Tag types and degradation multiplier factors
     factors = {
         "LVA": 8.0,  # Fast degradation
@@ -154,7 +154,7 @@ def append_degradation_tag(topology: dict[str, Any], target_gene: str, tag_type:
         "ASV": 2.0   # Slow degradation
     }
     multiplier = factors.get(tag_type.upper(), 5.0)
-    
+
     deg_key = f"protein_degradation_rate_{target_gene}"
     if deg_key in params:
         if isinstance(params[deg_key], dict) and "value" in params[deg_key]:
@@ -164,7 +164,7 @@ def append_degradation_tag(topology: dict[str, Any], target_gene: str, tag_type:
     else:
         # Default E. coli protein degradation rate is ~0.012 min-1 or 0.7 hr-1
         params[deg_key] = {"value": 0.7 * multiplier, "unit": "hr-1"}
-        
+
     updated["biokinetic_parameters"] = params
     return updated
 
@@ -178,7 +178,7 @@ def run_self_healing_action(topology: dict[str, Any], recommendation: dict[str, 
     action = recommendation.get("recommended_action")
     target = recommendation.get("target_node")
     params = recommendation.get("parameters", {})
-    
+
     if action == "adjust_copy_number":
         scale = float(params.get("scale", 0.5))
         return adjust_copy_number(topology, scale)

@@ -151,7 +151,7 @@ def test_reflexion_self_healing_controller_loop() -> None:
     # Mock components
     builder = MockAgent(lambda s: s)
     translator = MockAgent(lambda s: s)
-    
+
     # Mock Cello wrapper: adds default fields
     def cello_run(s):
         node = s.tree_nodes[s.current_node_id]
@@ -160,7 +160,7 @@ def test_reflexion_self_healing_controller_loop() -> None:
             topo["rbs_sequences"] = {"Y": "AGGAGG"}
         return s
     cello_wrapper = MockAgent(cello_run)
-    
+
     # Mock simulator: simulates and updates copy number / load index
     def sim_run(s):
         node = s.tree_nodes[s.current_node_id]

@@ -538,35 +538,22 @@ class StochasticSimulationAdapter:
     capability = "stochastic_simulation"
 
     def available(self) -> ToolAvailability:
-        # Detect if optional packages bioscrape or roadrunner are available
-        # First check bioscrape
-        availability = detect_python_module(
-            "bioscrape",
+        return ToolAvailability(
             tool_name=self.tool_name,
             adapter_name=self.adapter_name,
             capability=self.capability,
-            fallback_available=True,
-        )
-        if availability.status == "unavailable":
-            # Check roadrunner
-            availability = detect_python_module(
-                "roadrunner",
-                tool_name=self.tool_name,
-                adapter_name=self.adapter_name,
-                capability=self.capability,
-                fallback_available=True,
-            )
-
-        if availability.status == "unavailable":
-            availability.status = "fallback"
-            availability.fallback_used = True
-            availability.warnings.append(
+            status="available",
+            fallback_available=False,
+            fallback_used=False,
+            license_sensitive=False,
+            warnings=[
                 normalize_tool_warning(
-                    "FALLBACK_USED",
-                    "Bioscrape and RoadRunner are unavailable; using pure-python Gillespie SSA integration fallback.",
+                    "INTERNAL_SIMULATOR_USED",
+                    "Using the built-in pure-Python Gillespie SSA stochastic simulator.",
+                    "info",
                 )
-            )
-        return availability
+            ]
+        )
 
     def validate_input(self, payload: dict[str, Any]) -> list[ToolWarning]:
         warnings: list[ToolWarning] = []
@@ -658,6 +645,94 @@ class StochasticSimulationAdapter:
                     "error",
                 )
             )
+
+        # Validate random_seed if present
+        if "random_seed" in payload:
+            random_seed = payload["random_seed"]
+            if random_seed is not None:
+                if isinstance(random_seed, bool) or not isinstance(random_seed, (int, float)):
+                    warnings.append(
+                        normalize_tool_warning(
+                            "INVALID_RANDOM_SEED",
+                            "random_seed must be an integer.",
+                            "error",
+                        )
+                    )
+                else:
+                    try:
+                        int(random_seed)
+                    except (TypeError, ValueError):
+                        warnings.append(
+                            normalize_tool_warning(
+                                "INVALID_RANDOM_SEED",
+                                "random_seed must be an integer.",
+                                "error",
+                            )
+                        )
+
+        # Validate simulation_time if present
+        if "simulation_time" in payload:
+            sim_time = payload["simulation_time"]
+            if isinstance(sim_time, bool):
+                warnings.append(
+                    normalize_tool_warning(
+                        "INVALID_SIMULATION_TIME",
+                        "simulation_time must be a finite number greater than zero.",
+                        "error",
+                    )
+                )
+            else:
+                try:
+                    valid_time = math.isfinite(float(sim_time)) and float(sim_time) > 0.0
+                except (TypeError, ValueError):
+                    valid_time = False
+                if not valid_time:
+                    warnings.append(
+                        normalize_tool_warning(
+                            "INVALID_SIMULATION_TIME",
+                            "simulation_time must be a finite number greater than zero.",
+                            "error",
+                        )
+                    )
+
+        # Validate sample_count if present
+        if "sample_count" in payload:
+            sc = payload["sample_count"]
+            if isinstance(sc, bool) or not isinstance(sc, (int, float)):
+                warnings.append(
+                    normalize_tool_warning(
+                        "INVALID_SAMPLE_COUNT",
+                        "sample_count must be a positive integer.",
+                        "error",
+                    )
+                )
+            else:
+                try:
+                    sc_int = int(sc)
+                    valid_sc = (sc_int > 0)
+                except (TypeError, ValueError):
+                    valid_sc = False
+                if not valid_sc:
+                    warnings.append(
+                        normalize_tool_warning(
+                            "INVALID_SAMPLE_COUNT",
+                            "sample_count must be a positive integer.",
+                            "error",
+                        )
+                    )
+
+        # Validate temporal_inputs if present
+        if "temporal_inputs" in payload:
+            temp_in = payload["temporal_inputs"]
+            if temp_in is not None and not isinstance(temp_in, dict):
+                warnings.append(
+                    normalize_tool_warning(
+                        "INVALID_TEMPORAL_INPUTS",
+                        "temporal_inputs must be a dictionary.",
+                        "error",
+                    )
+                )
+
         return warnings
 
     def run(self, payload: dict[str, Any]) -> ToolAdapterResult:
@@ -671,7 +746,37 @@ class StochasticSimulationAdapter:
             )
 
         from tools.ode_simulator import BatchODESimulator
-        simulator = BatchODESimulator()
+
+        # Extract inputs
+        random_seed = payload.get("random_seed")
+        if random_seed is not None:
+            try:
+                random_seed = int(random_seed)
+            except (TypeError, ValueError):
+                pass
+
+        simulation_time = payload.get("simulation_time")
+        if simulation_time is not None:
+            try:
+                simulation_time = float(simulation_time)
+            except (TypeError, ValueError):
+                pass
+
+        sample_count = payload.get("sample_count")
+        if sample_count is not None:
+            try:
+                sample_count = int(sample_count)
+            except (TypeError, ValueError):
+                pass
+
+        temporal_inputs = payload.get("temporal_inputs")
+
+        simulator = BatchODESimulator(
+            simulation_time=simulation_time if simulation_time is not None else 600.0,
+            sample_count=sample_count if sample_count is not None else 80,
+            random_seed=random_seed,
+            temporal_inputs=temporal_inputs,
+        )
         topology = dict(payload["topology"])
         runs = int(payload.get("runs", 50))
         scale_factor = float(payload.get("scale_factor", 10.0))
@@ -711,6 +816,10 @@ class StochasticSimulationAdapter:
                 "simulation_status": output.get("simulation_status"),
                 "completed_run_count": output.get("completed_run_count", 0),
                 "truncated_run_count": output.get("truncated_run_count", 0),
+                "random_seed": output.get("random_seed"),
+                "simulation_time": output.get("simulation_time"),
+                "sample_count": output.get("sample_count"),
+                "temporal_inputs": output.get("temporal_inputs"),
             },
             warnings=validation_warnings + availability.warnings,
         )

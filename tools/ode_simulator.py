@@ -1624,6 +1624,10 @@ class BatchODESimulator:
             "truncated_run_count": truncated_run_count,
             "max_steps_per_run": max_steps,
             "run_statuses": run_statuses,
+            "random_seed": self.random_seed,
+            "simulation_time": self.simulation_time,
+            "sample_count": self.sample_count,
+            "temporal_inputs": self.temporal_inputs,
         }
 
     def _integrate(

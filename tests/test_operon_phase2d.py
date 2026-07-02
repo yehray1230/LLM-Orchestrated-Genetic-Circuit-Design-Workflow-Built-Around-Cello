@@ -20,10 +20,10 @@ def test_heuristic_rna_folding_energy() -> None:
 def test_rna_folding_adapter_fallback() -> None:
     adapter = RNAFoldingAdapter()
     availability = adapter.available()
-    
+
     # We should have status available or fallback
     assert availability.status in ("available", "fallback")
-    
+
     res = adapter.run({"sequence": "GGGGCATCGCCCC"})
     assert res.status == "ok"
     assert "mfe" in res.output
@@ -44,13 +44,13 @@ def test_polycistronic_operon_transcription() -> None:
         ],
         "operons": [["Y1", "Y2"]],
     }
-    
+
     simulator = BatchODESimulator(
         simulation_time=200.0,
         sample_count=21,
     )
     result = simulator.simulate_topology(topology)
-    
+
     assert result["ode_status"] == "simulated"
     # Number of states in result should be: num_op (1) + 2 * gene_count (4) = 5
     # Let's verify we got successful outputs
@@ -112,7 +112,7 @@ def test_translational_coupling_and_polarity() -> None:
             "translation_rate_Y2": {"value": 1.0, "unit": "hr-1"},  # low basal
         }
     }
-    
+
     # Spacing large (coupling off)
     topology_uncoupled = {
         "verilog": """
@@ -134,19 +134,19 @@ def test_translational_coupling_and_polarity() -> None:
     }
 
     simulator = BatchODESimulator(simulation_time=200.0, sample_count=21)
-    
+
     res_coupled = simulator.simulate_topology(topology_coupled)
     res_uncoupled = simulator.simulate_topology(topology_uncoupled)
-    
+
     # Trace values of Y2 should be higher in the coupled case due to upstream translation flux scaling Y2 RBS strength
     trace_coupled_Y2 = res_coupled["ode_trace"]["output_protein"]  # Y2 is output
     # Since target output defaults to Y2 (the last output)
     final_coupled_Y2 = trace_coupled_Y2[-1]
-    
+
     # Verify uncoupled target output Y2
     trace_uncoupled_Y2 = res_uncoupled["ode_trace"]["output_protein"]
     final_uncoupled_Y2 = trace_uncoupled_Y2[-1]
-    
+
     assert final_coupled_Y2 > final_uncoupled_Y2
 
 
@@ -163,10 +163,10 @@ def test_rbs_blocking_warning() -> None:
             "Y": "GGGGCATCGCCCC"  # forms -9.0 MFE hairpin loop
         }
     }
-    
+
     simulator = BatchODESimulator(simulation_time=100.0, sample_count=11)
     result = simulator.simulate_topology(topology)
-    
+
     assert result["ode_status"] == "simulated"
     # It should trigger RBS blocking warning because Y has a tight hairpin MFE < -8 and is at pos 0 of its operon
     warnings = result.get("warnings", [])
