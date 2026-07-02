@@ -51,6 +51,25 @@ the workflow can produce and inspect:
 - export-oriented artifacts such as BOM CSV, GenBank, and SBOL3 representations
   when enough sequence evidence is available.
 
+## Implemented Preview Capabilities
+
+The repository currently contains these reviewable computational paths:
+
+| Area | Implemented preview capability | Evidence boundary |
+| --- | --- | --- |
+| Design intake | Natural-language elicitation, structured specifications, guided JSON/GenBank imports, DesignIR revisions, comparisons, and part-replacement checks | Imported or generated records still require expert review |
+| Circuit execution | Synchronous evaluation plus persistent asynchronous runs, progress events, feedback/resume, artifacts, and HTML run monitoring | Run completion does not imply biological validity |
+| Simulation | Resource-aware ODE screening, temporal inputs, parameter sweeps, simplified bifurcation reports, Monte Carlo perturbation, stochastic SSA, retroactivity, operon coupling/polarity, and heuristic RBS-blocking warnings | Models are simplified and mostly uncalibrated |
+| Evaluation and repair | Versioned scoring profiles, benchmark datasets, readiness domains, Critic routing, validated best-candidate self-healing, and repair provenance | Scores rank implemented checks; they are not success probabilities |
+| Sequence and host | Sequence QC, synonymous E. coli codon revisions, CAI/rare-codon reporting, host profiles, host ranking, calibration snapshots, and optimization workflow orchestration | Host compatibility and expression are not experimentally guaranteed |
+| Assembly and exchange | Backbone registry, plasmid/assembly planning, conservative deliverable packages, BOM, GenBank, and SBOL3 representations | Outputs are planning artifacts, not executable wet-lab protocols |
+| Interfaces | Streamlit, FastAPI/OpenAPI, server-rendered research workspace, and MCP tools for run/design/revision/export operations | Optional external tools may fall back or remain unavailable |
+
+The detailed contracts and caveats live in
+[`WORKFLOW.md`](WORKFLOW.md), [`EVALUATION_METRICS.md`](EVALUATION_METRICS.md),
+[`MODEL_ASSUMPTIONS.md`](MODEL_ASSUMPTIONS.md), and
+[`LIMITATION.md`](LIMITATION.md).
+
 ## Biological Claim Boundary
 
 The project can support computational design assistance:
@@ -144,9 +163,14 @@ working research prototype with explicit boundaries:
 
 ## Future Work
 
-The roadmap includes benchmark calibration, wet-lab data fitting, richer
-biophysical modeling, host-specific profiles, SBOL/GenBank interoperability,
-layout analysis, RNA-folding checks, and CRISPRi/CRISPRa-oriented extensions.
+The current preview already includes conservative SBOL3/GenBank representations,
+host-profile screening, layout checks, heuristic RNA-folding warnings, and
+resource-aware deterministic/stochastic simulation paths. These remain
+computational screening features rather than experimentally validated models.
+
+Future work focuses on benchmark calibration, wet-lab data fitting, validated
+host-specific parameter sets, external thermodynamic/CRN tool integration,
+richer spatial and biophysical models, and CRISPRi/CRISPRa-oriented extensions.
 
 Those are future research directions. They should not be interpreted as current
 validated capabilities. See [`future_roadmap.md`](future_roadmap.md).

@@ -39,6 +39,7 @@ class ResearchService:
                 monte_carlo_samples=int(selected.get("monte_carlo_samples", 1)),
                 noise_fraction=float(selected.get("noise_fraction", 0.15)),
                 random_seed=selected.get("random_seed"),
+                temporal_inputs=selected.get("temporal_inputs"),
             )
             candidate = simulation["candidate"]
             profile_id = str(

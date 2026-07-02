@@ -345,6 +345,15 @@ For detailed biological assumptions, see [MODEL_ASSUMPTIONS.md](MODEL_ASSUMPTION
 
 如需詳細的生物學假設，請參見 [MODEL_ASSUMPTIONS.md](MODEL_ASSUMPTIONS.md)。
 
+Current preview extensions include:
+
+- deterministic retroactivity screening through regulator-load sequestration;
+- optional operon grouping, translational coupling, polarity, and heuristic RBS-accessibility warnings;
+- a pure-Python Gillespie stochastic audit exposed through `StochasticSimulationAdapter`;
+- explicit stochastic run completion metadata. Runs that reach `max_steps` are marked `truncated`, and the adapter reports `SSA_STEP_LIMIT_REACHED` instead of treating them as successful evidence.
+
+目前的預覽擴充包括 retroactivity 篩選、operon／轉譯耦合與極性、啟發式 RBS 可及性警告，以及 Gillespie 隨機稽核。達到 `max_steps` 的隨機 run 會明確標記為 `truncated`，不可視為完整模擬證據。
+
 ### Benchmark Suite
 ### Benchmark Suite
 

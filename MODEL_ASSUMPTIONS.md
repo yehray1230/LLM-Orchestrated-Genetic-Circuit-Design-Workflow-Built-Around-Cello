@@ -343,6 +343,9 @@ Important output fields should be interpreted conservatively:
 | `ode_explanation.key_readouts` | Derived trajectory readouts such as peak output, time to peak, final output, fold-change proxy, and steady-state status. <br> 衍生的軌跡讀數，例如最大輸出、達峰時間、最終輸出、fold-change 代理指標與穩態狀態。 |
 | `ode_explanation.burden_readouts` | Coarse mRNA/protein and RNAP/ribosome burden readouts. <br> 粗略的 mRNA/蛋白質與 RNAP/核糖體負載讀數。 |
 | `ode_explanation.coverage_warnings` | Warnings about missing explicit input scenarios, OFF-state traces, ON/OFF ratios, or Monte Carlo perturbation. <br> 關於缺少明確輸入情境、OFF-state 軌跡、ON/OFF 比率或蒙特卡羅微擾的警示。 |
+| `simulation_status = "truncated"` | One or more stochastic runs reached the configured step limit before the requested end time; this is incomplete evidence. <br> 至少一個隨機 run 在要求的終止時間前達到步數上限，因此證據不完整。 |
+| `retroactivity_max` | Simplified regulator-sequestration load index used for relative screening. <br> 用於相對篩選的簡化調控因子 sequestration 負載指標。 |
+| `rbs_blocking_detected` | Heuristic sequence-accessibility warning, not a thermodynamic folding prediction. <br> 啟發式序列可及性警告，不是熱力學折疊預測。 |
 
 These fields are most useful for comparing candidates generated in the same workflow. They should not be treated as standalone experimental predictions.
 
@@ -366,8 +369,8 @@ The current model does not include:
   應激反應反饋（核糖體-生長稀釋耦合已建模，但複雜的細胞應激反應尚未建模）；
 - DNA supercoiling or local sequence context;
   DNA 超螺旋或本地序列上下文；
-- RNA folding, RNA stability motifs, or transcript processing;
-  RNA 折疊、RNA 穩定性基序或轉錄本處理；
+- full thermodynamic RNA folding, RNA stability motifs, or transcript processing (a local heuristic can flag strong RBS-region hairpins, but it is not ViennaRNA/NUPACK-equivalent validation);
+  完整熱力學 RNA 折疊、RNA 穩定性基序或轉錄本處理（本地啟發式方法可警告強 RBS 區域 hairpin，但不等同 ViennaRNA／NUPACK 驗證）；
 - detailed codon-pair bias, translation initiation context, or ribosome traffic (synonymous E. coli codon replacement is now supported at the sequence level, but not dynamically simulated in ODEs);
   詳細的密碼子對偏好、翻譯起始上下文或核糖體交通（目前已在序列層級支援大腸桿菌同義密碼子替換，但尚未在 ODE 中進行動態模擬）；
 - detailed protein folding pathways, chaperones, degradation tags, or active/inactive maturation states (modeled via a simplified first-order maturation rate delay);

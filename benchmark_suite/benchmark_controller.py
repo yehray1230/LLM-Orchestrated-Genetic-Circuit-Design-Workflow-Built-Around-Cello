@@ -17,6 +17,10 @@ from benchmark_suite.scoring_profiles import (
 
 SCORE_WEIGHTS = LEGACY_PROFILE.dimension_weights
 
+RESEARCH_V2_BIOPHYSICAL_WEIGHTS = dict(
+    SIMULATION_RESEARCH_PROFILE.biophysical_weights or {}
+)
+
 
 def _clamp_score(score: float) -> float:
     return max(0.0, min(1.0, float(score)))
@@ -121,11 +125,41 @@ def evaluate_candidate(
         candidate,
         component_scores,
     )
+
+    diagnostic_tags = []
+    if _candidate_float(candidate, "retroactivity_max", 0.0) > 0.3:
+        diagnostic_tags.append("HIGH_RETROACTIVITY")
+    if candidate.get("rbs_blocking_detected"):
+        diagnostic_tags.append("RBS_HAIRPIN_DETECTED")
+    cv = _candidate_float(candidate, "monte_carlo_terminal_output_cv", _candidate_float(candidate, "metrics_cv", 0.0))
+    if cv > 0.5:
+        diagnostic_tags.append("NOISE_FLIP_RISK")
+
     research_profiles = {
         RESEARCH_PROFILE.profile_id,
         SIMULATION_RESEARCH_PROFILE.profile_id,
     }
-    if profile.profile_id in research_profiles:
+    applied_score_weights = profile.dimension_weights
+    biophysical_component_scores = None
+    if profile.profile_id == "research-v2-preview" and candidate.get("ode_status") == "simulated":
+        component_scores_v2 = {
+            "logic": _clamp_score(semantic_faithfulness_score),
+            "noise_resilience": 1.0 - _clamp_score(cv * cv),
+            "retroactivity_resilience": 1.0
+            - _clamp_score(_candidate_float(candidate, "retroactivity_max", 0.0)),
+            "rbs_accessibility": 0.0
+            if candidate.get("rbs_blocking_detected")
+            else 1.0,
+            "resource_burden": _clamp_score(metabolic_result.score),
+        }
+        biophysical_component_scores = component_scores_v2
+        applied_score_weights = dict(profile.biophysical_weights or {})
+        biophysical_score = sum(
+            applied_score_weights[name] * component_score
+            for name, component_score in component_scores_v2.items()
+        )
+        score = _clamp_score(biophysical_score)
+    elif profile.profile_id in research_profiles:
         score = _weighted_score(dimension_scores, profile.dimension_weights)
     else:
         score = _weighted_score(component_scores, profile.dimension_weights)
@@ -134,6 +168,7 @@ def evaluate_candidate(
         "weighted_total_score": score,
         "computational_design_score": score,
         "grade": _grade(score),
+        "diagnostic_tags": diagnostic_tags,
         "metabolic_burden_score": metabolic_result.metabolic_burden_score,
         "gate_count": metabolic_result.gate_count,
         "complexity_penalty": metabolic_result.complexity_penalty,
@@ -158,7 +193,8 @@ def evaluate_candidate(
         "semantic_faithfulness_score": semantic_faithfulness_score,
         "missed_edge_cases": missed_edge_cases,
         "component_scores": component_scores,
-        "score_weights": profile.dimension_weights,
+        "score_weights": applied_score_weights,
+        "biophysical_component_scores": biophysical_component_scores,
         "dimension_scores": dimension_scores,
         "dimension_applicability": applicability,
         "scoring_profile": profile.profile_id,

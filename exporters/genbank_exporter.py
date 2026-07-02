@@ -15,6 +15,12 @@ FEATURE_TYPES = {
     "cds": "CDS",
     "terminator": "terminator",
     "sensor": "misc_feature",
+    "backbone": "misc_feature",
+    "scar": "misc_feature",
+    "linker": "misc_feature",
+    "insulator": "misc_feature",
+    "operator": "protein_bind",
+    "notes": "misc_feature",
 }
 
 

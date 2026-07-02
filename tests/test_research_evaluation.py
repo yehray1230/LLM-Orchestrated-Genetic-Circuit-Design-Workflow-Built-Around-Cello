@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 import json
 from pathlib import Path
 
@@ -89,6 +90,74 @@ def test_research_profile_penalizes_missing_evidence() -> None:
     assert supported["weighted_total_score"] > unsupported["weighted_total_score"]
     assert supported["dimension_scores"]["evidence_quality"] == 0.95
     assert unsupported["dimension_scores"]["evidence_quality"] == 0.05
+
+
+def test_research_v2_perfect_simulated_candidate_can_reach_full_score() -> None:
+    candidate = {
+        **_candidate(evidence_quality=1.0),
+        "ode_status": "simulated",
+        "semantic_faithfulness_score": 1.0,
+        "monte_carlo_terminal_output_cv": 0.0,
+        "retroactivity_max": 0.0,
+        "rbs_blocking_detected": False,
+        "gate_count": 1,
+    }
+
+    result = evaluate_candidate(candidate, profile_id="research-v2-preview")
+
+    assert result["score"] == pytest.approx(1.0)
+    assert result["grade"] == "Excellent"
+    assert result["score_weights"] == {
+        "logic": 0.40,
+        "noise_resilience": 0.15,
+        "retroactivity_resilience": 0.15,
+        "rbs_accessibility": 0.15,
+        "resource_burden": 0.15,
+    }
+    assert result["biophysical_component_scores"] == {
+        "logic": 1.0,
+        "noise_resilience": 1.0,
+        "retroactivity_resilience": 1.0,
+        "rbs_accessibility": 1.0,
+        "resource_burden": 1.0,
+    }
+
+
+def test_research_v2_configuration_hash_covers_biophysical_weights() -> None:
+    profile = get_scoring_profile("research-v2-preview")
+    changed_weights = dict(profile.biophysical_weights or {})
+    changed_weights["logic"] = 0.39
+    changed_profile = replace(profile, biophysical_weights=changed_weights)
+
+    assert changed_profile.configuration_hash != profile.configuration_hash
+
+
+@pytest.mark.parametrize(
+    ("penalty", "expected_score"),
+    [
+        ({"monte_carlo_terminal_output_cv": 1.0}, 0.85),
+        ({"retroactivity_max": 1.0}, 0.85),
+        ({"rbs_blocking_detected": True}, 0.85),
+    ],
+)
+def test_research_v2_biophysical_risks_reduce_score(
+    penalty: dict,
+    expected_score: float,
+) -> None:
+    candidate = {
+        **_candidate(evidence_quality=1.0),
+        "ode_status": "simulated",
+        "semantic_faithfulness_score": 1.0,
+        "monte_carlo_terminal_output_cv": 0.0,
+        "retroactivity_max": 0.0,
+        "rbs_blocking_detected": False,
+        "gate_count": 1,
+        **penalty,
+    }
+
+    result = evaluate_candidate(candidate, profile_id="research-v2-preview")
+
+    assert result["score"] == pytest.approx(expected_score)
 
 
 def test_dataset_is_versioned_validated_and_content_addressed() -> None:

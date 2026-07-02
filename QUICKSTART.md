@@ -78,6 +78,21 @@ OpenAPI docs:   http://127.0.0.1:8000/docs
 OpenAPI schema: http://127.0.0.1:8000/openapi.json
 ```
 
+Useful workspace entry points:
+
+```text
+Runs and live monitor: /web/runs
+Research workspace:    /web/research
+Benchmarks:            /web/benchmarks
+Guided imports:        /web/imports
+Assembly workspace:    /web/assembly
+Design library:        /web/designs
+```
+
+The OpenAPI document also exposes simulation sweeps/bifurcation reports,
+parameter-fit snapshots, host/sequence optimization, readiness-related
+artifacts, assembly deliverables, and asynchronous run feedback/resume APIs.
+
 ## 5. Fixed Demo Intent
 
 Use one stable demo intent for first-pass validation:

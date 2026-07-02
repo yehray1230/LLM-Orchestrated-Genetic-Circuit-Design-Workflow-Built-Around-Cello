@@ -35,7 +35,10 @@ def test_demo_baseline_freeze_generates_reproducible_packet(tmp_path: Path) -> N
     assert len(packet["assembly_plan"]["fragments"]) > 0
     assert len(packet["assembly_plan"]["junctions"]) > 0
     assert packet["primer_readiness"]["status"] == "ready"
-    assert packet["primer_readiness"]["checks"]["actual_primer_sequences_generated"] is False
+    assert (
+        packet["primer_readiness"]["checks"]["actual_primer_sequences_generated"]
+        is False
+    )
     assert "primer sequences" in packet["primer_readiness"]["claim_boundary"]
     assert packet["readiness"]["readiness_status"] == "primer_ready"
     assert packet["readiness"]["next_required_stage"] == "sequence_optimized"
@@ -67,3 +70,58 @@ def test_demo_baseline_freeze_generates_reproducible_packet(tmp_path: Path) -> N
     assert "Demo / Research Baseline Freeze" in markdown_path.read_text(
         encoding="utf-8"
     )
+
+
+def test_run_canonical_task_baseline_all_cases(tmp_path: Path) -> None:
+    from application.demo_baseline import run_canonical_task_baseline
+
+    services = create_application_services(tmp_path / "api_data")
+
+    # Run for a temporal task (toggle switch)
+    packet_toggle = run_canonical_task_baseline(
+        services,
+        task_id="toggle_set_reset_v1",
+        output_dir=tmp_path / "toggle",
+        timeout_seconds=30.0,
+    )
+    assert packet_toggle["packet_hash"]
+    assert packet_toggle["fixed_demo"]["task_id"] == "toggle_set_reset_v1"
+    assert packet_toggle["evaluation"]["passed"] is True
+    assert packet_toggle["readiness"]["readiness_status"] == "primer_ready"
+
+    # Run for the ambiguous task
+    packet_ambiguous = run_canonical_task_baseline(
+        services,
+        task_id="ambiguous_stress_output_v1",
+        output_dir=tmp_path / "ambiguous",
+        timeout_seconds=30.0,
+    )
+    assert packet_ambiguous["packet_hash"]
+    assert packet_ambiguous["fixed_demo"]["task_id"] == "ambiguous_stress_output_v1"
+    assert len(packet_ambiguous["response"]["questions"]) == 3
+    assert packet_ambiguous["readiness"]["readiness_status"] == "conceptual"
+
+
+def test_baseline_packet_hashes_are_reproducible_across_runs(tmp_path: Path) -> None:
+    import time
+    from application.demo_baseline import run_canonical_task_baseline
+
+    services = create_application_services(tmp_path / "api_data")
+
+    packet1 = run_canonical_task_baseline(
+        services,
+        task_id="toggle_set_reset_v1",
+        output_dir=tmp_path / "run1",
+        timeout_seconds=30.0,
+    )
+
+    time.sleep(0.1)
+
+    packet2 = run_canonical_task_baseline(
+        services,
+        task_id="toggle_set_reset_v1",
+        output_dir=tmp_path / "run2",
+        timeout_seconds=30.0,
+    )
+
+    assert packet1["packet_hash"] == packet2["packet_hash"]

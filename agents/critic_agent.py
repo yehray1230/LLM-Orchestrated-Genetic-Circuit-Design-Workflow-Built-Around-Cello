@@ -394,8 +394,18 @@ You MUST output ONLY a valid JSON object matching this schema:
   "routing_target": "Builder | Translator | Consolidator | Human",
   "recoverable": true,
   "requires_human_input": false,
-  "feedback": "Specific instructions for Builder or Translator"
+  "feedback": "Specific instructions for Builder or Translator",
+  "recommendation": {{
+    "recommended_action": "adjust_copy_number | mutate_intergenic_spacer | insert_insulator | swap_part_by_affinity | append_degradation_tag",
+    "target_node": "target gene or regulator name (e.g. Y1, Y2, Q, Qbar)",
+    "parameters": {{
+      "scale": 0.5,
+      "affinity": "low | medium | high",
+      "tag_type": "LVA | AAV | ASV"
+    }}
+  }}
 }}
+(Omit the "recommendation" field entirely if everything is acceptable or no biophysical repair is needed).
 """
         user_content = f"Original Intent: {state.user_intent}\n"
         user_content += f"Logic Proposals: {proposals}\n"
@@ -507,16 +517,19 @@ You MUST output ONLY a valid JSON object matching this schema:
                 ) else data.get("routing_target") or _routing_target(error_type)
                 benchmark_summary = data.get("benchmark_summary", "")
                 
+                recommendation = data.get("recommendation")
                 if node:
                     node.is_approved = is_approved
                     node.error_type = error_type
                     node.critic_feedbacks.append(feedback)
+                    node.last_recommendation = recommendation
                     if score is not None:
                         node.score = score
                 else:
                     state.is_approved = is_approved
                     state.error_type = error_type
                     state.critic_feedbacks.append(feedback)
+                    state.last_recommendation = recommendation
                 state.is_approved = is_approved
                 state.error_type = error_type
                 if requires_human_input:

@@ -7,6 +7,7 @@ from exporters.bom_exporter import BOM_COLUMNS, export_bom_csv
 from exporters.genbank_exporter import export_genbank
 from exporters.sbol3_exporter import export_sbol3_turtle
 from schemas.design_ir import DesignIR, topology_to_design_ir
+from importers.genbank_importer import genbank_to_import_draft
 
 
 def _complete_design() -> DesignIR:
@@ -125,3 +126,16 @@ def test_invalid_dna_is_blocked_in_genbank_and_omitted_from_sbol_sequence() -> N
     assert any("non-IUPAC" in error for error in genbank.errors)
     assert sbol.ok is True
     assert any("non-IUPAC" in warning for warning in sbol.warnings)
+
+
+def test_genbank_round_trip() -> None:
+    design = _complete_design()
+    result = export_genbank(design)
+    assert result.ok is True
+
+    draft = genbank_to_import_draft(result.content, filename="roundtrip.gb")
+    assert len(draft.parts) > 0
+    part_types = [p.part_type for p in draft.parts]
+    assert "promoter" in part_types
+    assert "RBS" in part_types
+    assert "CDS" in part_types

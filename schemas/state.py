@@ -80,6 +80,8 @@ class SearchNode:
     is_approved: bool = False
     error_type: ErrorType = "NONE"
     last_error: str | None = None
+    last_recommendation: dict[str, Any] | None = None
+    self_healing_history: list[dict[str, Any]] = field(default_factory=list)
 
     def sync_evaluation_metrics(self, topology: dict[str, Any] | None) -> None:
         if not topology:
@@ -229,6 +231,7 @@ class DesignState:
     human_constraints: list[str] = field(default_factory=list)
     iteration_count: int = 0
     last_error: str | None = None
+    last_recommendation: dict[str, Any] | None = None
 
     # PM Agent Fields
     structured_spec: dict[str, Any] = field(default_factory=dict)

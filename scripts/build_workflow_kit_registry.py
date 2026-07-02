@@ -9,7 +9,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from catalog.workflow_kit_catalog import (
+from catalog.workflow_kit_catalog import (  # noqa: E402
     DEFAULT_WORKFLOW_KIT_ROOT,
     build_workflow_kit_registry,
 )

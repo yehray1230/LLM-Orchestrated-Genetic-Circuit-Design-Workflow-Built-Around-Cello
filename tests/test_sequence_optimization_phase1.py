@@ -142,3 +142,24 @@ def test_v2_host_profile_and_sequence_optimization_revision_api(
     data = revision.json()["data"]
     assert data["optimization"]["status"] == "passed"
     assert data["design"]["revision"]["change_type"] == "sequence_optimization"
+
+
+def test_codon_adaptation_and_rare_codon_analysis() -> None:
+    design = _design()
+    request = SequenceOptimizationRequest(
+        design_id="phase1_design",
+        objective="codon_optimization",
+        host_profile_id="ecoli_k12_default",
+        part_ids=["reporter_cds"],
+        optimized_sequences={"reporter_cds": "ATGGGTCTCTAA"},
+    )
+    results = evaluate_sequence_optimization(design, request)
+    assert len(results) == 1
+    result = results[0]
+
+    codes = [issue["code"] for issue in result.issues]
+    assert any(code in ("CODON_ADAPTATION_INFO", "RARE_CODONS_DETECTED") for code in codes)
+
+    cai_issue = next(issue for issue in result.issues if issue["code"] in ("CODON_ADAPTATION_INFO", "RARE_CODONS_DETECTED"))
+    assert "cai" in cai_issue["details"]
+    assert "rare_codon_count" in cai_issue["details"]

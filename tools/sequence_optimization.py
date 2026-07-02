@@ -63,6 +63,77 @@ def evaluate_sequence_optimization(
                         ),
                     }
                 )
+
+            # Calculate CAI and rare codon usage if part is CDS
+            if part.part_type.lower() == "cds" and optimized_sequence:
+                import math
+                from schemas.host_profile import default_ecoli_profile, default_yeast_profile, default_mammalian_profile
+
+                profile_id = request.host_profile_id or ""
+                if "yeast" in profile_id.lower():
+                    host_profile = default_yeast_profile()
+                elif any(x in profile_id.lower() for x in ("mammalian", "human", "cho")):
+                    host_profile = default_mammalian_profile()
+                else:
+                    host_profile = default_ecoli_profile()
+
+                codons = [optimized_sequence[idx:idx+3] for idx in range(0, len(optimized_sequence), 3)]
+                w_vals = []
+                rare_codons_found = []
+                rare_threshold = host_profile.rare_codon_threshold
+
+                for c_idx, codon in enumerate(codons):
+                    codon = codon.upper()
+                    if len(codon) != 3:
+                        continue
+                    try:
+                        amino_acid = str(Seq(codon).translate(to_stop=False))
+                    except Exception:
+                        continue
+                    if amino_acid == "*":
+                        continue
+
+                    usage_table = host_profile.codon_usage.get(amino_acid, {})
+                    f_val = usage_table.get(codon, 1.0)
+                    max_f = max(usage_table.values()) if usage_table else 1.0
+                    w_val = f_val / max_f if max_f > 0 else 1.0
+                    w_vals.append(w_val)
+
+                    if f_val < rare_threshold:
+                        rare_codons_found.append({
+                            "codon": codon,
+                            "position": c_idx,
+                            "amino_acid": amino_acid,
+                            "frequency": f_val
+                        })
+
+                if w_vals:
+                    cai = math.exp(sum(math.log(w) for w in w_vals) / len(w_vals))
+                    L = len(w_vals)
+                    if rare_codons_found:
+                        issues.append({
+                            "code": "RARE_CODONS_DETECTED",
+                            "severity": "info",
+                            "message": f"Detected {len(rare_codons_found)} rare codons in optimized CDS (cai: {cai:.3f}). These may restrict tRNA availability and lower translation speed.",
+                            "details": {
+                                "cai": round(cai, 4),
+                                "rare_codon_count": len(rare_codons_found),
+                                "rare_codon_fraction": round(len(rare_codons_found) / L, 4),
+                                "rare_codons": rare_codons_found[:10]
+                            }
+                        })
+                    else:
+                        issues.append({
+                            "code": "CODON_ADAPTATION_INFO",
+                            "severity": "info",
+                            "message": f"Codon Adaptation Index (CAI) is {cai:.3f} with 0 rare codons.",
+                            "details": {
+                                "cai": round(cai, 4),
+                                "rare_codon_count": 0,
+                                "rare_codon_fraction": 0.0
+                            }
+                        })
+
             changes = _sequence_changes(part.sequence, optimized_sequence)
             status = _optimization_status(after, issues)
         results.append(
@@ -215,7 +286,9 @@ def _optimization_status(
         issue.get("severity") == "error" for issue in issues
     ):
         return "blocked"
-    if after.status == "warning" or issues:
+    if after.status == "warning" or any(
+        issue.get("severity") in ("warning", "error") for issue in issues
+    ):
         return "needs_review"
     return "passed"
 

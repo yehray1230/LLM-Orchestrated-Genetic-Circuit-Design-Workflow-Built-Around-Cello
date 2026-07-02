@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from app import _ode_trace_rows, _valid_ode_trace
+from app import _ode_trace_rows, _tool_warning_message, _valid_ode_trace
 from mcp_server.ode_explainer import explain_ode_topology
+from tools.tool_adapters import normalize_tool_warning
 
 
 def test_valid_ode_trace_requires_time_and_output_series() -> None:
@@ -24,6 +25,13 @@ def test_ode_trace_rows_aligns_available_series() -> None:
         {"time": 0.0, "output_protein": 0.0, "total_mrna": 1.0, "rnap_occupancy": 0.2},
         {"time": 1.0, "output_protein": 10.0, "total_mrna": 2.0, "rnap_occupancy": 0.4},
     ]
+
+
+def test_tool_warning_message_supports_dataclass_and_dictionary() -> None:
+    warning = normalize_tool_warning("TOOL_FAILED", "Simulation stopped.")
+
+    assert _tool_warning_message(warning) == "Simulation stopped."
+    assert _tool_warning_message({"message": "Dictionary warning."}) == "Dictionary warning."
 
 
 def test_ode_explainer_extracts_key_readouts_and_warnings() -> None:

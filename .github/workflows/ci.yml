@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - "codex/**"
+      - "feature/**"
 
 jobs:
   tests:
@@ -35,6 +36,9 @@ jobs:
 
       - name: Verify generated registries
         run: python scripts/build_registry.py --check
+
+      - name: Run Ruff
+        run: python -m ruff check . --exclude venv,tmp_pytest,outputs,chroma_db,_docx_extract_tmp
 
       - name: Run tests
         run: python -m pytest
