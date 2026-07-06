@@ -49,7 +49,7 @@ def test_documentation_references_are_updated():
             "Run the FastAPI Web Workspace (Default Interface):",
             "For the legacy Streamlit UI (maintenance-only):"
         ],
-        "api/README.md": [
+        "src/api/README.md": [
             "FastAPI serves both the versioned JSON API and the server-rendered HTML workspace (default interface)",
             "The legacy Streamlit application (app.py) is kept in maintenance-only mode"
         ]

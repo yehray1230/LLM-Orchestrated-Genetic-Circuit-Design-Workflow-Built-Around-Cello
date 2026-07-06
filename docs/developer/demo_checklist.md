@@ -58,7 +58,7 @@ If the repo also uses linting or formatting checks, run those too:
 - [ ] Start the API and web workspace:
 
 ```powershell
-.\venv\Scripts\uvicorn.exe api.main:app --reload --host 127.0.0.1 --port 8000
+.\venv\Scripts\uvicorn.exe src.api.main:app --reload --app-dir src --host 127.0.0.1 --port 8000
 ```
 
 - [ ] Open `http://127.0.0.1:8000/web`.
