@@ -55,16 +55,16 @@ User intent
   -> repair / exploitation / consolidation
 ```
 
-The workflow is coordinated by [workflows/reflexion_controller.py](workflows/reflexion_controller.py). The Streamlit interface in [app.py](app.py) exposes the workflow to users.
+The workflow is coordinated by [workflows/reflexion_controller.py](workflows/reflexion_controller.py). The server-rendered HTML interface (FastAPI `/web` workspace) is the default user interface, while the legacy Streamlit interface in [app.py](app.py) remains for maintenance-only backup.
 
-該工作流由 [workflows/reflexion_controller.py](workflows/reflexion_controller.py) 進行協調。位於 [app.py](app.py) 的 Streamlit 介面則將該工作流呈現給使用者。
+該工作流由 [workflows/reflexion_controller.py](workflows/reflexion_controller.py) 進行協調。預設的使用者介面為伺服器端渲染的 HTML 工作台（FastAPI `/web`），而位於 [app.py](app.py) 的舊版 Streamlit 介面則維持僅供維護的備用狀態。
 
 ## 3. Repository Components
 ## 3. 儲存庫組件
 
 | Path / 路徑 | Role / 角色 |
 | --- | --- |
-| [app.py](app.py) | Streamlit UI, demo workflow controls, BYOK settings, result panels, and visualization. <br> Streamlit UI、展示工作流控制項、BYOK 設定、結果面板與視覺化。 |
+| [app.py](app.py) | Legacy Streamlit UI (maintenance-only). <br> 舊版 Streamlit UI（僅進行維護）。 |
 | [schemas/state.py](schemas/state.py) | Shared state models: `DesignState` and `SearchNode`. <br> 共享狀態模型：`DesignState` 與 `SearchNode`。 |
 | [workflows/reflexion_controller.py](workflows/reflexion_controller.py) | Main Reflexion loop, search routing, benchmark integration, and pause logic. <br> 主 Reflexion 迴圈、搜尋路由、基準整合與暫停邏輯。 |
 | [agents/pm_agent.py](agents/pm_agent.py) | Product Manager Agent responsible for dialogue elicitation, specification autocomplete, and human-in-the-loop option translation. <br> 產品經理智能體，負責對話式規格引導、主動需求補完、與人機協同選項翻譯。 |

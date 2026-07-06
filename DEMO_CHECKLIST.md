@@ -1,9 +1,7 @@
-# Demo Checklist / 展示檢查清單
+# Demo Checklist
 
 Use this checklist before a demo, supervisor meeting, research discussion, or
-major refactor that could affect the visible workflow.
-
-本清單用於展示、指導教授討論、研究討論，或任何可能影響主流程的重構前後。
+publishing a front-end migration milestone to GitHub.
 
 ## Demo Scope
 
@@ -21,9 +19,22 @@ regulatory logic circuits. It does not yet produce complete, buildable,
 experimentally validated genetic circuits.
 ```
 
-## Pre-Demo Stability
+## 1. GitHub Upload Readiness
 
 - [ ] Confirm the working tree only contains intentional changes.
+- [ ] Remove or ignore local temp outputs such as `tmp/` and `tmp_test_runs/`.
+- [ ] Confirm `.gitignore` covers local caches, test outputs, and generated
+      artifacts that should not be committed.
+- [ ] Review `git diff --stat` to make sure the change set matches the plan.
+- [ ] Review `git diff` for accidental debug code, temporary comments, or
+      leaked local-only files.
+- [ ] Confirm README and quickstart docs still match the current entry point
+      and workflow.
+- [ ] If this is a large milestone, create or use a feature branch and publish
+      via pull request instead of pushing directly to `main`.
+
+## 2. Core Verification
+
 - [ ] Run the full test suite:
 
 ```powershell
@@ -34,22 +45,15 @@ experimentally validated genetic circuits.
 - [ ] Confirm there are no unexpected warnings in the main test output.
 - [ ] Confirm dependency commands use the active project environment.
 
-## Streamlit Research UI
+If the repo also uses linting or formatting checks, run those too:
 
-- [ ] Start the Streamlit app:
+- [ ] Lint passes.
+- [ ] Formatting passes.
+- [ ] Type checks pass, if the project has them.
 
-```powershell
-.\venv\Scripts\streamlit.exe run app.py
-```
+## 3. Front-End Migration Checks
 
-- [ ] Open the app in the browser.
-- [ ] Enter the fixed demo intent.
-- [ ] Confirm PM Agent structured-spec collection is understandable.
-- [ ] Confirm the workflow can produce or display a candidate result.
-- [ ] Confirm result panels distinguish generated design evidence from
-      biological validation.
-
-## FastAPI / Web Workspace
+### FastAPI / Web Workspace (Primary)
 
 - [ ] Start the API and web workspace:
 
@@ -63,7 +67,33 @@ experimentally validated genetic circuits.
 - [ ] Confirm run, import, design, benchmark, or research pages load without
       template errors.
 
-## Workflow Evidence
+### Streamlit Research UI (Legacy / Maintenance-only)
+
+> [!WARNING]
+> This interface has entered maintenance-only mode. Use this check only if you
+> still need to compare the legacy entry point with the HTML workspace.
+
+- [ ] Start the Streamlit app:
+
+```powershell
+.\venv\Scripts\streamlit.exe run app.py
+```
+
+- [ ] Confirm the app starts without dependency errors.
+- [ ] Confirm the legacy path is clearly distinguished from the new HTML
+      workspace.
+
+### UI Behavior
+
+- [ ] Confirm the homepage loads correctly.
+- [ ] Confirm navigation links work.
+- [ ] Confirm forms submit successfully.
+- [ ] Confirm downloads, filters, and state toggles still work.
+- [ ] Confirm there are no broken assets, missing templates, or JavaScript
+      console errors on the key pages.
+- [ ] Confirm the layout remains usable on desktop and a narrow/mobile width.
+
+## 4. Workflow Evidence
 
 For the fixed demo, confirm the available result includes:
 
@@ -82,7 +112,7 @@ For the fixed demo, confirm the available result includes:
 - [ ] Export artifacts, or explicit warnings explaining missing sequence
       evidence.
 
-## Demo Baseline Freeze Packet
+## 5. Demo Baseline Freeze Packet
 
 Generate the fixed baseline evidence packet:
 
@@ -118,7 +148,7 @@ Recommended focused validation before pushing this milestone:
 .\venv\Scripts\python.exe -m pytest tests\test_demo_baseline_freeze.py tests\test_readiness_evaluator.py -q
 ```
 
-Recommended review/commit scope for the baseline-freeze milestone:
+Recommended review / commit scope for the baseline-freeze milestone:
 
 - `application/demo_baseline.py`
 - `scripts/generate_demo_baseline.py`
@@ -131,7 +161,7 @@ Generated `outputs/demo_baseline/` packets are local evidence artifacts. Keep
 them out of the commit unless a specific frozen artifact is intentionally being
 published.
 
-## Phase 1/2 API Validation
+## 6. Phase 1/2 API Validation
 
 - [ ] Create a local/private fitted snapshot with
       `POST /api/v1/benchmarks/parameter-fits`.
@@ -148,16 +178,16 @@ published.
       `report_type`, `schema_version`, `host_profile_id`, and row-level
       dynamic margin, SNR, kinetic score, and burden fields.
 - [ ] Compare host profile effects by running the same simulation with
-      `ecoli_k12_default`, `yeast_sc_default`, and
-      `mammalian_cho_default`; confirm the resulting
-      `biokinetic_parameters.host` and provenance summaries change.
+      `ecoli_k12_default`, `yeast_sc_default`, and `mammalian_cho_default`;
+      confirm the resulting `biokinetic_parameters.host` and provenance
+      summaries change.
 - [ ] If temporal inputs are demonstrated, use the structured
       `temporal_inputs` schema and confirm the simulation configuration hash
       changes when the temporal pattern changes.
 - [ ] If layout critique is demonstrated, confirm layout issues are reported
       with `schema_version`, `code`, `severity`, `subject_id`, and `message`.
 
-## Cello Claim Boundary
+## 7. Cello Claim Boundary
 
 - [ ] If `cello_mode` is `mock`, describe the output as workflow/testing
       evidence only.
@@ -167,7 +197,7 @@ published.
 - [ ] Do not describe any candidate as experimentally validated unless actual
       construction and measurement evidence is provided.
 
-## Result Handoff
+## 8. Result Handoff
 
 - [ ] Note the tested date and command used.
 - [ ] Record whether Streamlit, FastAPI `/web`, and OpenAPI loaded.
@@ -176,7 +206,7 @@ published.
 - [ ] Keep any generated reports or artifacts under the expected `outputs/`
       location.
 
-## Phase-One Done Criteria
+## 9. Phase-One Done Criteria
 
 - [ ] The fixed demo path can be run and explained end to end.
 - [ ] The full test suite passes.

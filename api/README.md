@@ -1,8 +1,6 @@
 # Research Workspace v2.0
 
-FastAPI serves both the versioned JSON API and a lower-density,
-server-rendered HTML interface. The existing Streamlit application remains
-available for detailed research inspection.
+FastAPI serves both the versioned JSON API and the server-rendered HTML workspace (default interface). The legacy Streamlit application (app.py) is kept in maintenance-only mode.
 
 ## Run
 

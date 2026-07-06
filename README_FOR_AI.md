@@ -40,13 +40,11 @@ Current implemented extensions that may be missed by a shallow review:
 - validated best-topology self-healing with applied/skipped repair provenance;
 - sequence analysis, synonymous E. coli optimization, host-profile ranking, calibration records, and split readiness domains;
 - backbone-aware assembly planning and conservative assembly-deliverable packages;
-- FastAPI, server-rendered web, Streamlit, and MCP entry points.
+- FastAPI server-rendered web, MCP, and legacy Streamlit entry points.
 
 Treat every item above as a computational preview. Check availability metadata,
 fallback warnings, evidence provenance, and the relevant limitation document
 before describing it as operational or biologically meaningful.
-
-Best short description:
 
 > An LLM-orchestrated computational workflow around Cello for translating
 > natural-language regulatory logic intent into candidate genetic-circuit
@@ -119,7 +117,7 @@ Important paths:
 
 | Path | What to inspect |
 | --- | --- |
-| [`app.py`](app.py) | Streamlit demo interface and visible workflow integration. |
+| [`app.py`](app.py) | Legacy Streamlit demo interface (maintenance-only). |
 | [`api/`](api) | FastAPI endpoints and API schemas. |
 | [`web/`](web) | HTML research workspace pages. |
 | [`agents/`](agents) | Agent roles and decision logic. |

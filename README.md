@@ -63,7 +63,7 @@ The repository currently contains these reviewable computational paths:
 | Evaluation and repair | Versioned scoring profiles, benchmark datasets, readiness domains, Critic routing, validated best-candidate self-healing, and repair provenance | Scores rank implemented checks; they are not success probabilities |
 | Sequence and host | Sequence QC, synonymous E. coli codon revisions, CAI/rare-codon reporting, host profiles, host ranking, calibration snapshots, and optimization workflow orchestration | Host compatibility and expression are not experimentally guaranteed |
 | Assembly and exchange | Backbone registry, plasmid/assembly planning, conservative deliverable packages, BOM, GenBank, and SBOL3 representations | Outputs are planning artifacts, not executable wet-lab protocols |
-| Interfaces | Streamlit, FastAPI/OpenAPI, server-rendered research workspace, and MCP tools for run/design/revision/export operations | Optional external tools may fall back or remain unavailable |
+| Interfaces | FastAPI/OpenAPI, server-rendered research workspace, MCP tools, and legacy Streamlit interface (maintenance-only) | Optional external tools may fall back or remain unavailable |
 
 The detailed contracts and caveats live in
 [`WORKFLOW.md`](WORKFLOW.md), [`EVALUATION_METRICS.md`](EVALUATION_METRICS.md),
@@ -144,7 +144,7 @@ Code areas:
 | [`schemas/`](schemas) | Design, simulation, readiness, sequence, and API data models. |
 | [`api/`](api) | FastAPI routes and service entry points. |
 | [`web/`](web) | HTML research workspace. |
-| [`app.py`](app.py) | Streamlit interface. |
+| [`app.py`](app.py) | Legacy Streamlit interface (maintenance-only). |
 | [`exporters/`](exporters) | BOM, GenBank, SBOL3, assembly, and report exporters. |
 | [`tests/`](tests) | Regression and workflow tests. |
 

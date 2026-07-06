@@ -40,22 +40,7 @@ Expected stability target for the current stage:
 All tests pass, and no unexpected warning appears during the main suite.
 ```
 
-## 3. Streamlit Research UI
-
-Use this interface for the detailed agent workflow, BYOK model settings,
-search-tree inspection, simulation charts, and result review.
-
-```powershell
-.\venv\Scripts\streamlit.exe run app.py
-```
-
-If `streamlit.exe` is unavailable in the environment, use:
-
-```powershell
-.\venv\Scripts\python.exe -m streamlit run app.py
-```
-
-## 4. FastAPI / Web Workspace
+## 3. FastAPI / Web Workspace (預設主介面 / Default Interface)
 
 Use this interface for the server-rendered workspace, persistent runs, API
 inspection, imports, benchmarks, and design-library flows.
@@ -92,6 +77,24 @@ Design library:        /web/designs
 The OpenAPI document also exposes simulation sweeps/bifurcation reports,
 parameter-fit snapshots, host/sequence optimization, readiness-related
 artifacts, assembly deliverables, and asynchronous run feedback/resume APIs.
+
+## 4. Streamlit Research UI (Legacy / Maintenance-only)
+
+> [!WARNING]
+> This interface has entered maintenance-only mode. All new features and updates
+> are only available on the official HTML Web Workspace.
+
+Use this interface only as a backup or for legacy research inspection.
+
+```powershell
+.\venv\Scripts\streamlit.exe run app.py
+```
+
+If `streamlit.exe` is unavailable in the environment, use:
+
+```powershell
+.\venv\Scripts\python.exe -m streamlit run app.py
+```
 
 ## 5. Fixed Demo Intent
 

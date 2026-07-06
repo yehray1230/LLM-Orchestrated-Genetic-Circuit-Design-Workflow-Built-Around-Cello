@@ -21,9 +21,19 @@ pip install -r requirements.txt
 pip install -r requirements-dev.txt
 ```
 
-Run the Streamlit UI:
+Run the FastAPI Web Workspace (Default Interface):
 
-運行 Streamlit UI：
+運行 FastAPI Web Workspace（預設主要介面）：
+
+```powershell
+.\venv\Scripts\uvicorn.exe api.main:app --reload
+```
+
+Open: `http://127.0.0.1:8000/web`
+
+For the legacy Streamlit UI (maintenance-only):
+
+針對舊版 Streamlit UI（僅進行維護）：
 
 ```powershell
 streamlit run app.py
