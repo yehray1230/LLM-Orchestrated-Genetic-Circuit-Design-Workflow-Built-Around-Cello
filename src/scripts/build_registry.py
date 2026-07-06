@@ -32,7 +32,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--registry-dir",
-        default="registry",
+        default="src/registry" if Path("src/registry").exists() else "registry",
         help="Directory for generated registry JSON files.",
     )
     parser.add_argument(

@@ -9,7 +9,11 @@ from catalog.agent_catalog import DEFAULT_CATALOG_ROOT, load_agent_catalog
 
 
 WORKFLOW_KIT_SCHEMA_VERSION = "workflow-kit-v1"
-DEFAULT_WORKFLOW_KIT_ROOT = Path("catalog/workflow-kits")
+DEFAULT_WORKFLOW_KIT_ROOT = (
+    Path("src/catalog/workflow-kits")
+    if Path("src/catalog/workflow-kits").exists()
+    else Path("catalog/workflow-kits")
+)
 VALID_CLAIM_LEVELS = {
     "planning_only",
     "computational_candidate",

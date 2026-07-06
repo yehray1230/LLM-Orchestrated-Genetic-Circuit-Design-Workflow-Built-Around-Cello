@@ -9,7 +9,11 @@ from typing import Any
 
 
 CATALOG_SCHEMA_VERSION = "agent-metadata-v1"
-DEFAULT_CATALOG_ROOT = Path("catalog/agents")
+DEFAULT_CATALOG_ROOT = (
+    Path("src/catalog/agents")
+    if Path("src/catalog/agents").exists()
+    else Path("catalog/agents")
+)
 REQUIRED_FIELDS = {
     "id",
     "name",

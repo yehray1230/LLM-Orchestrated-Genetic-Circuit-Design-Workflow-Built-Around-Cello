@@ -21,7 +21,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--output",
-        default="registry/agent-registry.json",
+        default="src/registry/agent-registry.json" if Path("src/registry").exists() else "registry/agent-registry.json",
         help="Path to write the aggregated registry JSON.",
     )
     args = parser.parse_args()

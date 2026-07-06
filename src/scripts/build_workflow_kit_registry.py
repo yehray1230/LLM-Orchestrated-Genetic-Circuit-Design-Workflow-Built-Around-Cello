@@ -24,12 +24,12 @@ def main() -> int:
     )
     parser.add_argument(
         "--agent-catalog-root",
-        default="catalog/agents",
+        default="src/catalog/agents" if Path("src/catalog/agents").exists() else "catalog/agents",
         help="Directory containing agent metadata entries used for reference validation.",
     )
     parser.add_argument(
         "--output",
-        default="registry/workflow-kit-registry.json",
+        default="src/registry/workflow-kit-registry.json" if Path("src/registry").exists() else "registry/workflow-kit-registry.json",
         help="Path to write the aggregated workflow kit registry JSON.",
     )
     args = parser.parse_args()
