@@ -2,11 +2,11 @@
 
 This guide is the shortest path for running and verifying the local research
 prototype. For project scope, biological claim boundaries, and architecture,
-read `README.md`, `LIMITATION.md`, `ARCHITECTURE.md`, and `WORKFLOW.md`.
+read `README.md`, `docs/limitations.md`, `docs/architecture.md`, and `docs/workflow.md`.
 
 本文件的目標是讓協作者可以快速把專案跑起來並完成基本驗證。若要理解研究邊界、
-生物學宣稱限制與架構細節，請閱讀 `README.md`、`LIMITATION.md`、
-`ARCHITECTURE.md` 與 `WORKFLOW.md`。
+生物學宣稱限制與架構細節，請閱讀 `README.md`、`docs/limitations.md`、
+`docs/architecture.md` 與 `docs/workflow.md`。
 
 ## 1. Environment
 

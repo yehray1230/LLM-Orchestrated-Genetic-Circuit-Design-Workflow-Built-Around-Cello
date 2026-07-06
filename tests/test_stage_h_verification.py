@@ -32,20 +32,20 @@ def test_documentation_references_are_updated():
             "Streamlit Research UI (Legacy / Maintenance-only)",
             "This interface has entered maintenance-only mode"
         ],
-        "DEMO_CHECKLIST.md": [
+        "docs/developer/demo_checklist.md": [
             "FastAPI / Web Workspace (Primary)",
             "Streamlit Research UI (Legacy / Maintenance-only)",
             "This interface has entered maintenance-only mode"
         ],
-        "ARCHITECTURE.md": [
+        "docs/architecture.md": [
             "The server-rendered HTML interface (FastAPI `/web` workspace) is the default user interface, while the legacy Streamlit interface in [app.py](app.py) remains for maintenance-only backup",
             "Legacy Streamlit UI (maintenance-only)"
         ],
-        "README_FOR_AI.md": [
+        "docs/ai_reviewer_guide.md": [
             "FastAPI server-rendered web, MCP, and legacy Streamlit entry points",
             "Legacy Streamlit demo interface (maintenance-only)"
         ],
-        "WORKFLOW.md": [
+        "docs/workflow.md": [
             "Run the FastAPI Web Workspace (Default Interface):",
             "For the legacy Streamlit UI (maintenance-only):"
         ],

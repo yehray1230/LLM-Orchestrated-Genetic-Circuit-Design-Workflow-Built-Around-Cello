@@ -5,9 +5,9 @@ This document describes the current system architecture for the multi-agent gene
 
 本文件描述了多智能體基因電路設計原型目前的系統架構。該系統最好被理解為一個計算輔助設計工作流：LLM 智能體提出並修正候選方案，而確定性工具與基準評估器則提供部分檢查。
 
-The architecture does not make the project a complete plasmid-design platform or an experimentally validated biological design system. For explicit claim boundaries, see [LIMITATION.md](LIMITATION.md).
+The architecture does not make the project a complete plasmid-design platform or an experimentally validated biological design system. For explicit claim boundaries, see [limitations.md](limitations.md).
 
-此架構並未使本專案成為一個完整的質體設計平台，或是一個經過實驗驗證的生物設計系統。有關明確的宣稱邊界，請參見 [LIMITATION.md](LIMITATION.md)。
+此架構並未使本專案成為一個完整的質體設計平台，或是一個經過實驗驗證的生物設計系統。有關明確的宣稱邊界，請參見 [limitations.md](limitations.md)。
 
 ## 1. Purpose and Scope
 ## 1. 目的與範圍
@@ -77,7 +77,7 @@ The workflow is coordinated by [workflows/reflexion_controller.py](workflows/ref
 | [tools/host_optimization.py](tools/host_optimization.py) | Host-candidate ranking (high_expression, low_burden, balanced) and calibrations. <br> 宿主候選方案排序（高表達、低負載、平衡）與實驗校準。 |
 | [api/v2_routes.py](api/v2_routes.py) | V2 API router containing assembly plans, sequence analysis, codon optimization, and host optimization. <br> 包含組裝計畫、序列分析、密碼子優化及宿主優化的 V2 API 路由器。 |
 | [benchmark_suite/](benchmark_suite) | Deterministic, heuristic, and experimental readiness evaluation scoring. <br> 確定性、啟發式與實驗整備度評估評分組件。 |
-| [LOGIC_DESIGN_SKILL.md](LOGIC_DESIGN_SKILL.md) | Maintenance guide for the canonical logic design skill JSON schema. <br> Canonical 邏輯設計 skill JSON schema 的維護指南。 |
+| [logic_design_skill.md](developer/logic_design_skill.md) | Maintenance guide for the canonical logic design skill JSON schema. <br> Canonical 邏輯設計 skill JSON schema 的維護指南。 |
 | [tools/skill_retriever.py](tools/skill_retriever.py) | Logic skill context builder: injects the full compact canonical logic skill catalog and retrieves only dynamic design memories. <br> 邏輯技能上下文建構器：注入完整精簡版 canonical logic skill 目錄，僅對動態設計記憶進行檢索。 |
 | [tools/vector_retriever.py](tools/vector_retriever.py) | Vector retrieval wrapper for local records. <br> 用於本地記錄的向量檢索包裝器。 |
 | [mcp_server/](mcp_server) | Local service for run artifacts and serialized outputs. <br> 用於運行產物與序列化輸出的本地服務。 |
@@ -341,9 +341,9 @@ External Cello failures are categorized when possible:
 
 [tools/ode_simulator.py](tools/ode_simulator.py) 運行一個簡化的資源感知 ODE 模型。它追蹤 mRNA、蛋白質、RNAP/核糖體的資源可用性，以及粗略的負載訊號。它可能會運行蒙特卡羅微擾以進行魯棒性篩選。
 
-For detailed biological assumptions, see [MODEL_ASSUMPTIONS.md](MODEL_ASSUMPTIONS.md).
+For detailed biological assumptions, see [model_assumptions.md](model_assumptions.md).
 
-如需詳細的生物學假設，請參見 [MODEL_ASSUMPTIONS.md](MODEL_ASSUMPTIONS.md)。
+如需詳細的生物學假設，請參見 [model_assumptions.md](model_assumptions.md)。
 
 Current preview extensions include:
 
@@ -370,9 +370,9 @@ Current preview extensions include:
 - `orthogonality`
 - `cello_assignment`
 
-For formulas and fallback behavior, see [EVALUATION_METRICS.md](EVALUATION_METRICS.md).
+For formulas and fallback behavior, see [evaluation_metrics.md](evaluation_metrics.md).
 
-如需了解公式與回退（fallback）行為，請參見 [EVALUATION_METRICS.md](EVALUATION_METRICS.md)。
+如需了解公式與回退（fallback）行為，請參見 [evaluation_metrics.md](evaluation_metrics.md)。
 
 ### SequenceAnalyzer / 序列分析器
 
@@ -499,16 +499,16 @@ Human input is expected for biological interpretation, constraint selection, and
 ## 11. Related Documents
 ## 11. 相關文件
 
-- [README.md](README.md): high-level overview and project entry point.
-  [README.md](README.md)：高階概述與專案進入點。
-- [WORKFLOW.md](WORKFLOW.md): how a run proceeds and how to interpret outputs.
-  [WORKFLOW.md](WORKFLOW.md)：運行如何進行以及如何解讀輸出。
-- [EVALUATION_METRICS.md](EVALUATION_METRICS.md): scoring formulas and evaluator behavior.
-  [EVALUATION_METRICS.md](EVALUATION_METRICS.md)：評分公式與評估器行為。
-- [MODEL_ASSUMPTIONS.md](MODEL_ASSUMPTIONS.md): ODE model scope and biological assumptions.
-  [MODEL_ASSUMPTIONS.md](MODEL_ASSUMPTIONS.md)：ODE 模型範圍與生物學假設。
-- [LIMITATION.md](LIMITATION.md): capabilities, non-goals, and safe claim boundaries.
-  [LIMITATION.md](LIMITATION.md)：能力、非目標與安全宣稱邊界。
+- [README.md](../README.md): high-level overview and project entry point.
+  [README.md](../README.md)：高階概述與專案進入點。
+- [workflow.md](workflow.md): how a run proceeds and how to interpret outputs.
+  [workflow.md](workflow.md)：運行如何進行以及如何解讀輸出。
+- [evaluation_metrics.md](evaluation_metrics.md): scoring formulas and evaluator behavior.
+  [evaluation_metrics.md](evaluation_metrics.md)：評分公式與評估器行為。
+- [model_assumptions.md](model_assumptions.md): ODE model scope and biological assumptions.
+  [model_assumptions.md](model_assumptions.md)：ODE 模型範圍與生物學假設。
+- [limitations.md](limitations.md): capabilities, non-goals, and safe claim boundaries.
+  [limitations.md](limitations.md)：能力、非目標與安全宣稱邊界。
 # Current Design-Data Architecture (2026-06-06)
 # 目前設計資料架構（2026-06-06）
 

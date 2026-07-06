@@ -185,14 +185,14 @@ Stronger biological claims would require additional evidence and implementation 
 
 ## 6. Relationship to Other Documents/與其他文件的關係
 
-- [README.md](README.md): high-level project overview and entry point.
-  [README.md](README.md)：高階專案概述與進入點。
-- [EVALUATION_METRICS.md](EVALUATION_METRICS.md): scoring formulas, fallback behavior, and interpretation of benchmark components.
-  [EVALUATION_METRICS.md](EVALUATION_METRICS.md)：評分公式、回退行為以及基準組件的解讀。
-- [MODEL_ASSUMPTIONS.md](MODEL_ASSUMPTIONS.md): detailed assumptions behind the resource-aware ODE simulation model.
-  [MODEL_ASSUMPTIONS.md](MODEL_ASSUMPTIONS.md)：資源感知 ODE 模擬模型背後的詳細假設。
-- [ARCHITECTURE.md](ARCHITECTURE.md): current system architecture and agent responsibilities.
-  [ARCHITECTURE.md](ARCHITECTURE.md)：當前系統架構與智能體職責。
+- [README.md](../README.md): high-level project overview and entry point.
+  [README.md](../README.md)：高階專案概述與進入點。
+- [evaluation_metrics.md](evaluation_metrics.md): scoring formulas, fallback behavior, and interpretation of benchmark components.
+  [evaluation_metrics.md](evaluation_metrics.md)：評分公式、回退行為以及基準組件的解讀。
+- [model_assumptions.md](model_assumptions.md): detailed assumptions behind the resource-aware ODE simulation model.
+  [model_assumptions.md](model_assumptions.md)：資源感知 ODE 模擬模型背後的詳細假設。
+- [architecture.md](architecture.md): current system architecture and agent responsibilities.
+  [architecture.md](architecture.md)：當前系統架構與智能體職責。
 
 ## 7. Recommended One-Sentence Description/推薦的一句話描述
 

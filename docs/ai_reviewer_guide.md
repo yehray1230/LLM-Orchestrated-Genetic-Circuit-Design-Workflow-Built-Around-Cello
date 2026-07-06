@@ -74,23 +74,23 @@ Do not interpret it as:
 
 Read these first:
 
-1. [`README.md`](README.md): short public-facing overview.
-2. [`LIMITATION.md`](LIMITATION.md): current capabilities, non-goals, and safe
+1. [`README.md`](../README.md): short public-facing overview.
+2. [`limitations.md`](limitations.md): current capabilities, non-goals, and safe
    wording.
-3. [`demo_cases/DEMO_SUMMARY.md`](demo_cases/DEMO_SUMMARY.md): fixed demo-case
+3. [`demo_cases/DEMO_SUMMARY.md`](../demo_cases/DEMO_SUMMARY.md): fixed demo-case
    storyline.
-4. [`DEMO_CHECKLIST.md`](DEMO_CHECKLIST.md): what a reproducible demo should
+4. [`demo_checklist.md`](developer/demo_checklist.md): what a reproducible demo should
    show.
-5. [`ARCHITECTURE.md`](ARCHITECTURE.md): component map and agent
+5. [`architecture.md`](architecture.md): component map and agent
    responsibilities.
-6. [`WORKFLOW.md`](WORKFLOW.md): multi-agent Reflexion execution flow.
-7. [`EVALUATION_METRICS.md`](EVALUATION_METRICS.md): scoring dimensions and
+6. [`workflow.md`](workflow.md): multi-agent Reflexion execution flow.
+7. [`evaluation_metrics.md`](evaluation_metrics.md): scoring dimensions and
    interpretation.
-8. [`MODEL_ASSUMPTIONS.md`](MODEL_ASSUMPTIONS.md): ODE model scope and
+8. [`model_assumptions.md`](model_assumptions.md): ODE model scope and
    biological limitations.
 9. [`future_roadmap.md`](future_roadmap.md): future work, not current claims.
 
-Use [`QUICKSTART.md`](QUICKSTART.md) only when you need to run the project
+Use [`QUICKSTART.md`](../QUICKSTART.md) only when you need to run the project
 locally. It contains installation and execution details that are intentionally
 not repeated in the public README.
 

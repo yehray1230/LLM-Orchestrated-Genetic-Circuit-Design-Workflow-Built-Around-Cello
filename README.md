@@ -66,9 +66,9 @@ The repository currently contains these reviewable computational paths:
 | Interfaces | FastAPI/OpenAPI, server-rendered research workspace, MCP tools, and legacy Streamlit interface (maintenance-only) | Optional external tools may fall back or remain unavailable |
 
 The detailed contracts and caveats live in
-[`WORKFLOW.md`](WORKFLOW.md), [`EVALUATION_METRICS.md`](EVALUATION_METRICS.md),
-[`MODEL_ASSUMPTIONS.md`](MODEL_ASSUMPTIONS.md), and
-[`LIMITATION.md`](LIMITATION.md).
+[`WORKFLOW.md`](docs/workflow.md), [`EVALUATION_METRICS.md`](docs/evaluation_metrics.md),
+[`MODEL_ASSUMPTIONS.md`](docs/model_assumptions.md), and
+[`LIMITATION.md`](docs/limitations.md).
 
 ## Biological Claim Boundary
 
@@ -122,16 +122,16 @@ Start here:
 
 | File | Purpose |
 | --- | --- |
-| [`README_FOR_AI.md`](README_FOR_AI.md) | AI-agent reading guide for quickly judging project scope, architecture, and fit. |
+| [`docs/about.md`](docs/about.md) | Project introduction, personal motivation, and strategic profile. |
 | [`QUICKSTART.md`](QUICKSTART.md) | How to install, test, and run the local demo interfaces. |
-| [`DEMO_CHECKLIST.md`](DEMO_CHECKLIST.md) | Checklist for a stable reproducible demo. |
-| [`demo_cases/DEMO_SUMMARY.md`](demo_cases/DEMO_SUMMARY.md) | Presentation-facing index for fixed demo cases. |
-| [`LIMITATION.md`](LIMITATION.md) | Detailed current capabilities, non-goals, and safe claims. |
-| [`MODEL_ASSUMPTIONS.md`](MODEL_ASSUMPTIONS.md) | ODE model scope, assumptions, and missing biological mechanisms. |
-| [`EVALUATION_METRICS.md`](EVALUATION_METRICS.md) | Benchmark dimensions, scoring behavior, and interpretation. |
-| [`ARCHITECTURE.md`](ARCHITECTURE.md) | System components and agent responsibilities. |
-| [`WORKFLOW.md`](WORKFLOW.md) | Reflexion workflow details and execution flow. |
-| [`future_roadmap.md`](future_roadmap.md) | Longer-term research directions beyond the current preview. |
+| [`docs/limitations.md`](docs/limitations.md) | Detailed current capabilities, non-goals, and safe claims. |
+| [`docs/architecture.md`](docs/architecture.md) | System components and agent responsibilities. |
+| [`docs/workflow.md`](docs/workflow.md) | Reflexion workflow details and execution flow. |
+| [`docs/model_assumptions.md`](docs/model_assumptions.md) | ODE model scope, assumptions, and missing biological mechanisms. |
+| [`docs/evaluation_metrics.md`](docs/evaluation_metrics.md) | Benchmark dimensions, scoring behavior, and interpretation. |
+| [`docs/ai_reviewer_guide.md`](docs/ai_reviewer_guide.md) | AI-agent reading guide for quickly judging project scope, architecture, and fit. |
+| [`docs/future_roadmap.md`](docs/future_roadmap.md) | Longer-term research directions beyond the current preview. |
+| [`docs/developer/demo_checklist.md`](docs/developer/demo_checklist.md) | Checklist for a stable reproducible demo. |
 
 Code areas:
 
@@ -173,4 +173,4 @@ host-specific parameter sets, external thermodynamic/CRN tool integration,
 richer spatial and biophysical models, and CRISPRi/CRISPRa-oriented extensions.
 
 Those are future research directions. They should not be interpreted as current
-validated capabilities. See [`future_roadmap.md`](future_roadmap.md).
+validated capabilities. See [`docs/future_roadmap.md`](docs/future_roadmap.md).

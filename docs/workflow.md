@@ -5,9 +5,9 @@ This document explains how the current multi-agent genetic-circuit design workfl
 
 本文件解釋了目前多智能體基因電路設計工作流如何運行、使用哪些輸入與輸出，以及如何解讀結果。
 
-The workflow should be understood as computational candidate generation and triage. It does not produce complete plasmids or experimentally validated biological logic gates. For explicit boundaries, see [LIMITATION.md](LIMITATION.md).
+The workflow should be understood as computational candidate generation and triage. It does not produce complete plasmids or experimentally validated biological logic gates. For explicit boundaries, see [limitations.md](limitations.md).
 
-該工作流應被理解為計算候選方案生成與篩選。它不產生完整的質體或經實驗驗證的生物邏輯閘。有關明確的邊界，請參見 [LIMITATION.md](LIMITATION.md)。
+該工作流應被理解為計算候選方案生成與篩選。它不產生完整的質體或經實驗驗證的生物邏輯閘。有關明確的邊界，請參見 [limitations.md](limitations.md)。
 
 ## 1. Running the App
 ## 1. 運行應用程式
@@ -288,9 +288,9 @@ The weighted total ranks candidates under the implemented benchmark. It is not a
 
 加權總分在已實現的基準下對候選方案進行排序。它並非實驗驗證分數。
 
-See [EVALUATION_METRICS.md](EVALUATION_METRICS.md) for formulas.
+See [evaluation_metrics.md](evaluation_metrics.md) for formulas.
 
-公式請參見 [EVALUATION_METRICS.md](EVALUATION_METRICS.md)。
+公式請參見 [evaluation_metrics.md](evaluation_metrics.md)。
 
 ### `component_scores`
 ### `component_scores`
@@ -334,9 +334,9 @@ It does not mean:
 - the in vivo expression level is quantitatively predicted.
   定量預測了活體內（in vivo）的表達水平。
 
-See [MODEL_ASSUMPTIONS.md](MODEL_ASSUMPTIONS.md).
+See [model_assumptions.md](model_assumptions.md).
 
-請參見 [MODEL_ASSUMPTIONS.md](MODEL_ASSUMPTIONS.md)。
+請參見 [model_assumptions.md](model_assumptions.md)。
 
 ### `cello_buildable`
 ### `cello_buildable`
@@ -568,16 +568,16 @@ yet fit a validated host-cell model or automatically recalibrate the ODE model.
 ## 14. Related Documents
 ## 14. 相關文件
 
-- [README.md](README.md): high-level project overview.
-  [README.md](README.md)：高階專案概述。
-- [ARCHITECTURE.md](ARCHITECTURE.md): system components and responsibility boundaries.
-  [ARCHITECTURE.md](ARCHITECTURE.md)：系統組件與責任邊界。
-- [EVALUATION_METRICS.md](EVALUATION_METRICS.md): benchmark formulas and scoring interpretation.
-  [EVALUATION_METRICS.md](EVALUATION_METRICS.md)：基準公式與評分合理解讀。
-- [MODEL_ASSUMPTIONS.md](MODEL_ASSUMPTIONS.md): ODE assumptions and biological mechanisms not modeled.
-  [MODEL_ASSUMPTIONS.md](MODEL_ASSUMPTIONS.md)：ODE 假設與未建模的生物機制。
-- [LIMITATION.md](LIMITATION.md): safe claims, non-goals, and evidence needed for stronger claims.
-  [LIMITATION.md](LIMITATION.md)：安全宣稱、非目標以及做出更強宣稱所需的證據。
+- [README.md](../README.md): high-level project overview.
+  [README.md](../README.md)：高階專案概述。
+- [architecture.md](architecture.md): system components and responsibility boundaries.
+  [architecture.md](architecture.md)：系統組件與責任邊界。
+- [evaluation_metrics.md](evaluation_metrics.md): benchmark formulas and scoring interpretation.
+  [evaluation_metrics.md](evaluation_metrics.md)：基準公式與評分合理解讀。
+- [model_assumptions.md](model_assumptions.md): ODE assumptions and biological mechanisms not modeled.
+  [model_assumptions.md](model_assumptions.md)：ODE 假設與未建模的生物機制。
+- [limitations.md](limitations.md): safe claims, non-goals, and evidence needed for stronger claims.
+  [limitations.md](limitations.md)：安全宣稱、非目標以及做出更強宣稱所需的證據。
 # Current Design Review and Export Workflow (2026-06-06)
 # 目前設計檢視與匯出流程（2026-06-06）
 
