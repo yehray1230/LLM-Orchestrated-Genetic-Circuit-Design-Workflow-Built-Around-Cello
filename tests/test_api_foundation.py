@@ -529,19 +529,22 @@ def test_web_run_detail_monitor_endpoint(
 
     page = client.get("/web/runs/run_web_test")
     status = client.get("/web/runs/run_web_test/status")
+    history_page = client.get("/web/runs/run_web_test/decision-history")
 
     assert page.status_code == 200
     assert "Design run monitor" in page.text
     assert "Event timeline" in page.text
     assert "Latest message" in page.text
-    assert "Score breakdown" in page.text
-    assert "Semantic faithfulness" in page.text
-    assert "Topology graph" in page.text
-    assert "ODE trace" in page.text
-    assert "Search tree / branch history" in page.text
-    assert "Output protein" in page.text
-    assert "repair_1" in page.text
-    assert "Debug payload" in page.text
+
+    assert history_page.status_code == 200
+    assert "Score Breakdown" in history_page.text or "score_breakdown" in history_page.text
+    assert "semantic_faithfulness_score" in history_page.text or "Semantic faithfulness" in history_page.text
+    assert "verilog" in history_page.text
+    assert "ode_trace" in history_page.text
+    assert "tree_summary" in history_page.text
+    assert "output_protein" in history_page.text
+    assert "repair_1" in history_page.text
+    assert "Payload" in history_page.text or "payload" in history_page.text
     assert status.status_code == 200
     payload = status.json()
     assert payload["run"]["progress"] == 1.0
@@ -582,3 +585,32 @@ def test_web_interaction_enhancements_are_available(client: TestClient) -> None:
     assert "data-run-latest-message" in app_js
     assert "status-badge" in app_js
     assert "Please fix invalid JSON fields before submitting." in app_js
+
+
+def test_web_design_detail_tabs_and_clipboard(client: TestClient) -> None:
+    services = client.app.state.test_services
+    draft = services.imports.import_json(_draft_payload("external_tabs_test"))
+    draft_id = draft.draft_id
+
+    confirmed = client.post(
+        f"/web/imports/{draft_id}/confirm",
+        follow_redirects=False,
+    )
+    assert confirmed.status_code == 303
+    design_url = confirmed.headers["location"]
+
+    response = client.get(design_url)
+    assert response.status_code == 200
+
+    assert "邏輯設計規格" in response.text or "設計合成就緒評估" in response.text
+    assert "材料元件清單" in response.text
+    assert "裝配文件與交付下載" in response.text
+    assert "data-copy-text" in response.text
+    assert "switchTab" in response.text
+    assert "NCBI" in response.text
+    assert "SynBioHub" in response.text
+    assert "BOM 材料 CSV 明細" in response.text
+    assert "GenBank 完整圖譜" in response.text
+
+    app_js = Path("web/static/app.js").read_text(encoding="utf-8")
+    assert "setupClipboardCopy" in app_js

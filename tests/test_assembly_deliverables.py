@@ -64,6 +64,9 @@ def test_deliverable_service_writes_complete_package(tmp_path: Path) -> None:
 
     assert result["ok"] is True
     assert result["readiness"]["readiness_status"] == "primer_ready"
+    assert result["revision_id"].endswith("revision_1")
+    assert result["revision_number"] == 1
+    assert result["source_context"]["design_id"] == "planner_design"
     assert {"genbank", "csv", "json", "report", "opentrons", "echo"}.issubset(result["artifacts"])
     for key in ("genbank", "csv", "json", "report", "opentrons", "echo"):
         artifact = services.assembly_deliverables.artifact(
