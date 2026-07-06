@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}Decision History - Run {{ run.run_id }}{% endblock %}
+{% block content %}
+<header class="page-header split-header">
+  <div>
+    <span class="eyebrow">AI Search Tree & Decision History</span>
+    <h1>探索決策歷程：{{ run.run_id }}</h1>
+    <p class="muted">檢視 AI 智能體（Orchestrator、Critic）在探索樹中的評分軌跡、反饋、淘汰與保留原因。</p>
+  </div>
+  <div style="display: flex; gap: 8px;">
+    <a class="button" href="/web/runs/{{ run.run_id }}">返回執行監控</a>
+    <a class="button secondary" href="/web/runs">返回任務列表</a>
+  </div>
+</header>
+
+<div class="grid grid-2 section-space" style="align-items: start; gap: 24px;">
+  
+  <!-- Left Column: Search Path & Tree -->
+  <div style="display: flex; flex-direction: column; gap: 24px;">
+    
+    <!-- Explored Tree Path -->
+    <article class="card">
+      <h2>📍 當前最佳探測路徑 (Current Best Path)</h2>
+      <p class="muted" style="margin-bottom: 14px;">由根節點到當前評估最高分之電路拓樸分支路徑。</p>
+      
+      {% if monitor.search_tree.path %}
+        <div class="branch-path" style="border-left: 3px solid var(--brand); padding-left: 14px;">
+          {% for node in monitor.search_tree.path %}
+          <div style="background: #f8fafc; border: 1px solid var(--line); border-radius: 6px; padding: 12px; margin-bottom: 10px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <strong>{{ node.node_id }}</strong>
+              <span class="stage-chip {{ 'stage-complete' if node.status in ['Pass', 'Evaluated'] else 'stage-human' if node.status == 'Needs_Human_Input' else 'stage-neutral' }}" style="font-size: 11px;">{{ node.status }}</span>
+            </div>
+            <div class="muted" style="font-size: 12px; margin-top: 4px;">
+              探測模式: {{ node.search_mode }} | 評分: <strong style="color: var(--brand);">{{ node.score_label }}</strong>
+            </div>
+            {% if node.critic_feedback %}
+            <div style="background: white; border: 1px solid var(--line); border-left: 3px solid var(--brand); margin-top: 8px; padding: 8px; font-size: 12.5px; border-radius: 4px; color: #334155;">
+              💬 <strong>Critic 反饋：</strong>{{ node.critic_feedback }}
+            </div>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="muted">目前無探測路徑資訊。</p>
+      {% endif %}
+    </article>
+
+    <!-- All Explored Nodes -->
+    <article class="card">
+      <div class="split-header">
+        <h2>🌳 所有已探索節點 (All Explored Nodes)</h2>
+        {% if monitor.search_tree.nodes %}
+          <span class="badge">{{ monitor.search_tree.nodes|length }} 個探索節點</span>
+        {% endif %}
+      </div>
+      <p class="muted" style="margin-bottom: 14px;">詳細列出搜尋樹中所有生成、保留或被淘汰的電路節點。</p>
+      
+      {% if monitor.search_tree.nodes %}
+        <div class="search-branches" style="max-height: 400px; overflow-y: auto; padding-right: 4px; display:flex; flex-direction:column; gap:8px;">
+          {% for node in monitor.search_tree.nodes %}
+          <div class="search-node" style="padding: 12px; border: 1px solid var(--line); border-radius: 6px; background: white;">
+            <div style="display: flex; justify-content: space-between; align-items: start;">
+              <div>
+                <strong>{{ node.node_id }}</strong>
+                <small class="muted" style="display: block; margin-top: 2px;">模式: {{ node.search_mode }} | 父節點: {{ node.parent_id or "root" }}</small>
+              </div>
+              <div style="text-align: right;">
+                <span class="stage-chip {{ 'stage-complete' if node.status in ['Pass', 'Evaluated'] else 'stage-human' if node.status == 'Needs_Human_Input' else 'stage-neutral' }}" style="font-size: 11px;">{{ node.status }}</span>
+                <strong style="display: block; font-size: 13.5px; color: var(--brand); margin-top: 2px;">{{ node.score_label }}</strong>
+              </div>
+            </div>
+            {% if node.critic_feedback %}
+              <div style="background: #f8fafc; border-top: 1px dashed var(--line); margin-top: 8px; padding: 6px 8px; font-size: 12px; color: #475569; border-radius: 4px;">
+                💬 {{ node.critic_feedback }}
+              </div>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="muted">目前尚無已探索的節點紀錄。</p>
+      {% endif %}
+    </article>
+
+  </div>
+
+  <!-- Right Column: Decision History & Critic Details -->
+  <div style="display: flex; flex-direction: column; gap: 24px;">
+    
+    <!-- Score Timeline & Breakdown -->
+    <article class="card">
+      <h2>📊 最終評分細節 (Final Score Breakdown)</h2>
+      <p class="muted" style="margin-bottom: 14px;">設計方案經 Critic 評估的多維度細化指標評分。</p>
+      
+      {% if result %}
+        <dl class="definition-list" style="grid-template-columns: 140px minmax(0, 1fr); margin-bottom: 20px;">
+          <dt>綜合評分 (Score)</dt><dd><strong>{% if monitor.score_summary and monitor.score_summary.score is not none %}{{ "%.3f"|format(monitor.score_summary.score) }}{% else %}-{% endif %}</strong></dd>
+          <dt>拓撲對應健康</dt><dd>{{ monitor.score_summary.mapping_status or "-" }}</dd>
+          <dt>物理模擬就緒</dt><dd>{{ monitor.score_summary.ode_status or "-" }}</dd>
+        </dl>
+        
+        {% if monitor.score_breakdown %}
+          <div class="score-breakdown" data-score-breakdown>
+            {% for item in monitor.score_breakdown %}
+            <div class="score-row" style="margin-bottom: 8px;">
+              <span style="font-size: 12.5px;">{{ item.label }}</span>
+              <div class="score-track" style="flex: 1; margin: 0 10px; background: #e2e8f0; height: 8px; border-radius: 4px; overflow: hidden;">
+                <span style="display: block; background: var(--brand); height: 100%; width:{{ item.percent }}%"></span>
+              </div>
+              <strong style="font-size: 12.5px;">{{ "%.3f"|format(item.score) }}</strong>
+            </div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% else %}
+        <p class="muted">等待搜尋成功後顯示最終多維度評分。</p>
+      {% endif %}
+    </article>
+
+    <!-- Raw Node Data (Advanced Section) -->
+    <article class="card advanced-only">
+      <h2>🛠️ 探索樹原始資料 (Advanced Node Payload)</h2>
+      <p class="muted" style="margin-bottom: 14px;">點擊展開以檢視此探索樹的完整原始 JSON 負載（可用於系統除錯）。</p>
+      
+      <details style="background: #f8fafc; border: 1px solid var(--line); border-radius: 6px; padding: 12px;">
+        <summary style="cursor: pointer; font-weight: bold; font-size: 13px; color: #475569;">展開原始 Payload JSON</summary>
+        <pre style="margin-top: 10px; max-height: 300px; overflow-y: auto; font-size: 11.5px; font-family: monospace; line-height: 1.4; background: white; padding: 10px; border-radius: 4px; border: 1px solid var(--line);">{% if result %}{{ result | tojson(indent=2) }}{% else %}{{ {"run": run, "events": events} | tojson(indent=2) }}{% endif %}</pre>
+      </details>
+    </article>
+
+  </div>
+
+</div>
+{% endblock %}

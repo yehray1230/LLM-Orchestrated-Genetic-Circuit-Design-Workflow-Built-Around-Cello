@@ -10,6 +10,9 @@ from typing import Any
 from uuid import uuid4
 
 from application.research import ResearchService
+from application.settings import SettingsService
+from application.design_draft_service import DesignDraftService
+from application.notification_service import NotificationService
 from benchmark_suite.benchmark_controller import evaluate_candidate
 from benchmark_suite.dataset import (
     list_benchmark_datasets,
@@ -185,20 +188,44 @@ class DesignService:
             else None
         )
 
-    def list(self) -> list[DesignIR]:
+    def list(self, show_archived: bool = False, show_deleted: bool = False) -> list[DesignIR]:
+        import inspect
+        sig = inspect.signature(self.repository.list)
+        if "show_archived" in sig.parameters:
+            payloads = self.repository.list(show_archived=show_archived, show_deleted=show_deleted)
+        else:
+            payloads = self.repository.list()
+            payloads = [
+                p for p in payloads
+                if (show_archived or not p.get("is_archived"))
+                and (show_deleted or not p.get("is_deleted"))
+            ]
+        payloads.sort(key=lambda x: x.get("is_pinned", False), reverse=True)
         return [
             design_ir_from_dict(design_ir_v2_to_v1_payload(payload))
-            for payload in self.repository.list()
+            for payload in payloads
         ]
 
     def get_v2(self, design_id: str) -> DesignIRV2 | None:
         payload = self.repository.get(design_id)
         return design_ir_v2_from_dict(payload) if payload else None
 
-    def list_v2(self) -> list[DesignIRV2]:
+    def list_v2(self, show_archived: bool = False, show_deleted: bool = False) -> list[DesignIRV2]:
+        import inspect
+        sig = inspect.signature(self.repository.list)
+        if "show_archived" in sig.parameters:
+            payloads = self.repository.list(show_archived=show_archived, show_deleted=show_deleted)
+        else:
+            payloads = self.repository.list()
+            payloads = [
+                p for p in payloads
+                if (show_archived or not p.get("is_archived"))
+                and (show_deleted or not p.get("is_deleted"))
+            ]
+        payloads.sort(key=lambda x: x.get("is_pinned", False), reverse=True)
         return [
             design_ir_v2_from_dict(payload)
-            for payload in self.repository.list()
+            for payload in payloads
         ]
 
     def revisions(self, design_id: str) -> list[dict[str, Any]]:
@@ -215,6 +242,35 @@ class DesignService:
             return None
         payload = self.repository.get_revision(design_id, revision_number)
         return design_ir_v2_from_dict(payload) if payload else None
+
+    def archive(self, design_id: str) -> None:
+        if hasattr(self.repository, "archive"):
+            self.repository.archive(design_id)
+
+    def unarchive(self, design_id: str) -> None:
+        if hasattr(self.repository, "unarchive"):
+            self.repository.unarchive(design_id)
+
+    def soft_delete(self, design_id: str) -> None:
+        if hasattr(self.repository, "soft_delete"):
+            self.repository.soft_delete(design_id)
+
+    def restore(self, design_id: str) -> None:
+        if hasattr(self.repository, "restore"):
+            self.repository.restore(design_id)
+
+    def pin(self, design_id: str) -> None:
+        if hasattr(self.repository, "pin"):
+            self.repository.pin(design_id)
+
+    def unpin(self, design_id: str) -> None:
+        if hasattr(self.repository, "unpin"):
+            self.repository.unpin(design_id)
+
+    def purge(self, design_id: str) -> bool:
+        if hasattr(self.repository, "purge"):
+            return self.repository.purge(design_id)
+        return False
 
     def simulation_spec(self, design_id: str) -> dict[str, Any] | None:
         design = self.get_v2(design_id)
@@ -270,6 +326,24 @@ class ComparisonService:
                 right_metrics=right_metrics,
             )
         )
+
+    def compare_revisions(
+        self,
+        design_id: str,
+        left_rev: int,
+        right_rev: int,
+    ) -> dict[str, Any]:
+        left_v2 = self.designs.get_revision(design_id, left_rev)
+        right_v2 = self.designs.get_revision(design_id, right_rev)
+        if left_v2 is None or right_v2 is None:
+            raise KeyError(f"Revision {left_rev} or {right_rev} not found.")
+
+        from schemas.design_ir import design_ir_from_dict
+        from schemas.design_migrations import design_ir_v2_to_v1_payload
+        left = design_ir_from_dict(design_ir_v2_to_v1_payload(left_v2.to_dict()))
+        right = design_ir_from_dict(design_ir_v2_to_v1_payload(right_v2.to_dict()))
+
+        return asdict(compare_designs(left, right))
 
 
 class EvaluationService:
@@ -719,11 +793,60 @@ class ExportService:
     def __init__(self, designs: DesignService):
         self.designs = designs
 
-    def export(self, design_id: str, export_format: str) -> ExportResult:
-        design = self.designs.get(design_id)
-        if design is None:
-            raise KeyError(design_id)
-        exporter = self.EXPORTERS.get(export_format.lower())
+    def export(
+        self,
+        design_id: str,
+        export_format: str,
+        revision_number: int | None = None,
+        backbone_name: str | None = None,
+    ) -> ExportResult:
+        if revision_number is not None:
+            design_v2 = self.designs.get_revision(design_id, revision_number)
+            if design_v2 is None:
+                raise KeyError(design_id)
+            design = design_ir_from_dict(design_ir_v2_to_v1_payload(design_v2.to_dict()))
+        else:
+            design = self.designs.get(design_id)
+            design_v2 = self.designs.get_v2(design_id)
+            if design is None or design_v2 is None:
+                raise KeyError(design_id)
+
+        fmt = export_format.lower()
+        if fmt == "json":
+            import json
+            return ExportResult(
+                ok=True,
+                format="JSON",
+                filename=f"{design.design_id}.json",
+                media_type="application/json",
+                content=json.dumps(design_v2.to_dict(), indent=2, ensure_ascii=False),
+                status="success",
+            )
+        elif fmt == "verilog":
+            verilog_content = design_v2.extensions.get("verilog", "")
+            if not verilog_content:
+                return ExportResult(
+                    ok=False,
+                    format="Verilog",
+                    filename=f"{design.design_id}.v",
+                    media_type="text/x-verilog",
+                    content="",
+                    status="blocked_no_verilog",
+                    errors=["No Verilog topology exists for this design."],
+                )
+            return ExportResult(
+                ok=True,
+                format="Verilog",
+                filename=f"{design.design_id}.v",
+                media_type="text/x-verilog",
+                content=verilog_content,
+                status="success",
+            )
+        elif fmt == "plasmid_genbank":
+            from exporters.plasmid_assembler import export_plasmid_genbank
+            return export_plasmid_genbank(design, backbone_name or "pUC19 (High copy, AmpR)")
+
+        exporter = self.EXPORTERS.get(fmt)
         if exporter is None:
             raise ValueError(f"Unsupported export format: {export_format}")
         return exporter(design)
@@ -812,8 +935,12 @@ class PlasmidAssemblyService:
         insertion_start: int,
         insertion_end: int,
         assembly_method: str = "direct_insertion",
+        revision_number: int | None = None,
     ) -> PlasmidAssemblyResult:
-        design = self.designs.get_v2(design_id)
+        if revision_number is not None:
+            design = self.designs.get_revision(design_id, revision_number)
+        else:
+            design = self.designs.get_v2(design_id)
         if design is None:
             raise KeyError(design_id)
         backbone = self.backbones.get(backbone_id, backbone_version)
@@ -857,13 +984,17 @@ class AssemblyPlanningService:
         gibson_overlap_length: int = 25,
         golden_gate_enzyme: str = "BsaI",
         golden_gate_overhangs: list[str] | None = None,
+        revision_number: int | None = None,
     ) -> dict[str, Any]:
         backbone = self.backbones.get(backbone_id, backbone_version)
         if backbone is None:
             raise ValueError(
                 f"Unknown registered backbone: {backbone_id}@{backbone_version}"
             )
-        design = self.assemblies.designs.get_v2(design_id)
+        if revision_number is not None:
+            design = self.assemblies.designs.get_revision(design_id, revision_number)
+        else:
+            design = self.assemblies.designs.get_v2(design_id)
         if design is None:
             raise KeyError(design_id)
         assembly = self.assemblies.assemble(
@@ -875,6 +1006,7 @@ class AssemblyPlanningService:
             insertion_start=insertion_start,
             insertion_end=insertion_end,
             assembly_method="direct_insertion",
+            revision_number=revision_number,
         )
         if not assembly.ok:
             readiness = evaluate_readiness(
@@ -923,19 +1055,32 @@ class AssemblyDeliverableService:
         self.output_dir = output_dir
 
     def create(self, design_id: str, **request: Any) -> dict[str, Any]:
+        revision_number = request.pop("revision_number", None)
+        if revision_number is not None:
+            try:
+                revision_number = int(revision_number)
+            except ValueError:
+                revision_number = None
         primer_options = {
             key: request.pop(key)
             for key in list(request)
             if key.startswith("primer_")
         }
-        planned = self.planning.plan(design_id, **request)
+        planned = self.planning.plan(
+            design_id,
+            revision_number=revision_number,
+            **request,
+        )
         if not planned["ok"] or not planned["plan"]:
             return planned
         primers = design_assembly_primers(
             planned["plan"],
             **primer_options,
         ).to_dict()
-        design = self.planning.assemblies.designs.get_v2(design_id)
+        if revision_number is not None:
+            design = self.planning.assemblies.designs.get_revision(design_id, revision_number)
+        else:
+            design = self.planning.assemblies.designs.get_v2(design_id)
         assert design is not None
         readiness = evaluate_readiness(
             design,
@@ -951,6 +1096,14 @@ class AssemblyDeliverableService:
             "plan": planned["plan"],
             "primers": primers,
             "readiness": readiness.to_dict(),
+            "revision_number": revision_number or design.revision.revision_number,
+            "revision_id": design.revision.revision_id,
+            "source_context": {
+                "design_id": design.design_id,
+                "revision_id": design.revision.revision_id,
+                "revision_number": design.revision.revision_number,
+                "provenance_ids": [item.id for item in design.provenance],
+            },
         }
         artifacts = write_assembly_deliverables(
             self.output_dir / deliverable_id,
@@ -1293,28 +1446,56 @@ class OptimizationWorkflowService:
 
 
 class RunService:
-    def __init__(self, run_store: RunStore):
+    def __init__(self, run_store: RunStore, settings: SettingsService | None = None):
         self.run_store = run_store
+        self.settings = settings
 
     def start(self, request: dict[str, Any]) -> dict[str, Any]:
-        return start_design_run(
-            user_intent=str(request.get("user_intent") or ""),
-            host_organism=str(
-                request.get("host_organism") or "Escherichia coli"
-            ),
-            compute_budget=int(request.get("compute_budget") or 6),
-            enable_rag=bool(request.get("enable_rag", True)),
-            enable_ode=bool(request.get("enable_ode", True)),
-            enable_skill_extraction=bool(
+        req_model = _optional_string(request.get("model_name"))
+        req_base = _optional_string(request.get("api_base"))
+        req_cello_cmd = _optional_string(request.get("cello_command"))
+        req_ucf_path = _optional_string(request.get("ucf_path"))
+        req_host = _optional_string(request.get("host_organism"))
+        req_budget = request.get("compute_budget")
+
+        host = req_host or "Escherichia coli"
+        budget = int(req_budget) if req_budget is not None else 6
+
+        kwargs = {
+            "user_intent": str(request.get("user_intent") or ""),
+            "host_organism": host,
+            "compute_budget": budget,
+            "enable_rag": bool(request.get("enable_rag", True)),
+            "enable_ode": bool(request.get("enable_ode", True)),
+            "enable_skill_extraction": bool(
                 request.get("enable_skill_extraction", True)
             ),
-            monte_carlo_samples=int(request.get("monte_carlo_samples") or 1),
-            model_name=_optional_string(request.get("model_name")),
-            api_base=_optional_string(request.get("api_base")),
-            cello_command=_optional_string(request.get("cello_command")),
-            ucf_path=_optional_string(request.get("ucf_path")),
-            run_store=self.run_store,
-        )
+            "monte_carlo_samples": int(request.get("monte_carlo_samples") or 1),
+            "model_name": req_model,
+            "api_base": req_base,
+            "cello_command": req_cello_cmd,
+            "ucf_path": req_ucf_path,
+            "run_store": self.run_store,
+        }
+
+        if self.settings:
+            raw_settings = self.settings.get_settings_raw()
+            if not req_model and raw_settings.get("model_name"):
+                kwargs["model_name"] = raw_settings["model_name"]
+            if not req_base and raw_settings.get("api_base"):
+                kwargs["api_base"] = raw_settings["api_base"]
+            if raw_settings.get("api_key"):
+                kwargs["api_key"] = raw_settings["api_key"]
+            if not req_cello_cmd and raw_settings.get("cello_command"):
+                kwargs["cello_command"] = raw_settings["cello_command"]
+            if not req_ucf_path and raw_settings.get("ucf_path"):
+                kwargs["ucf_path"] = raw_settings["ucf_path"]
+            if not req_host and raw_settings.get("default_host"):
+                kwargs["host_organism"] = raw_settings["default_host"]
+            if req_budget is None and raw_settings.get("default_compute_budget"):
+                kwargs["compute_budget"] = int(raw_settings["default_compute_budget"])
+
+        return start_design_run(**kwargs)
 
     def status(self, run_id: str) -> dict[str, Any]:
         return get_design_run_status(_validated_run_id(run_id), run_store=self.run_store)
@@ -1367,13 +1548,34 @@ class RunService:
         *,
         model_name: str | None = None,
         api_base: str | None = None,
+        api_key: str | None = None,
     ) -> dict[str, Any]:
-        return resume_design_run(
-            _validated_run_id(run_id),
-            model_name=model_name,
-            api_base=api_base,
-            run_store=self.run_store,
-        )
+        req_model = model_name
+        req_base = api_base
+        req_key = api_key
+
+        kwargs = {
+            "run_id": _validated_run_id(run_id),
+            "run_store": self.run_store,
+        }
+
+        if self.settings:
+            raw_settings = self.settings.get_settings_raw()
+            if not req_model and raw_settings.get("model_name"):
+                req_model = raw_settings["model_name"]
+            if not req_base and raw_settings.get("api_base"):
+                req_base = raw_settings["api_base"]
+            if not req_key and raw_settings.get("api_key"):
+                req_key = raw_settings["api_key"]
+
+        if req_model is not None:
+            kwargs["model_name"] = req_model
+        if req_base is not None:
+            kwargs["api_base"] = req_base
+        if req_key is not None:
+            kwargs["api_key"] = req_key
+
+        return resume_design_run(**kwargs)
 
 
 @dataclass
@@ -1394,6 +1596,9 @@ class ApplicationServices:
     host_optimization: HostOptimizationService
     optimization_workflows: OptimizationWorkflowService
     runs: RunService
+    settings: SettingsService
+    design_drafts: DesignDraftService
+    notifications: NotificationService
 
     @property
     def storage_backend(self) -> str:
@@ -1405,6 +1610,7 @@ def create_application_services(
 ) -> ApplicationServices:
     selected = Path(base_dir) if base_dir else DEFAULT_API_DATA_DIR
     draft_repository = JsonRepository(selected / "drafts")
+    design_draft_repository = JsonRepository(selected / "design_drafts")
     benchmark_repository = JsonRepository(selected / "benchmark_runs")
     parameter_fit_repository = JsonRepository(selected / "parameter_fit_snapshots")
     backbone_repository = JsonRepository(selected / "backbones")
@@ -1430,6 +1636,7 @@ def create_application_services(
         base_dir=selected / "research_runs",
         max_workers=2,
     )
+    settings_service = SettingsService(selected / "settings.json")
     return ApplicationServices(
         imports=ImportService(draft_repository, designs),
         designs=designs,
@@ -1463,7 +1670,10 @@ def create_application_services(
             sequence_quality,
             host_optimization,
         ),
-        runs=RunService(run_store),
+        runs=RunService(run_store, settings=settings_service),
+        settings=settings_service,
+        design_drafts=DesignDraftService(design_draft_repository),
+        notifications=NotificationService(run_store, selected / "notifications_read_state.json"),
     )
 
 

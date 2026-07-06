@@ -22,6 +22,10 @@ from api.schemas import (
     SimulationComparisonRequest,
     ParameterSweepRequest,
     BifurcationSweepRequest,
+    SettingsUpdateRequest,
+    SettingsTestRequest,
+    DesignDraftUpdateRequest,
+    ElicitationProposeRequest,
     temporal_inputs_to_dict,
 )
 from application.services import ApplicationServices
@@ -618,10 +622,17 @@ def resume_run(
 def export_design(
     design_id: str,
     export_format: str,
+    rev: int | None = None,
+    backbone: str | None = None,
     services: ApplicationServices = Depends(get_services),
 ) -> Response:
     try:
-        result = services.exports.export(design_id, export_format)
+        result = services.exports.export(
+            design_id,
+            export_format,
+            revision_number=rev,
+            backbone_name=backbone,
+        )
     except KeyError as exc:
         raise _not_found("DESIGN_NOT_FOUND", design_id) from exc
     except (ValueError, RepositoryError) as exc:
@@ -639,7 +650,16 @@ def export_design(
     headers = {
         "Content-Disposition": f'attachment; filename="{result.filename}"',
         "X-Export-Status": result.status,
+        "X-Export-Warning-Count": str(len(result.warnings)),
     }
+    source = (
+        services.designs.get_revision(design_id, rev)
+        if rev is not None
+        else services.designs.get_v2(design_id)
+    )
+    if source is not None:
+        headers["X-Source-Revision"] = str(source.revision.revision_number)
+        headers["X-Source-Revision-Id"] = source.revision.revision_id
     return Response(
         content=result.content,
         media_type=result.media_type,
@@ -678,3 +698,280 @@ def _raise_run_error(result: dict[str, Any]) -> None:
             error_type.upper() or "RUN_ERROR",
             str(result.get("error") or "Run operation failed."),
         )
+
+
+# ==========================================
+# Phase 1 & 2 Settings, Drafts, Notifications API Routes
+# ==========================================
+
+@router.get("/settings")
+def get_settings(
+    services: ApplicationServices = Depends(get_services),
+) -> dict[str, Any]:
+    return envelope(services.settings.get_settings_masked())
+
+
+@router.post("/settings")
+def save_settings(
+    request: SettingsUpdateRequest,
+    services: ApplicationServices = Depends(get_services),
+) -> dict[str, Any]:
+    services.settings.save_settings(request.model_dump())
+    return envelope(services.settings.get_settings_masked())
+
+
+@router.get("/settings/status")
+def get_settings_status(
+    services: ApplicationServices = Depends(get_services),
+) -> dict[str, Any]:
+    return envelope(services.settings.check_availability())
+
+
+@router.post("/settings/test")
+def test_settings_connection(
+    request: SettingsTestRequest,
+    services: ApplicationServices = Depends(get_services),
+) -> dict[str, Any]:
+    return envelope(services.settings.check_availability(request.model_dump()))
+
+
+@router.delete("/settings/api-key")
+def clear_settings_api_key(
+    services: ApplicationServices = Depends(get_services),
+) -> dict[str, Any]:
+    services.settings.clear_api_key()
+    return envelope(services.settings.get_settings_masked())
+
+
+@router.get("/designs/drafts/active")
+def get_active_design_draft(
+    services: ApplicationServices = Depends(get_services),
+) -> dict[str, Any]:
+    return envelope(services.design_drafts.get_active())
+
+
+@router.post("/designs/drafts")
+def save_design_draft(
+    request: DesignDraftUpdateRequest,
+    services: ApplicationServices = Depends(get_services),
+) -> dict[str, Any]:
+    return envelope(services.design_drafts.save(request.model_dump()))
+
+
+@router.delete("/designs/drafts/active")
+def clear_active_design_draft(
+    services: ApplicationServices = Depends(get_services),
+) -> dict[str, Any]:
+    services.design_drafts.clear()
+    return envelope({"status": "cleared"})
+
+
+@router.post("/designs/drafts/elicitation/next")
+def next_elicitation(
+    services: ApplicationServices = Depends(get_services),
+) -> dict[str, Any]:
+    draft = services.design_drafts.get_active()
+    if not draft:
+        raise HTTPException(status_code=400, detail="No active draft found.")
+
+    from schemas.state import DesignState
+    from agents.pm_agent import call_pm_agent
+
+    state = DesignState(
+        user_intent=draft.get("user_intent") or "",
+        host_organism=draft.get("host_organism") or "Escherichia coli",
+        compute_budget=draft.get("compute_budget") or 6,
+        structured_spec=draft.get("structured_spec") or {},
+        pm_chat_history=draft.get("pm_chat_history") or [],
+        pending_proposal=draft.get("pending_proposal") or {},
+        pm_stage=draft.get("pm_stage") or "elicitation",
+    )
+
+    if not state.pending_proposal or not state.pm_chat_history:
+        settings = services.settings.get_settings_raw()
+        api_key = settings.get("api_key")
+        model_name = settings.get("model_name") or "gpt-4o-mini"
+        api_base = settings.get("api_base")
+
+        state = call_pm_agent(
+            state,
+            api_key=api_key,
+            model_name=model_name,
+            api_base=api_base,
+        )
+
+    updated_draft = services.design_drafts.save({
+        "structured_spec": state.structured_spec,
+        "pm_chat_history": state.pm_chat_history,
+        "pending_proposal": state.pending_proposal,
+        "pm_stage": state.pm_stage,
+    })
+    return envelope(updated_draft)
+
+
+@router.post("/designs/drafts/elicitation/propose")
+def propose_elicitation(
+    request: ElicitationProposeRequest,
+    services: ApplicationServices = Depends(get_services),
+) -> dict[str, Any]:
+    draft = services.design_drafts.get_active()
+    if not draft:
+        raise HTTPException(status_code=400, detail="No active draft found.")
+
+    from schemas.state import DesignState
+    from agents.pm_agent import call_pm_agent
+    import json
+
+    state = DesignState(
+        user_intent=draft.get("user_intent") or "",
+        host_organism=draft.get("host_organism") or "Escherichia coli",
+        compute_budget=draft.get("compute_budget") or 6,
+        structured_spec=draft.get("structured_spec") or {},
+        pm_chat_history=draft.get("pm_chat_history") or [],
+        pending_proposal=draft.get("pending_proposal") or {},
+        pm_stage=draft.get("pm_stage") or "elicitation",
+    )
+
+    if not state.pending_proposal:
+        raise HTTPException(status_code=400, detail="No pending proposal to reply to.")
+
+    missing_field = state.pending_proposal["missing_field"]
+    proposed_value = state.pending_proposal["proposed_value"]
+
+    if request.choice == "agree":
+        state.structured_spec[missing_field] = proposed_value
+        state.pm_chat_history.append({
+            "role": "user",
+            "content": f"同意使用推薦值：{json.dumps(proposed_value, ensure_ascii=False)}",
+        })
+        state.pm_chat_history.append({
+            "role": "assistant",
+            "content": f"已儲存 {missing_field} 設定。",
+        })
+        state.pending_proposal = {}
+    elif request.choice == "override":
+        custom_val = request.value
+        if isinstance(custom_val, str):
+            custom_val = custom_val.strip()
+            try:
+                parsed_val = json.loads(custom_val)
+            except Exception:
+                if "," in custom_val:
+                    parsed_val = [x.strip() for x in custom_val.split(",")]
+                else:
+                    parsed_val = custom_val
+        else:
+            parsed_val = custom_val
+
+        state.structured_spec[missing_field] = parsed_val
+        state.pm_chat_history.append({
+            "role": "user",
+            "content": f"我想要改為：{json.dumps(parsed_val, ensure_ascii=False) if not isinstance(parsed_val, str) else parsed_val}",
+        })
+        state.pm_chat_history.append({
+            "role": "assistant",
+            "content": f"已自訂 {missing_field} 為: {json.dumps(parsed_val, ensure_ascii=False)}。",
+        })
+        state.pending_proposal = {}
+
+    settings = services.settings.get_settings_raw()
+    api_key = settings.get("api_key")
+    model_name = settings.get("model_name") or "gpt-4o-mini"
+    api_base = settings.get("api_base")
+
+    state = call_pm_agent(
+        state,
+        api_key=api_key,
+        model_name=model_name,
+        api_base=api_base,
+    )
+
+    updated_draft = services.design_drafts.save({
+        "structured_spec": state.structured_spec,
+        "pm_chat_history": state.pm_chat_history,
+        "pending_proposal": state.pending_proposal,
+        "pm_stage": state.pm_stage,
+    })
+    return envelope(updated_draft)
+
+
+@router.post("/designs/drafts/elicitation/skip")
+def skip_elicitation(
+    services: ApplicationServices = Depends(get_services),
+) -> dict[str, Any]:
+    draft = services.design_drafts.get_active()
+    if not draft:
+        raise HTTPException(status_code=400, detail="No active draft found.")
+
+    fallbacks = {
+        "chassis": "Escherichia coli",
+        "inputs": [{"name": "IPTG", "sensor_promoter": "pLac", "type": "input_sensor"}],
+        "outputs": [{"name": "sfGFP", "type": "reporter_gene"}],
+        "logic_relation": "sfGFP = IPTG",
+        "copy_number": 15,
+    }
+    structured_spec = draft.get("structured_spec") or {}
+    for k, v in fallbacks.items():
+        if k not in structured_spec:
+            structured_spec[k] = v
+
+    pm_chat_history = draft.get("pm_chat_history") or []
+    pm_chat_history.append({
+        "role": "user",
+        "content": "略過對話，直接套用大腸桿菌預設規格。",
+    })
+    pm_chat_history.append({
+        "role": "assistant",
+        "content": "已套用預設規格，可直接啟動設計。",
+    })
+
+    updated_draft = services.design_drafts.save({
+        "structured_spec": structured_spec,
+        "pm_chat_history": pm_chat_history,
+        "pending_proposal": {},
+        "pm_stage": "completed",
+    })
+    return envelope(updated_draft)
+
+
+@router.get("/notifications")
+def get_notifications(
+    services: ApplicationServices = Depends(get_services),
+) -> dict[str, Any]:
+    notifications = [n.to_dict() for n in services.notifications.get_notifications()]
+    unread_count = services.notifications.get_unread_count()
+    return envelope({
+        "notifications": notifications,
+        "unread_count": unread_count
+    })
+
+
+@router.post("/notifications/{notification_id}/read")
+def mark_notification_as_read(
+    notification_id: str,
+    services: ApplicationServices = Depends(get_services),
+) -> dict[str, Any]:
+    services.notifications.mark_as_read(notification_id)
+    return envelope({"status": "success"})
+
+
+@router.post("/notifications/read-all")
+def mark_all_notifications_as_read(
+    services: ApplicationServices = Depends(get_services),
+) -> dict[str, Any]:
+    services.notifications.mark_all_as_read()
+    return envelope({"status": "success"})
+
+
+@router.get("/designs/{design_id}/revisions/compare")
+def compare_revisions(
+    design_id: str,
+    left: int,
+    right: int,
+    services: ApplicationServices = Depends(get_services),
+) -> dict[str, Any]:
+    try:
+        result = services.comparisons.compare_revisions(design_id, left, right)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    return envelope(result)

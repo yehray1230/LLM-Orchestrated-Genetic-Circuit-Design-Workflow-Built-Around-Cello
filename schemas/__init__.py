@@ -82,7 +82,7 @@ from schemas.temporal_evaluation import (
     TEMPORAL_EVALUATOR_CONFIGS,
     get_temporal_evaluator_config,
 )
-
+from schemas.notification import Notification
 
 __all__ = [
     "BiologicalPart",
@@ -151,4 +151,5 @@ __all__ = [
     "DEFAULT_TEMPORAL_CONFIG",
     "TEMPORAL_EVALUATOR_CONFIGS",
     "get_temporal_evaluator_config",
+    "Notification",
 ]

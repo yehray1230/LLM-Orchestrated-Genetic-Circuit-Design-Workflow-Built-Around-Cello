@@ -1,87 +1,636 @@
 {% extends "base.html" %}
 {% block title %}{{ design.name }}{% endblock %}
 {% block content %}
+
+{# ── Page header ────────────────────────────────────────────── #}
 <header class="page-header split-header">
   <div>
     <span class="eyebrow">DesignIR v2 workspace</span>
     <h1>{{ design.name }}</h1>
-    <p class="muted">{{ design.design_id }} · revision {{ design_v2.revision.revision_number }}</p>
+    <p class="muted">{{ design.design_id }} · revision {{ viewed_rev }}</p>
   </div>
-  <a class="button" href="/web/research?design={{ design.design_id }}">Open simulation workspace</a>
+  <div class="inline">
+    <!-- Star Pin/Unpin Toggle -->
+    <form action="/web/designs/{{ design.design_id }}/{% if view.is_pinned %}unpin{% else %}pin{% endif %}" method="post" style="margin: 0; display: inline;">
+      <button type="submit" class="button secondary" style="padding: 10px 14px; font-size: 16px;">
+        {% if view.is_pinned %}⭐ {{ _t('取消釘選') }}{% else %}☆ {{ _t('釘選') }}{% endif %}
+      </button>
+    </form>
+
+    <!-- Archive/Unarchive Toggle -->
+    <form action="/web/designs/{{ design.design_id }}/{% if view.is_archived %}unarchive{% else %}archive{% endif %}" method="post" style="margin: 0; display: inline;">
+      <button type="submit" class="button secondary">
+        {% if view.is_archived %}📂 {{ _t('取消封存') }}{% else %}📁 {{ _t('封存') }}{% endif %}
+      </button>
+    </form>
+
+    <!-- Delete or Restore Toggle -->
+    {% if view.is_deleted %}
+      <form action="/web/designs/{{ design.design_id }}/restore" method="post" style="margin: 0; display: inline;">
+        <button type="submit" class="button" style="background: var(--success);">
+          🔄 {{ _t('還原') }}
+        </button>
+      </form>
+      <a href="/web/designs/{{ design.design_id }}/delete_preview" class="button" style="background: #d92d20;">
+        🗑️ {{ _t('永久刪除') }}
+      </a>
+    {% else %}
+      <form action="/web/designs/{{ design.design_id }}/delete" method="post" style="margin: 0; display: inline;">
+        <button type="submit" class="button warning">
+          🗑️ {{ _t('刪除') }}
+        </button>
+      </form>
+    {% endif %}
+
+    <a class="button" href="/web/research?design={{ design.design_id }}">{{ _t('開啟模擬工作區') }}</a>
+  </div>
 </header>
 
-<nav class="section-tabs">
-  <a href="#overview">Overview</a><a href="#constructs">Constructs</a>
-  <a href="#plasmids">Plasmids</a><a href="#evidence">Evidence</a>
-  <a href="#simulation">Simulation</a>
+{% if is_historical %}
+<div class="warning-box" style="margin-bottom: 18px;">
+  ⚠️ 正在查看版本 <strong>Rev {{ viewed_rev }}（Revision {{ viewed_rev }}）的歷史快照</strong>。
+  最新版本為 Revision {{ view.latest_rev }}。
+  <a href="/web/designs/{{ design.design_id }}">前往最新版本 →</a>
+</div>
+{% endif %}
+
+{# ── Stats bar ──────────────────────────────────────────────── #}
+<section class="grid grid-3" style="grid-template-columns: repeat(4, minmax(0, 1fr));">
+  <article class="card">
+    <span class="muted">輸入信號</span>
+    <div class="metric">{{ design.inputs|length }}</div>
+  </article>
+  <article class="card">
+    <span class="muted">輸出信號</span>
+    <div class="metric">{{ design.outputs|length }}</div>
+  </article>
+  <article class="card">
+    <span class="muted">零件總數</span>
+    <div class="metric">{{ design.parts|length }}</div>
+  </article>
+  <article class="card">
+    <span class="muted">宿主生物</span>
+    <div class="metric compact">{{ view.host_organism or "未設定" }}</div>
+  </article>
+</section>
+
+{# ── Tab navigation ─────────────────────────────────────────── #}
+<nav class="section-tabs" style="margin-top: 24px;">
+  <a href="#spec" onclick="switchTab(event,'spec')" class="active" data-tab="spec">設計規格與評估</a>
+  <a href="#bom" onclick="switchTab(event,'bom')" data-tab="bom">材料清單 (BoM)</a>
+  <a href="#assembly" onclick="switchTab(event,'assembly')" data-tab="assembly">裝配與交付下載</a>
+  <a href="#export" onclick="switchTab(event,'export')" data-tab="export">匯出中心</a>
+  <a href="#revisions" onclick="switchTab(event,'revisions')" data-tab="revisions">版本歷程</a>
+  {% if view.can_optimize %}
+  <a href="#optimization" onclick="switchTab(event,'optimization')" data-tab="optimization">最佳化</a>
+  {% endif %}
 </nav>
 
-<section id="overview" class="grid grid-3">
-  <article class="card"><span class="muted">Inputs</span><div class="metric">{{ design.inputs|length }}</div></article>
-  <article class="card"><span class="muted">Outputs</span><div class="metric">{{ design.outputs|length }}</div></article>
-  <article class="card"><span class="muted">Parts</span><div class="metric">{{ design.parts|length }}</div></article>
-</section>
+{# ════════════════════════════════════════════════════════════ #}
+{# TAB 1 — 設計規格與評估                                       #}
+{# ════════════════════════════════════════════════════════════ #}
+<div class="tab-content" id="tab-spec">
 
-<section class="grid grid-2 section-space">
-  <article class="card">
-    <h2>Logic specification</h2>
-    <pre>{{ design.logic_expression or "Not defined" }}</pre>
-    <div class="inline">
-      <a class="button secondary" href="/api/v1/designs/{{ design.design_id }}/exports/bom">BOM</a>
-      <a class="button secondary" href="/api/v1/designs/{{ design.design_id }}/exports/genbank">GenBank</a>
-      <a class="button secondary" href="/api/v1/designs/{{ design.design_id }}/exports/sbol3">SBOL3</a>
+  <section class="grid grid-2 section-space">
+    {# — Logic specification — #}
+    <article class="card">
+      <h2>邏輯設計規格</h2>
+      <dl class="definition-list">
+        <dt>邏輯表達式</dt>
+        <dd><pre style="margin:0;">{{ design.logic_expression or "尚未定義" }}</pre></dd>
+        <dt>輸入信號</dt>
+        <dd>
+          {% for inp in design.inputs %}
+            <span class="badge" style="margin-right:4px;">{{ inp }}</span>
+          {% else %}
+            <span class="muted">—</span>
+          {% endfor %}
+        </dd>
+        <dt>輸出信號</dt>
+        <dd>
+          {% for out in design.outputs %}
+            <span class="badge" style="margin-right:4px;">{{ out }}</span>
+          {% else %}
+            <span class="muted">—</span>
+          {% endfor %}
+        </dd>
+      </dl>
+    </article>
+
+    {# — Biological context — #}
+    <article class="card">
+      <h2>生物情境</h2>
+      <dl class="definition-list">
+        <dt>宿主生物</dt>
+        <dd>{{ design_v2.biological_context.host_organism.value or "未知" }}</dd>
+        <dt>底盤</dt>
+        <dd>{{ design_v2.biological_context.chassis.value or "繼承自宿主" }}</dd>
+        <dt>假設數量</dt>
+        <dd>{{ design_v2.assumptions|length }}</dd>
+        <dt>警告數量</dt>
+        <dd>{{ design_v2.warnings|length }}</dd>
+      </dl>
+
+      {% if design_v2.assumptions %}
+      <details style="margin-top:14px;">
+        <summary>展開假設 ({{ design_v2.assumptions|length }})</summary>
+        {% for a in design_v2.assumptions %}
+        <div class="notice">
+          <strong>{{ a.field_path }}</strong><br>
+          <span class="muted">{{ a.rationale }}</span>
+        </div>
+        {% endfor %}
+      </details>
+      {% endif %}
+
+      {% if design_v2.warnings %}
+      <details style="margin-top:10px;">
+        <summary>展開警告 ({{ design_v2.warnings|length }})</summary>
+        {% for w in design_v2.warnings %}
+        <div class="warning-box" style="margin-top:8px;">{{ w.message }}</div>
+        {% endfor %}
+      </details>
+      {% endif %}
+    </article>
+  </section>
+
+  {# — Readiness summary — #}
+  <section class="card section-space">
+    <div class="split-header">
+      <h2>就緒性評估</h2>
+      <span class="status-badge
+        {% if readiness.readiness_status == 'ready' %}status-ready
+        {% elif readiness.readiness_status == 'warning' %}status-warning
+        {% else %}status-error{% endif %}">
+        {{ readiness.readiness_status|upper }}
+      </span>
     </div>
-  </article>
-  <article class="card">
-    <h2>Biological context</h2>
-    <dl class="definition-list">
-      <dt>Host</dt><dd>{{ design_v2.biological_context.host_organism.value or "Unknown" }}</dd>
-      <dt>Chassis</dt><dd>{{ design_v2.biological_context.chassis.value or "Inherited from host" }}</dd>
-      <dt>Assumptions</dt><dd>{{ design_v2.assumptions|length }}</dd>
-      <dt>Warnings</dt><dd>{{ design_v2.warnings|length }}</dd>
-    </dl>
-  </article>
-</section>
 
-<section id="constructs" class="card section-space">
-  <h2>Constructs</h2>
-  <table><tr><th>Name</th><th>Topology</th><th>Parts</th><th>Assembly</th></tr>
-  {% for item in design_v2.constructs %}
-  <tr><td>{{ item.name }}</td><td>{{ item.topology }}</td><td>{{ item.part_instances|length }}</td><td>{{ item.assembly_method.value or "Unknown" }}</td></tr>
-  {% else %}<tr><td colspan="4" class="muted">No construct has been defined.</td></tr>{% endfor %}</table>
-</section>
+    {% if readiness.blockers %}
+    <div style="margin-top:14px;">
+      <h3 style="color:#b42318; margin-bottom:8px;">🚫 阻擋項目</h3>
+      {% for b in readiness.blockers %}
+      <div class="error-box" style="margin-bottom:6px;">
+        <strong>[{{ b.code }}]</strong> {{ b.message }}
+        <span class="muted" style="margin-left:8px;">來源：{{ b.source }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
 
-<section id="plasmids" class="card section-space">
-  <h2>Plasmids</h2>
-  <table><tr><th>Name</th><th>Origin</th><th>Copy number</th><th>Selection</th></tr>
-  {% for item in design_v2.plasmids %}
-  <tr><td>{{ item.name }}</td><td>{{ item.origin_of_replication.value or "Unknown" }}</td><td>{{ item.copy_number.value or "Unknown" }}</td><td>{{ item.selection_marker.value or "Unknown" }}</td></tr>
-  {% else %}<tr><td colspan="4" class="muted">No plasmid layer has been defined.</td></tr>{% endfor %}</table>
-</section>
+    {% if readiness.warnings %}
+    <div style="margin-top:14px;">
+      <h3 style="color:var(--warning); margin-bottom:8px;">⚠️ 警告</h3>
+      {% for w in readiness.warnings %}
+      <div class="warning-box" style="margin-bottom:6px;">{{ w.message }}</div>
+      {% endfor %}
+    </div>
+    {% endif %}
 
-<section id="evidence" class="grid grid-2 section-space">
-  <article class="card">
-    <h2>Provenance</h2>
+    {# Capability badges #}
+    <div class="inline" style="margin-top:16px; gap:8px;">
+      <span class="status-badge {{ 'status-ready' if view.can_simulate else 'status-warning' }}">
+        模擬 {{ "✓" if view.can_simulate else "✗" }}
+      </span>
+      <span class="status-badge {{ 'status-ready' if view.can_optimize else 'status-warning' }}">
+        最佳化 {{ "✓" if view.can_optimize else "✗" }}
+      </span>
+      <span class="status-badge {{ 'status-ready' if view.can_assemble else 'status-warning' }}">
+        裝配 {{ "✓" if view.can_assemble else "✗" }}
+      </span>
+      <span class="status-badge {{ 'status-ready' if view.can_export else 'status-warning' }}">
+        匯出 {{ "✓" if view.can_export else "✗" }}
+      </span>
+    </div>
+  </section>
+
+  {# — Provenance — #}
+  {% if design_v2.field_provenance %}
+  <section class="card section-space">
+    <h2>欄位來源追蹤</h2>
     {% for item in design_v2.field_provenance %}
-    <div class="evidence-row"><code>{{ item.field_path }}</code><span class="badge">{{ item.status }}</span></div>
-    {% else %}<p class="muted">No field-level provenance.</p>{% endfor %}
-  </article>
-  <article class="card">
-    <h2>Assumptions</h2>
-    {% for item in design_v2.assumptions %}
-    <div class="notice"><strong>{{ item.field_path }}</strong><br><span class="muted">{{ item.rationale }}</span></div>
-    {% else %}<p class="muted">No active assumptions.</p>{% endfor %}
-  </article>
-</section>
+    <div class="evidence-row">
+      <code>{{ item.field_path }}</code>
+      <span class="badge">{{ item.status }}</span>
+    </div>
+    {% endfor %}
+  </section>
+  {% endif %}
 
-<section id="simulation" class="card section-space">
-  <h2>Simulation readiness</h2>
-  <dl class="definition-list">
-    <dt>Model</dt><dd>{{ simulation_spec.model_id }} @ {{ simulation_spec.model_version }}</dd>
-    <dt>Chassis</dt><dd>{{ simulation_spec.chassis }}</dd>
-    <dt>Copy number</dt><dd>{{ simulation_spec.copy_number }}</dd>
-    <dt>Scenarios</dt><dd>{{ simulation_spec.scenarios|length }}</dd>
-    <dt>Configuration</dt><dd><code>{{ simulation_spec.configuration_hash }}</code></dd>
-  </dl>
-</section>
+  {# — Simulation spec — #}
+  <section class="card section-space">
+    <h2>模擬規格</h2>
+    <dl class="definition-list">
+      <dt>模型</dt><dd>{{ simulation_spec.model_id }} @ {{ simulation_spec.model_version }}</dd>
+      <dt>底盤</dt><dd>{{ simulation_spec.chassis }}</dd>
+      <dt>拷貝數</dt><dd>{{ simulation_spec.copy_number }}</dd>
+      <dt>情境數</dt><dd>{{ simulation_spec.scenarios|length }}</dd>
+      <dt>組態雜湊</dt><dd><code>{{ simulation_spec.configuration_hash }}</code></dd>
+    </dl>
+  </section>
+</div>
+
+{# ════════════════════════════════════════════════════════════ #}
+{# TAB 2 — 材料清單 (BoM)                                      #}
+{# ════════════════════════════════════════════════════════════ #}
+<div class="tab-content" id="tab-bom" style="display:none;">
+
+  {# — Parts table — #}
+  <section class="card section-space">
+    <h2>材料元件清單</h2>
+    <div class="table-scroll">
+      <table>
+        <tr>
+          <th>名稱</th><th>類型</th><th>角色</th><th>序列預覽</th>
+        </tr>
+        {% for part in design_v2.parts %}
+        <tr>
+          <td><strong>{{ part.name }}</strong></td>
+          <td><span class="badge">{{ part.type }}</span></td>
+          <td>{{ part.role or "—" }}</td>
+          <td class="sequence">
+            {{ (part.dna_sequence or "—")[:60] }}{% if part.dna_sequence and part.dna_sequence|length > 60 %}…{% endif %}
+            <button type="button" class="button secondary" data-copy-text="{{ part.dna_sequence or '' }}" {% if not part.dna_sequence %}disabled{% endif %}>複製</button>
+            <a href="https://www.ncbi.nlm.nih.gov/search/all/?term={{ part.name|urlencode }}">NCBI</a>
+            <a href="https://synbiohub.org/search/{{ part.name|urlencode }}">SynBioHub</a>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="muted">尚無零件定義。</td></tr>
+        {% endfor %}
+      </table>
+    </div>
+  </section>
+
+  {# — Constructs table — #}
+  <section class="card section-space">
+    <h2>建構體 (Constructs)</h2>
+    <div class="table-scroll">
+      <table>
+        <tr>
+          <th>名稱</th><th>拓撲</th><th>零件數</th><th>裝配方法</th>
+        </tr>
+        {% for item in design_v2.constructs %}
+        <tr>
+          <td><strong>{{ item.name }}</strong></td>
+          <td><span class="badge">{{ item.topology }}</span></td>
+          <td>{{ item.part_instances|length }}</td>
+          <td>{{ item.assembly_method.value or "未知" }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="muted">尚無建構體定義。</td></tr>
+        {% endfor %}
+      </table>
+    </div>
+  </section>
+
+  {# — Plasmids table — #}
+  <section class="card section-space">
+    <h2>質體 (Plasmids)</h2>
+    <div class="table-scroll">
+      <table>
+        <tr>
+          <th>名稱</th><th>複製起點</th><th>拷貝數</th><th>篩選標記</th>
+        </tr>
+        {% for item in design_v2.plasmids %}
+        <tr>
+          <td><strong>{{ item.name }}</strong></td>
+          <td>{{ item.origin_of_replication.value or "未知" }}</td>
+          <td>{{ item.copy_number.value or "未知" }}</td>
+          <td>{{ item.selection_marker.value or "未知" }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="muted">尚無質體層定義。</td></tr>
+        {% endfor %}
+      </table>
+    </div>
+  </section>
+</div>
+
+{# ════════════════════════════════════════════════════════════ #}
+{# TAB 3 — 裝配與交付下載                                       #}
+{# ════════════════════════════════════════════════════════════ #}
+<div class="tab-content" id="tab-assembly" style="display:none;">
+
+  <section class="card section-space">
+    <h2>裝配文件與交付下載</h2>
+    {% if view.can_assemble %}
+    <p>此設計已準備好進行裝配規劃。前往裝配工作區建立交付物件。</p>
+    <div class="inline" style="margin-top:14px;">
+      <a class="button" href="/web/assembly/new?design={{ design.design_id }}&rev={{ viewed_rev }}">前往裝配 →</a>
+    </div>
+    {% else %}
+    <div class="warning-box">
+      🔒 裝配功能目前不可用。<br>
+      <span class="muted">原因：{{ view.assemble_lock_reason or "條件未滿足" }}</span>
+    </div>
+    {% endif %}
+  </section>
+
+  {% if view.recent_deliverable_id %}
+  <section class="card section-space">
+    <h2>最近的交付物件</h2>
+    <p>此設計已有產出的交付物件，您可以直接查看報告或下載產出檔案。</p>
+    <div class="inline" style="margin-top:14px; gap:10px;">
+      <a class="button secondary" href="/web/assembly/deliverables/{{ view.recent_deliverable_id }}">查看報告</a>
+      <a class="button secondary" href="/web/assembly/deliverables/{{ view.recent_deliverable_id }}/downloads">下載檔案</a>
+    </div>
+  </section>
+  {% endif %}
+</div>
+
+{# ════════════════════════════════════════════════════════════ #}
+{# TAB 4 — 匯出中心 (Export Center)                             #}
+{# ════════════════════════════════════════════════════════════ #}
+<div class="tab-content" id="tab-export" style="display:none;">
+
+  {% if not view.can_export %}
+  <div class="warning-box" style="margin-bottom:18px;">
+    🔒 匯出功能目前不可用。<br>
+    <span class="muted">原因：{{ view.export_lock_reason or "條件未滿足" }}</span>
+  </div>
+  {% endif %}
+
+  <section class="card section-space">
+    <div class="split-header" style="margin-bottom:16px;">
+      <div>
+        <h2>匯出中心</h2>
+        <p class="muted">選擇所需格式，下載設計資料。所有匯出均以 Revision {{ viewed_rev }} 為基準。</p>
+      </div>
+      <span class="status-badge {{ 'status-ready' if view.can_export else 'status-warning' }}">
+        {{ "可匯出" if view.can_export else "受限" }}
+      </span>
+    </div>
+
+    <div class="download-grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:16px;">
+
+      {# ── BOM CSV ── #}
+      <div class="download-card" style="display:grid; gap:10px; {{ '' if view.can_export else 'opacity:0.5; pointer-events:none;' }}">
+        <div style="font-size:28px;">📊</div>
+        <strong>BOM 材料 CSV 明細</strong>
+        <span>完整零件材料清單，以逗號分隔值格式匯出。可直接匯入試算表工具。</span>
+        <span style="font-size:11px; color:var(--muted);">格式：text/csv · v1</span>
+        <a class="button secondary" href="/api/v1/designs/{{ design.design_id }}/exports/bom?rev={{ viewed_rev }}" style="text-align:center;">下載 CSV</a>
+      </div>
+
+      {# ── GenBank ── #}
+      <div class="download-card" style="display:grid; gap:10px; {{ '' if view.can_export else 'opacity:0.5; pointer-events:none;' }}">
+        <div style="font-size:28px;">🧬</div>
+        <strong>GenBank 完整圖譜</strong>
+        <span>建構體序列與註釋，以標準 GenBank flat-file 格式匯出。適用於 SnapGene、Benchling 等工具。</span>
+        <span style="font-size:11px; color:var(--muted);">格式：application/genbank · v1</span>
+        <a class="button secondary" href="/api/v1/designs/{{ design.design_id }}/exports/genbank?rev={{ viewed_rev }}" style="text-align:center;">下載 GenBank</a>
+      </div>
+
+      {# ── SBOL3 ── #}
+      <div class="download-card" style="display:grid; gap:10px; {{ '' if view.can_export else 'opacity:0.5; pointer-events:none;' }}">
+        <div style="font-size:28px;">📡</div>
+        <strong>SBOL3</strong>
+        <span>Synthetic Biology Open Language v3 格式，用於跨平台合成生物學資料交換。</span>
+        <span style="font-size:11px; color:var(--muted);">格式：application/ld+json (SBOL3) · v3.1</span>
+        <a class="button secondary" href="/api/v1/designs/{{ design.design_id }}/exports/sbol3?rev={{ viewed_rev }}" style="text-align:center;">下載 SBOL3</a>
+      </div>
+
+      {# ── JSON ── #}
+      <div class="download-card" style="display:grid; gap:10px; {{ '' if view.can_export else 'opacity:0.5; pointer-events:none;' }}">
+        <div style="font-size:28px;">📋</div>
+        <strong>JSON</strong>
+        <span>完整 DesignIR v2 結構化資料，含所有欄位、假設與來源追蹤。適合程式化存取。</span>
+        <span style="font-size:11px; color:var(--muted);">格式：application/json · v2</span>
+        <a class="button secondary" href="/api/v1/designs/{{ design.design_id }}/exports/json?rev={{ viewed_rev }}" style="text-align:center;">下載 JSON</a>
+      </div>
+
+      {# ── Verilog ── #}
+      <div class="download-card" style="display:grid; gap:10px; {{ '' if view.can_export else 'opacity:0.5; pointer-events:none;' }}">
+        <div style="font-size:28px;">💻</div>
+        <strong>Verilog</strong>
+        <span>硬體描述語言格式的邏輯規格，可用於 Cello 等基因電路 CAD 工具重新合成。</span>
+        <span style="font-size:11px; color:var(--muted);">格式：text/verilog · v1</span>
+        <a class="button secondary" href="/api/v1/designs/{{ design.design_id }}/exports/verilog?rev={{ viewed_rev }}" style="text-align:center;">下載 Verilog</a>
+      </div>
+
+      {# ── Plasmid GenBank ── #}
+      <div class="download-card" style="display:grid; gap:10px; {{ '' if view.can_export else 'opacity:0.5; pointer-events:none;' }}">
+        <div style="font-size:28px;">🧫</div>
+        <strong>Plasmid GenBank</strong>
+        <span>含骨架載體的完整質體 GenBank 檔案。請指定骨架名稱以生成完整環形序列。</span>
+        <span style="font-size:11px; color:var(--muted);">格式：application/genbank · v1</span>
+        <div style="display:grid; gap:6px; margin-top:4px;">
+          <label style="font-size:13px; font-weight:600;">骨架載體名稱
+            <input type="text" id="plasmid-backbone-input" placeholder="例如：pAN4637" style="margin-top:4px;">
+          </label>
+          <a class="button secondary" id="plasmid-genbank-btn"
+             href="/api/v1/designs/{{ design.design_id }}/exports/plasmid_genbank?rev={{ viewed_rev }}"
+             onclick="(function(e){var b=document.getElementById('plasmid-backbone-input').value;if(b){e.target.href='/api/v1/designs/{{ design.design_id }}/exports/plasmid_genbank?rev={{ viewed_rev }}&backbone='+encodeURIComponent(b);}else{e.preventDefault();alert('請輸入骨架載體名稱');}})(event)"
+             style="text-align:center;">下載 Plasmid GenBank</a>
+        </div>
+      </div>
+
+      {# ── ZIP Project Package ── #}
+      <div class="download-card" style="display:grid; gap:10px; {{ '' if view.can_export else 'opacity:0.5; pointer-events:none;' }}">
+        <div style="font-size:28px;">📦</div>
+        <strong>ZIP 專案套件</strong>
+        <span>一鍵下載完整專案：包含所有格式的匯出檔案、模擬結果與元資料。</span>
+        <span style="font-size:11px; color:var(--muted);">格式：application/zip · 綜合</span>
+        <a class="button" href="/web/designs/{{ design.design_id }}/exports/project_package?rev={{ viewed_rev }}" style="text-align:center;">下載 ZIP 套件</a>
+      </div>
+
+      {# ── Share / Print Summary ── #}
+      <div class="download-card" style="display:grid; gap:10px;">
+        <div style="font-size:28px;">🖨️</div>
+        <strong>分享 / 列印摘要</strong>
+        <span>產生適合列印的設計摘要頁面，可用於實驗室記錄、報告或團隊分享。</span>
+        <span style="font-size:11px; color:var(--muted);">格式：HTML (可列印) · v1</span>
+        <a class="button secondary" href="/web/designs/{{ design.design_id }}/share_summary?rev={{ viewed_rev }}" style="text-align:center;">開啟摘要</a>
+      </div>
+
+    </div>
+  </section>
+</div>
+
+{# ════════════════════════════════════════════════════════════ #}
+{# TAB 5 — 版本歷程                                            #}
+{# ════════════════════════════════════════════════════════════ #}
+<div class="tab-content" id="tab-revisions" style="display:none;">
+
+  <section class="card section-space">
+    <div class="split-header" style="margin-bottom:16px;">
+      <div>
+        <h2>版本歷程</h2>
+        <p class="muted">追蹤設計的演進歷程，點選版本號可查看該時間點的快照。</p>
+      </div>
+      <button class="button secondary" onclick="compareRevisions()" id="compare-btn" disabled>比較選取版本</button>
+    </div>
+
+    <div style="position:relative; padding-left:32px;">
+      {# Vertical timeline line #}
+      <div style="position:absolute; left:13px; top:8px; bottom:8px; width:2px; background:var(--line);"></div>
+
+      {% for rev in revisions %}
+      <div style="position:relative; padding:14px 0 14px 20px;
+                  {% if rev.revision_number == viewed_rev %}border-left:3px solid var(--brand); margin-left:-2px; padding-left:22px;{% endif %}">
+        {# Timeline dot #}
+        <div style="position:absolute; left:-24px; top:18px; width:12px; height:12px; border-radius:50%;
+                    background:{{ 'var(--brand)' if rev.revision_number == viewed_rev else 'var(--line)' }};
+                    border:2px solid {{ 'var(--brand)' if rev.revision_number == viewed_rev else '#d0d5dd' }};"></div>
+
+        <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+          <div style="flex:1; min-width:200px;">
+            <div class="inline" style="gap:8px; margin-bottom:4px;">
+              <strong style="font-size:15px;">
+                Revision {{ rev.revision_number }}
+                {% if rev.revision_number == viewed_rev %}
+                  <span class="badge" style="margin-left:4px;">目前</span>
+                {% endif %}
+              </strong>
+              <span class="muted" style="font-size:12px;">
+                由 {{ rev.created_by or "系統" }} ·
+                <time class="format-date">{{ rev.created_at }}</time>
+              </span>
+            </div>
+            <p style="margin:4px 0 0; color:var(--muted); font-size:13px;">{{ rev.change_summary or "無變更摘要" }}</p>
+          </div>
+
+          <div class="inline" style="gap:8px; flex-shrink:0;">
+            <a class="button secondary" href="/web/designs/{{ design.design_id }}?rev={{ rev.revision_number }}"
+               style="font-size:12px; padding:6px 10px;">
+              {% if rev.revision_number == viewed_rev %}檢視中{% else %}查看快照{% endif %}
+            </a>
+            <label style="display:flex; align-items:center; gap:4px; font-weight:500; font-size:12px; cursor:pointer;">
+              <input type="radio" name="diff_from" value="{{ rev.revision_number }}"
+                     onchange="updateCompareBtn()" style="width:auto;">
+              A
+            </label>
+            <label style="display:flex; align-items:center; gap:4px; font-weight:500; font-size:12px; cursor:pointer;">
+              <input type="radio" name="diff_to" value="{{ rev.revision_number }}"
+                     onchange="updateCompareBtn()" style="width:auto;">
+              B
+            </label>
+          </div>
+        </div>
+      </div>
+      {% else %}
+      <p class="muted" style="padding-left:20px;">尚無版本記錄。</p>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+
+{# ════════════════════════════════════════════════════════════ #}
+{# TAB 6 — 最佳化 (conditional)                                #}
+{# ════════════════════════════════════════════════════════════ #}
+{% if view.can_optimize %}
+<div class="tab-content" id="tab-optimization" style="display:none;">
+  <section class="card section-space">
+    <h2>最佳化工作區</h2>
+    <p>此設計可進行參數最佳化。選擇一個最佳化策略以改善電路效能。</p>
+    <div class="grid grid-2" style="margin-top:16px;">
+      <a class="download-card" href="/web/designs/{{ design.design_id }}/optimize/codon?rev={{ viewed_rev }}" style="text-decoration:none;">
+        <strong>密碼子最佳化</strong>
+        <span>針對目標宿主進行密碼子使用頻率優化，提升蛋白質表達量。</span>
+      </a>
+      <a class="download-card" href="/web/designs/{{ design.design_id }}/optimize/rbs?rev={{ viewed_rev }}" style="text-decoration:none;">
+        <strong>RBS 強度調控</strong>
+        <span>調整核糖體結合位點序列，精確控制翻譯起始速率。</span>
+      </a>
+      <a class="download-card" href="/web/designs/{{ design.design_id }}/optimize/promoter?rev={{ viewed_rev }}" style="text-decoration:none;">
+        <strong>啟動子工程</strong>
+        <span>篩選或設計啟動子變體，調整基因表達水平與動態範圍。</span>
+      </a>
+      <a class="download-card" href="/web/designs/{{ design.design_id }}/optimize/stability?rev={{ viewed_rev }}" style="text-decoration:none;">
+        <strong>遺傳穩定性分析</strong>
+        <span>評估並改善電路在多代培養中的結構與功能穩定性。</span>
+      </a>
+    </div>
+  </section>
+
+  {% if view.optimize_lock_reason %}
+  <div class="warning-box section-space">
+    ⚠️ 部分最佳化功能可能受限：{{ view.optimize_lock_reason }}
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+{# ════════════════════════════════════════════════════════════ #}
+{# Tab switching & comparison JavaScript                       #}
+{# ════════════════════════════════════════════════════════════ #}
+<script>
+window.switchTab = function(event, tabId) {
+  if (event) event.preventDefault();
+
+  // Hide all tab content
+  document.querySelectorAll('.tab-content').forEach(function(el) {
+    el.style.display = 'none';
+  });
+
+  // Deactivate all tab links
+  document.querySelectorAll('.section-tabs a').forEach(function(el) {
+    el.classList.remove('active');
+    el.style.background = '';
+    el.style.color = '';
+  });
+
+  // Show target tab
+  var target = document.getElementById('tab-' + tabId);
+  if (target) {
+    target.style.display = 'block';
+  }
+
+  // Activate clicked tab link
+  var link = document.querySelector('.section-tabs a[data-tab="' + tabId + '"]');
+  if (link) {
+    link.classList.add('active');
+    link.style.background = 'var(--brand)';
+    link.style.color = 'white';
+  }
+
+  // Update URL hash without scrolling
+  if (history.replaceState) {
+    history.replaceState(null, null, '#' + tabId);
+  }
+};
+
+window.updateCompareBtn = function() {
+  var fromChecked = document.querySelector('input[name="diff_from"]:checked');
+  var toChecked = document.querySelector('input[name="diff_to"]:checked');
+  var btn = document.getElementById('compare-btn');
+  if (btn) {
+    btn.disabled = !(fromChecked && toChecked);
+  }
+};
+
+window.compareRevisions = function() {
+  var from = document.querySelector('input[name="diff_from"]:checked');
+  var to = document.querySelector('input[name="diff_to"]:checked');
+  if (from && to) {
+    window.location.href = '/web/designs/{{ design.design_id }}/diff?from=' + from.value + '&to=' + to.value;
+  }
+};
+
+document.addEventListener('DOMContentLoaded', function() {
+  // Read hash and activate correct tab
+  var hash = window.location.hash.replace('#', '') || 'spec';
+  var validTabs = ['spec', 'bom', 'assembly', 'export', 'revisions', 'optimization'];
+  if (validTabs.indexOf(hash) === -1) hash = 'spec';
+  switchTab(null, hash);
+
+  // Push to recently viewed designs in localStorage
+  try {
+    var recentlyViewed = JSON.parse(localStorage.getItem("recently_viewed_designs") || "[]");
+    recentlyViewed = recentlyViewed.filter(function(item) {
+      return item.id !== "{{ design.design_id }}";
+    });
+    recentlyViewed.unshift({
+      id: "{{ design.design_id }}",
+      name: "{{ design.name }}"
+    });
+    recentlyViewed = recentlyViewed.slice(0, 5);
+    localStorage.setItem("recently_viewed_designs", JSON.stringify(recentlyViewed));
+  } catch (e) {
+    console.error(e);
+  }
+});
+</script>
+
 {% endblock %}

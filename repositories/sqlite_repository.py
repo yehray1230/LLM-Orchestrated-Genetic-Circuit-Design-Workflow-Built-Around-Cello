@@ -14,7 +14,7 @@ from repositories.json_repository import RepositoryError
 
 
 SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")
-DATABASE_SCHEMA_VERSION = 1
+DATABASE_SCHEMA_VERSION = 2
 
 
 class SqliteDesignRepository:
@@ -117,18 +117,52 @@ class SqliteDesignRepository:
     def get(self, record_id: str) -> dict[str, Any] | None:
         _validate_id(record_id)
         with self._connect() as connection:
-            row = connection.execute(
-                "SELECT payload_json FROM designs WHERE id = ?",
-                (record_id,),
-            ).fetchone()
-        return _deserialize(row["payload_json"]) if row else None
+            version = int(connection.execute("PRAGMA user_version").fetchone()[0])
+            if version >= 2:
+                row = connection.execute(
+                    "SELECT payload_json, is_archived, is_deleted, is_pinned FROM designs WHERE id = ?",
+                    (record_id,),
+                ).fetchone()
+                if row:
+                    payload = _deserialize(row["payload_json"])
+                    payload["is_archived"] = bool(row["is_archived"])
+                    payload["is_deleted"] = bool(row["is_deleted"])
+                    payload["is_pinned"] = bool(row["is_pinned"])
+                    return payload
+            else:
+                row = connection.execute(
+                    "SELECT payload_json FROM designs WHERE id = ?",
+                    (record_id,),
+                ).fetchone()
+                if row:
+                    return _deserialize(row["payload_json"])
+        return None
 
-    def list(self) -> list[dict[str, Any]]:
+    def list(self, show_archived: bool = False, show_deleted: bool = False) -> list[dict[str, Any]]:
         with self._connect() as connection:
-            rows = connection.execute(
-                "SELECT payload_json FROM designs ORDER BY updated_at DESC, id"
-            ).fetchall()
-        return [_deserialize(row["payload_json"]) for row in rows]
+            version = int(connection.execute("PRAGMA user_version").fetchone()[0])
+            if version >= 2:
+                query = "SELECT payload_json, is_archived, is_deleted, is_pinned FROM designs WHERE 1=1"
+                params = []
+                if not show_deleted:
+                    query += " AND is_deleted = 0"
+                if not show_archived:
+                    query += " AND is_archived = 0"
+                query += " ORDER BY updated_at DESC, id"
+                rows = connection.execute(query, params).fetchall()
+                results = []
+                for row in rows:
+                    payload = _deserialize(row["payload_json"])
+                    payload["is_archived"] = bool(row["is_archived"])
+                    payload["is_deleted"] = bool(row["is_deleted"])
+                    payload["is_pinned"] = bool(row["is_pinned"])
+                    results.append(payload)
+                return results
+            else:
+                rows = connection.execute(
+                    "SELECT payload_json FROM designs ORDER BY updated_at DESC, id"
+                ).fetchall()
+                return [_deserialize(row["payload_json"]) for row in rows]
 
     def exists(self, record_id: str) -> bool:
         _validate_id(record_id)
@@ -169,6 +203,60 @@ class SqliteDesignRepository:
                 (record_id, int(revision_number)),
             ).fetchone()
         return _deserialize(row["payload_json"]) if row else None
+
+    def archive(self, record_id: str) -> None:
+        _validate_id(record_id)
+        with self._transaction() as connection:
+            connection.execute(
+                "UPDATE designs SET is_archived = 1, updated_at = ? WHERE id = ?",
+                (_now_iso(), record_id),
+            )
+
+    def unarchive(self, record_id: str) -> None:
+        _validate_id(record_id)
+        with self._transaction() as connection:
+            connection.execute(
+                "UPDATE designs SET is_archived = 0, updated_at = ? WHERE id = ?",
+                (_now_iso(), record_id),
+            )
+
+    def soft_delete(self, record_id: str) -> None:
+        _validate_id(record_id)
+        with self._transaction() as connection:
+            connection.execute(
+                "UPDATE designs SET is_deleted = 1, updated_at = ? WHERE id = ?",
+                (_now_iso(), record_id),
+            )
+
+    def restore(self, record_id: str) -> None:
+        _validate_id(record_id)
+        with self._transaction() as connection:
+            connection.execute(
+                "UPDATE designs SET is_deleted = 0, updated_at = ? WHERE id = ?",
+                (_now_iso(), record_id),
+            )
+
+    def pin(self, record_id: str) -> None:
+        _validate_id(record_id)
+        with self._transaction() as connection:
+            connection.execute(
+                "UPDATE designs SET is_pinned = 1, updated_at = ? WHERE id = ?",
+                (_now_iso(), record_id),
+            )
+
+    def unpin(self, record_id: str) -> None:
+        _validate_id(record_id)
+        with self._transaction() as connection:
+            connection.execute(
+                "UPDATE designs SET is_pinned = 0, updated_at = ? WHERE id = ?",
+                (_now_iso(), record_id),
+            )
+
+    def purge(self, record_id: str) -> bool:
+        _validate_id(record_id)
+        with self._transaction() as connection:
+            cursor = connection.execute("DELETE FROM designs WHERE id = ?", (record_id,))
+            return cursor.rowcount > 0
 
     def record_payload_migration(
         self,
@@ -229,7 +317,10 @@ class SqliteDesignRepository:
                         payload_json TEXT NOT NULL,
                         payload_hash TEXT NOT NULL,
                         created_at TEXT NOT NULL,
-                        updated_at TEXT NOT NULL
+                        updated_at TEXT NOT NULL,
+                        is_archived INTEGER DEFAULT 0,
+                        is_deleted INTEGER DEFAULT 0,
+                        is_pinned INTEGER DEFAULT 0
                     );
                     CREATE TABLE IF NOT EXISTS design_revisions(
                         design_id TEXT NOT NULL,
@@ -272,6 +363,22 @@ class SqliteDesignRepository:
                     PRAGMA user_version = 1;
                     """
                 )
+                version = 1
+            if version < 2:
+                # Migrate to version 2 (add columns)
+                try:
+                    connection.execute("ALTER TABLE designs ADD COLUMN is_archived INTEGER DEFAULT 0")
+                except sqlite3.OperationalError:
+                    pass
+                try:
+                    connection.execute("ALTER TABLE designs ADD COLUMN is_deleted INTEGER DEFAULT 0")
+                except sqlite3.OperationalError:
+                    pass
+                try:
+                    connection.execute("ALTER TABLE designs ADD COLUMN is_pinned INTEGER DEFAULT 0")
+                except sqlite3.OperationalError:
+                    pass
+                connection.execute("PRAGMA user_version = 2")
 
     @contextmanager
     def _transaction(self) -> Iterator[sqlite3.Connection]:

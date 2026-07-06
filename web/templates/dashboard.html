@@ -5,6 +5,85 @@
   <h1>研究工作台</h1>
   <p class="muted">聚焦最近設計、執行狀態與外部證據，不在同一頁塞入所有技術細節。</p>
 </header>
+<div class="grid grid-2" style="margin-bottom: 18px; gap: 16px;">
+  <!-- Column 1: AI Service Status -->
+  <article class="card" id="ai-status-card" style="margin: 0; border-left: 5px solid #667085; transition: all 0.3s ease; display: flex; flex-direction: column; justify-content: space-between; min-height: 100px;">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; width: 100%;">
+      <div>
+        <h3 style="margin: 0 0 4px 0;">AI 服務狀態</h3>
+        <div id="ai-status-detail" class="muted" style="font-size: 13px;">正在獲取連線狀態...</div>
+      </div>
+      <div id="ai-status-badge-container">
+        <span class="status-badge status-neutral">檢查中...</span>
+      </div>
+    </div>
+    <div style="margin-top: 12px; text-align: right;">
+      <a href="/web/settings" class="button secondary" style="padding: 4px 10px; font-size: 12px; height: auto;">變更模型設定</a>
+    </div>
+  </article>
+
+  <!-- Column 2: Cello Mapping Health Status -->
+  <article class="card" id="cello-status-card" style="margin: 0; border-left: 5px solid {% if cello_status.status == 'available' %}#12b886{% elif cello_status.status == 'fallback' or cello_status.fallback_used %}#f08c00{% else %}#fa5252{% endif %}; display: flex; flex-direction: column; justify-content: space-between; min-height: 100px;">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; width: 100%;">
+      <div>
+        <h3 style="margin: 0 0 4px 0;">Cello 物理對應狀態</h3>
+        <div class="muted" style="font-size: 13px;">
+          {% if cello_status.status == 'available' %}
+            本地 Cello 映射引擎與 UCF 配置均正常可用。
+          {% elif cello_status.status == 'fallback' or cello_status.fallback_used %}
+            無可用本地 Cello 容器，目前使用模擬備援模式。
+          {% else %}
+            對應引擎失效或未正確安裝，可能導致電路對應失敗。
+          {% endif %}
+        </div>
+      </div>
+      <div>
+        {% if cello_status.status == 'available' %}
+          <span class="status-badge status-ready">🟢 正常 (Available)</span>
+        {% elif cello_status.status == 'fallback' or cello_status.fallback_used %}
+          <span class="status-badge status-neutral" style="background: #fff9db; color: #f08c00; border-color: #ffe066;">🟡 備援 (Fallback)</span>
+        {% else %}
+          <span class="status-badge status-error">🔴 異常 (Error)</span>
+        {% endif %}
+      </div>
+    </div>
+    <div style="margin-top: 12px; text-align: right;">
+      <a href="/web/settings" class="button secondary" style="padding: 4px 10px; font-size: 12px; height: auto;">變更 Cello 設定</a>
+    </div>
+  </article>
+</div>
+
+{% if notifications %}
+  {% set unread_count = notifications | selectattr('read', 'equalto', false) | list | length %}
+  {% if unread_count > 0 %}
+  <section class="card" id="notifications-section" style="margin-bottom: 18px; border-left: 5px solid #d92d20; padding: 16px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <h2 style="margin:0; font-size:16px;">待辦事項與系統提醒</h2>
+      <button class="button secondary" id="btn-read-all-notifs" style="padding: 4px 10px; font-size:12px; height: auto;">全部標記為已讀</button>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:8px;">
+      {% for notif in notifications %}
+        {% if not notif.read %}
+        <div class="notice-item" data-notif-id="{{ notif.notification_id }}" style="background: #fdf2f2; border: 1px solid #fecdca; padding: 10px 14px; border-radius: 6px; display:flex; justify-content:space-between; align-items:center; transition: all 0.3s ease; box-shadow: none;">
+          <div>
+            <span class="status-badge {% if notif.category == 'warning' %}status-warning{% elif notif.category == 'error' %}status-error{% elif notif.category == 'success' %}status-ready{% else %}status-neutral{% endif %}" style="margin-right: 8px;">{{ notif.title }}</span>
+            <span style="font-size: 13.5px; color: #344054;">{{ notif.message }}</span>
+            <span class="muted" style="font-size: 11.5px; margin-left: 10px;">{{ notif.timestamp }}</span>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            {% if notif.link %}
+              <a href="{{ notif.link }}" class="button" style="padding: 4px 10px; font-size: 12px; height: auto;">查看詳情</a>
+            {% endif %}
+            <button class="button secondary btn-mark-notif-read" data-notif-id="{{ notif.notification_id }}" style="padding: 4px 10px; font-size: 12px; height: auto;">已讀</button>
+          </div>
+        </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+{% endif %}
+
 <section class="grid grid-3">
   <article class="card"><span class="muted">已保存設計</span><div class="metric">{{ design_count }}</div></article>
   <article class="card"><span class="muted">執行中任務</span><div class="metric">{{ active_run_count }}</div></article>
@@ -20,20 +99,87 @@
     </div>
   </article>
   <article class="card">
-    <h2>最近執行</h2>
-    {% if runs %}
-      <table>
-        <tr><th>Run</th><th>Status</th><th>Progress</th></tr>
-        {% for run in runs %}
-        <tr>
-          <td><a href="/web/runs/{{ run.run_id }}">{{ run.run_id }}</a></td>
-          <td><span class="badge">{{ run.status }}</span></td>
-          <td>{{ "%.0f"|format((run.progress or 0) * 100) }}%</td>
-        </tr>
-        {% endfor %}
+    <h2>後端工作探索狀態 (Job Monitor)</h2>
+    <p class="muted">監控最近啟動的設計與研究工作流程之即時進度與健康度。</p>
+
+    {% if active_jobs %}
+      <h3 style="font-size: 13.5px; margin-top: 14px; margin-bottom: 6px; color: var(--brand);">⚡ 執行中背景工作</h3>
+      <table style="width: 100%; border-collapse: collapse; margin-bottom: 14px;">
+        <thead>
+          <tr style="border-bottom: 2px solid var(--line); text-align: left; font-size: 12px;">
+            <th style="padding: 6px;">工作 ID</th>
+            <th style="padding: 6px;">類型</th>
+            <th style="padding: 6px;">進度</th>
+            <th style="padding: 6px;">狀態</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for job in active_jobs %}
+          <tr style="border-bottom: 1px solid var(--line); font-size: 13px;">
+            <td style="padding: 8px 6px;">
+              <a href="/web/{% if job.kind == 'research' %}research/runs{% else %}runs{% endif %}/{{ job.run_id }}"><code>{{ job.run_id[:12] }}...</code></a>
+            </td>
+            <td style="padding: 8px 6px;"><span class="badge" style="background:#f2f4f7; color:#344054;">{{ job.kind | upper }}</span></td>
+            <td style="padding: 8px 6px;">{{ "%.0f"|format(job.progress * 100) }}%</td>
+            <td style="padding: 8px 6px;">
+              <span class="status-badge {% if job.status == 'needs_human_input' %}status-warning{% else %}status-active{% endif %}">{{ job.status }}</span>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
       </table>
-    {% else %}
-      <p class="muted">尚無執行紀錄。</p>
+    {% endif %}
+
+    {% if failed_jobs %}
+      <h3 style="font-size: 13.5px; margin-top: 14px; margin-bottom: 6px; color: #b42318;">❌ 執行失敗工作</h3>
+      <table style="width: 100%; border-collapse: collapse; margin-bottom: 14px;">
+        <thead>
+          <tr style="border-bottom: 2px solid var(--line); text-align: left; font-size: 12px;">
+            <th style="padding: 6px;">工作 ID</th>
+            <th style="padding: 6px;">類型</th>
+            <th style="padding: 6px;">狀態</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for job in failed_jobs %}
+          <tr style="border-bottom: 1px solid var(--line); font-size: 13px; background: #fffbfa;">
+            <td style="padding: 8px 6px;">
+              <a href="/web/{% if job.kind == 'research' %}research/runs{% else %}runs{% endif %}/{{ job.run_id }}" style="color:#b42318;"><code>{{ job.run_id[:12] }}...</code></a>
+            </td>
+            <td style="padding: 8px 6px;"><span class="badge" style="background:#fee4e2; color:#b42318;">{{ job.kind | upper }}</span></td>
+            <td style="padding: 8px 6px;"><span class="status-badge status-error">{{ job.status }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+
+    {% if completed_jobs %}
+      <h3 style="font-size: 13.5px; margin-top: 14px; margin-bottom: 6px; color: #027a48;">✅ 最近完成工作</h3>
+      <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+          <tr style="border-bottom: 2px solid var(--line); text-align: left; font-size: 12px;">
+            <th style="padding: 6px;">工作 ID</th>
+            <th style="padding: 6px;">類型</th>
+            <th style="padding: 6px;">狀態</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for job in completed_jobs %}
+          <tr style="border-bottom: 1px solid var(--line); font-size: 13px;">
+            <td style="padding: 8px 6px;">
+              <a href="/web/{% if job.kind == 'research' %}research/runs{% else %}runs{% endif %}/{{ job.run_id }}"><code>{{ job.run_id[:12] }}...</code></a>
+            </td>
+            <td style="padding: 8px 6px;"><span class="badge" style="background:#e0f2fe; color:#0369a1;">{{ job.kind | upper }}</span></td>
+            <td style="padding: 8px 6px;"><span class="status-badge status-ready">{{ job.status }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+
+    {% if not active_jobs and not failed_jobs and not completed_jobs %}
+      <p class="muted">目前尚無後端工作紀錄。</p>
     {% endif %}
   </article>
 </section>

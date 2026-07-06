@@ -1,0 +1,255 @@
+{% extends "base.html" %}
+{% block title %}Stochastic SSA Simulation - {{ design.name }}{% endblock %}
+{% block content %}
+<style>
+  .sub-tab-button.active {
+    background: var(--brand) !important;
+    color: white !important;
+    border-color: var(--brand) !important;
+  }
+</style>
+
+{% if is_historical %}
+<div class="warning-box" style="margin-bottom: 18px; background: #fff9e6; border: 1px solid #ffe199; color: #b54708; display: flex; justify-content: space-between; align-items: center; border-radius: 8px; padding: 12px 18px;">
+  <span style="font-size: 14.5px;">⚠️ 您目前正在查看版本 <strong>[Rev {{ viewed_rev }}]</strong> 的歷史快照。</span>
+  <a href="/web/designs/{{ view.design_id }}" class="button" style="padding: 4px 10px; font-size: 12px; height: auto;">回到最新版本</a>
+</div>
+{% endif %}
+
+<header class="page-header split-header">
+  <div>
+    <span class="eyebrow">模擬與分析中心</span>
+    <h1>{{ design.name }}</h1>
+    <p class="muted">{{ design.design_id }} · revision {{ design_v2.revision.revision_number }}</p>
+  </div>
+  <div style="display: flex; gap: 8px;">
+    <a class="button secondary" href="/web/designs/{{ view.design_id }}{% if is_historical %}?rev={{ viewed_rev }}{% endif %}">返回總覽</a>
+  </div>
+</header>
+
+<!-- Secondary Sub-Navigation -->
+<nav class="section-tabs" style="border-bottom: 2px solid var(--line); padding-bottom: 6px; display: flex; gap: 8px; overflow-x: auto; white-space: nowrap; margin-bottom: 20px;">
+  <a href="/web/designs/{{ view.design_id }}{% if is_historical %}?rev={{ viewed_rev }}{% endif %}" class="tab-button">總覽</a>
+  <a href="/web/designs/{{ view.design_id }}#source" class="tab-button">候選來源</a>
+  <a href="/web/designs/{{ view.design_id }}/simulation/ode{% if is_historical %}?rev={{ viewed_rev }}{% endif %}" class="tab-button active">模擬</a>
+  <a href="/web/designs/{{ view.design_id }}#optimization" class="tab-button">最佳化</a>
+  <a href="/web/designs/{{ view.design_id }}#assembly" class="tab-button">組裝</a>
+  <a href="/web/designs/{{ view.design_id }}#export" class="tab-button">匯出</a>
+  <a href="/web/designs/{{ view.design_id }}#history" class="tab-button">歷程</a>
+</nav>
+
+<!-- Simulation Sub-Navigation -->
+<div class="simulation-sub-tabs" style="display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid var(--line); padding-bottom: 8px; overflow-x: auto;">
+  <a href="/web/designs/{{ view.design_id }}/simulation/ode{% if is_historical %}?rev={{ viewed_rev }}{% endif %}" class="sub-tab-button" style="padding: 6px 12px; border: 1px solid var(--line); border-radius: 4px; background: white; cursor: pointer; font-size: 13px; text-decoration: none; color: var(--text);">動態 ODE 模擬</a>
+  <a href="/web/designs/{{ view.design_id }}/simulation/ssa{% if is_historical %}?rev={{ viewed_rev }}{% endif %}" class="sub-tab-button active" style="padding: 6px 12px; border: 1px solid var(--line); border-radius: 4px; background: white; cursor: pointer; font-size: 13px; text-decoration: none; color: var(--text);">隨機 SSA 模擬</a>
+  <a href="/web/designs/{{ view.design_id }}/simulation/sweep{% if is_historical %}?rev={{ viewed_rev }}{% endif %}" class="sub-tab-button" style="padding: 6px 12px; border: 1px solid var(--line); border-radius: 4px; background: white; cursor: pointer; font-size: 13px; text-decoration: none; color: var(--text);">參數敏感度分析</a>
+  <a href="/web/designs/{{ view.design_id }}/simulation/bifurcation{% if is_historical %}?rev={{ viewed_rev }}{% endif %}" class="sub-tab-button" style="padding: 6px 12px; border: 1px solid var(--line); border-radius: 4px; background: white; cursor: pointer; font-size: 13px; text-decoration: none; color: var(--text);">分岔與轉移函數</a>
+  <a href="/web/designs/{{ view.design_id }}/simulation/fit{% if is_historical %}?rev={{ viewed_rev }}{% endif %}" class="sub-tab-button" style="padding: 6px 12px; border: 1px solid var(--line); border-radius: 4px; background: white; cursor: pointer; font-size: 13px; text-decoration: none; color: var(--text);">參數配適對比</a>
+</div>
+
+<div class="grid grid-3" style="grid-template-columns: 1fr 2fr; gap: 24px; align-items: start;">
+  
+  <!-- Left Column: Settings Form -->
+  <article class="card" style="padding: 20px;">
+    <h2 style="font-size: 16px; margin-top: 0; margin-bottom: 16px; border-bottom: 1px solid var(--line); padding-bottom: 8px;">🎛️ Gillespie SSA 設定</h2>
+    
+    <form method="POST" action="/web/designs/{{ view.design_id }}/simulation/ssa{% if is_historical %}?rev={{ viewed_rev }}{% endif %}" id="simulation-form">
+      <div style="display: grid; gap: 12px; margin-bottom: 20px;">
+        <div>
+          <label style="display: block; font-size: 12px; font-weight: bold; margin-bottom: 4px;">模擬次數 (Runs)</label>
+          <input type="number" name="runs" value="10" min="1" max="200" required style="width: 100%; padding: 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 13px;">
+          <small class="muted">計算多條軌跡以獲得隨機統計。</small>
+        </div>
+
+        <div>
+          <label style="display: block; font-size: 12px; font-weight: bold; margin-bottom: 4px;">體積放大係數 (Scale Factor)</label>
+          <input type="number" step="0.1" name="scale_factor" value="10.0" min="0.1" max="500.0" required style="width: 100%; padding: 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 13px;">
+          <small class="muted">係數越小，分子數越少，噪音效應越明顯。</small>
+        </div>
+
+        <div>
+          <label style="display: block; font-size: 12px; font-weight: bold; margin-bottom: 4px;">最大反應步數 (Max Steps)</label>
+          <input type="number" name="max_steps" value="15000" min="500" max="200000" required style="width: 100%; padding: 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 13px;">
+        </div>
+
+        <div>
+          <label style="display: block; font-size: 12px; font-weight: bold; margin-bottom: 4px;">隨機晶種</label>
+          <input type="number" name="random_seed" placeholder="隨機" style="width: 100%; padding: 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 13px;">
+        </div>
+      </div>
+
+      <button type="submit" class="button" style="width: 100%;">🚀 執行隨機 SSA 模擬</button>
+    </form>
+  </article>
+
+  <!-- Right Column: Job Status & Result -->
+  <section class="grid grid-1" style="gap: 24px;">
+    
+    <!-- 1. 問題說明 -->
+    <article class="card" style="background: #f8fafc; border-left: 4px solid var(--brand);">
+      <h3 style="margin: 0 0 6px 0;">隨機／SSA 模擬回答的問題</h3>
+      <p style="margin: 0; font-size: 13.5px; line-height: 1.5; color: #475569;">
+        本分析解答：<strong>「在考量細胞內分子隨機碰撞與微觀隨機性時，此基因電路的穩定性與動態漲落如何？」</strong>
+      </p>
+    </article>
+
+    <!-- 2. 工作狀態 / 主要圖表 -->
+    <article class="card" style="min-height: 400px;">
+      {% if run_id and run_data and run_data.status not in ["completed", "failed", "cancelled", "error"] %}
+        <div style="text-align: center; padding: 80px 24px;">
+          <div style="animation: spin 1s linear infinite; width: 40px; height: 40px; border: 4px solid var(--line); border-top-color: var(--brand); border-radius: 50%; margin: 0 auto 16px auto;"></div>
+          <h3 style="margin: 0 0 8px 0;">隨機模擬計算中...</h3>
+          <p class="muted" style="margin: 0 0 16px 0;">正在使用 Gillespie 演算法計算隨機模擬軌跡。頁面將在完成後自動重整。</p>
+          <script>
+            setTimeout(() => { window.location.reload(); }, 2000);
+          </script>
+        </div>
+      {% elif run_data and run_data.status == "completed" and run_data.result %}
+        
+        <!-- SSA Step Limit warning -->
+        {% if run_data.result.ssa_result.simulation_status == "truncated" %}
+          <div style="background: #fffbeb; border: 1.5px solid var(--yellow); border-radius: 8px; padding: 14px; margin-bottom: 20px; color: #b54708; font-size: 13.5px;">
+            ⚠️ <strong>模擬未完全 (SSA Step Limit Reached)</strong>: 計算已達到最大反應步數限制 ({{ run_data.result.ssa_result.max_steps_per_run }} 步)。可能是因為胞內分子數過多，此圖表僅顯示截斷前的隨機軌跡。
+          </div>
+        {% endif %}
+
+        <h2>📊 隨機 Gillespie 軌跡與噪音統計</h2>
+        <div style="position: relative; height: 320px; width: 100%; margin-bottom: 20px;">
+          <canvas id="simulation-chart" style="height: 100%; width: 100%;"></canvas>
+        </div>
+
+        <!-- Fano factors table -->
+        <h3 style="font-size: 14px; margin-top: 20px; margin-bottom: 10px;">訊號雜訊與 Fano 因子 (Fano Factors)</h3>
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; margin-bottom: 20px;">
+          <thead>
+            <tr style="border-bottom: 2px solid var(--line);">
+              <th style="padding: 8px;">訊號名稱</th>
+              <th style="padding: 8px;">終端 Fano 因子 (Variance/Mean)</th>
+              <th style="padding: 8px;">狀態描述</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for name, fano in run_data.result.ssa_result.fano_factors.items() %}
+            <tr style="border-bottom: 1px solid var(--line);">
+              <td style="padding: 8px; font-weight: bold;">{{ name }}</td>
+              <td style="padding: 8px; font-family: monospace;">{{ "%.3f"|format(fano) }}</td>
+              <td style="padding: 8px;">
+                {% if fano > 1.2 %}
+                  <span style="color: #b42318; font-weight: bold;">⚠️ 隨機漲落偏高 (Super-Poissonian)</span>
+                {% else %}
+                  <span style="color: #027a48;">穩定 (Near-Poissonian)</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+
+        <!-- 3. 白話解釋 -->
+        <div style="background: #ecfdf3; border: 1px solid #abfdf1; border-radius: 8px; padding: 16px;">
+          <h4 style="margin: 0 0 6px 0; color: #027a48;">💡 隨機噪音白話轉譯</h4>
+          <p style="margin: 0; font-size: 13.5px; line-height: 1.5; color: #027a48;">
+            此處細線代表各次隨機模擬軌跡，粗線為平均值。這說明了微觀下的隨機性會使不同細胞內的電路表現量產生不同程度的抖動。<strong>記憶體穩定度 (Memory Stability)：{{ "%.1f"|format(run_data.result.ssa_result.memory_stability * 100) }}%</strong>。
+          </p>
+        </div>
+
+        <!-- 4. 限制／證據 -->
+        <div style="background: #fffbeb; border: 1px solid #fee4cc; border-radius: 8px; padding: 16px; margin-top: 16px;">
+          <h4 style="margin: 0 0 6px 0; color: #b54708;">⚠️ 可信度限制</h4>
+          <p style="margin: 0; font-size: 13px; line-height: 1.5; color: #b54708;">
+            Gillespie SSA 假設系統處於均勻混合狀態，且細胞體積恆定。若放大係數過低，部分物種可能隨機歸零導致死鎖。
+          </p>
+        </div>
+
+        <!-- 5. 原始資料下載 -->
+        <div style="margin-top: 24px; border-top: 1px solid var(--line); padding-top: 16px; display: flex; justify-content: space-between; align-items: center;">
+          <span class="muted" style="font-size: 12.5px;">模擬工作 ID: {{ run_id }}</span>
+          <a class="button secondary" href="/web/research/runs/{{ run_id }}" target="_blank">📥 下載隨機軌跡資料 (JSON)</a>
+        </div>
+      {% else %}
+        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 350px; text-align: center; color: var(--muted); padding: 24px;">
+          <span style="font-size: 48px; margin-bottom: 12px;">🎲</span>
+          <h3 style="margin: 0; color: var(--text); font-size: 16px;">等待啟動隨機 SSA</h3>
+          <p style="margin: 8px 0 0 0; font-size: 13.5px; max-width: 320px; line-height: 1.5;">請在左側設定重複模擬軌跡數量與細胞體積放大比率，點擊「執行隨機 SSA 模擬」觀察分子抖動行為。</p>
+        </div>
+      {% endif %}
+    </article>
+
+  </section>
+</div>
+
+{% if run_data and run_data.status == "completed" and run_data.result %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const ctx = document.getElementById('simulation-chart').getContext('2d');
+  const ssaRes = {{ run_data.result.ssa_result | tojson }};
+  
+  const datasets = [];
+  const time = ssaRes.mean_trajectory.time;
+  
+  // 1. Plot individual runs with thinner semi-transparent lines
+  if (ssaRes.runs && ssaRes.runs.length > 0) {
+    ssaRes.runs.forEach((run, runIdx) => {
+      Object.keys(run).forEach(key => {
+        if (key !== 'time' && (key === 'Y' || key === 'Q' || key.toLowerCase().includes('output'))) {
+          datasets.push({
+            label: `${key} (Run ${runIdx+1})`,
+            data: run[key],
+            borderColor: 'rgba(37, 99, 235, 0.15)',
+            borderWidth: 1,
+            tension: 0.1,
+            fill: false,
+            pointRadius: 0
+          });
+        }
+      });
+    });
+  }
+
+  // 2. Plot mean trajectory with thick bold line
+  Object.keys(ssaRes.mean_trajectory).forEach(key => {
+    if (key !== 'time') {
+      const isOutput = key.toLowerCase().includes('output') || key === 'Y' || key === 'Q';
+      datasets.push({
+        label: `${key} (平均值)`,
+        data: ssaRes.mean_trajectory[key],
+        borderColor: isOutput ? '#12b76a' : '#d92d20',
+        borderWidth: 3.5,
+        tension: 0.1,
+        fill: false,
+        pointRadius: 0
+      });
+    }
+  });
+
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: time,
+      datasets: datasets
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          labels: {
+            filter: function(item, chart) {
+              // Hide individual runs in legend to avoid cluttering
+              return !item.text.includes('Run');
+            }
+          }
+        }
+      },
+      scales: {
+        x: { title: { display: true, text: '時間 (秒)' } },
+        y: { title: { display: true, text: '分子濃度 (nM)' } }
+      }
+    }
+  });
+});
+</script>
+{% endif %}
+
+{% endblock %}

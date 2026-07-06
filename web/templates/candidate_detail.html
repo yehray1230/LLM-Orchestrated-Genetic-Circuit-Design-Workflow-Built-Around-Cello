@@ -1,0 +1,945 @@
+{% extends "base.html" %}
+{% block title %}Detail - Candidate #{{ view.index + 1 }} - {{ view.run_id }}{% endblock %}
+{% block content %}
+
+<!-- Header and Breadcrumbs -->
+<header class="page-header split-header" style="margin-bottom: 24px;">
+  <div>
+    <span class="eyebrow" style="display: flex; align-items: center; gap: 8px;">
+      <a href="/web/runs/{{ view.run_id }}" style="text-decoration: none; color: var(--muted);">Run {{ view.run_id }}</a>
+      <span>&rarr;</span>
+      <a href="/web/runs/{{ view.run_id }}/candidates" style="text-decoration: none; color: var(--muted);">Candidates</a>
+      <span>&rarr;</span>
+      <span style="color: var(--brand);">Candidate #{{ view.index + 1 }}</span>
+    </span>
+    <h1 style="display: inline-flex; align-items: center; gap: 12px; margin: 6px 0 0 0;">
+      {{ view.name }} 詳細設計報告
+      {% if view.is_best %}
+      <span class="status-badge status-ready" style="font-size: 13px; padding: 4px 12px; font-weight: 800;">★ 最佳候選</span>
+      {% endif %}
+    </h1>
+  </div>
+  <div style="display: flex; gap: 8px;">
+    <a class="button secondary" href="/web/runs/{{ view.run_id }}/candidates">返回候選列表</a>
+    <a class="button" href="/web/runs/{{ view.run_id }}">返回執行監控</a>
+  </div>
+</header>
+
+<!-- Section 1: Conclusion Summary & Overall Evaluation -->
+<section class="grid grid-2" style="margin-bottom: 24px;">
+  <article class="card" style="display: flex; flex-direction: column; justify-content: space-between;">
+    <div>
+      <h2 style="font-size: 18px; margin-top: 0; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+        <span>📊</span> 結論與整體評價
+      </h2>
+      <p style="font-size: 15px; line-height: 1.6; color: var(--text); margin-bottom: 20px;">
+        {{ view.conclusion_summary }}
+      </p>
+      
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 13px;">
+        <div style="background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid var(--line);">
+          <span class="muted" style="display: block; margin-bottom: 4px;">整體加權評分</span>
+          <strong style="font-size: 24px; color: {% if view.score >= 0.85 %}var(--success){% elif view.score >= 0.70 %}var(--warning){% else %}#b42318{% endif %};">
+            {{ "%.3f"|format(view.score) }}
+          </strong>
+        </div>
+        <div style="background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid var(--line);">
+          <span class="muted" style="display: block; margin-bottom: 4px;">Cello 證據與成熟度</span>
+          <span class="badge" style="background: var(--brand-soft); color: var(--brand); font-size: 12px; margin-top: 6px; font-weight: bold;">
+            {{ view.evidence_level | upper }}
+          </span>
+        </div>
+      </div>
+    </div>
+  </article>
+
+  <article class="card">
+    <h2 style="font-size: 18px; margin-top: 0; margin-bottom: 12px;">優勢、限制與下一步建議</h2>
+    
+    <div style="display: flex; flex-direction: column; gap: 14px; font-size: 13.5px;">
+      <div>
+        <strong style="color: var(--success); display: block; margin-bottom: 4px;">✓ 設計優勢 (Pros)</strong>
+        <ul style="margin: 0; padding-left: 20px; color: #1e3a1e;">
+          {% for adv in view.advantages %}
+          <li>{{ adv }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+
+      <div>
+        <strong style="color: #b42318; display: block; margin-bottom: 4px;">⚠️ 主要限制 (Cons)</strong>
+        <ul style="margin: 0; padding-left: 20px; color: #4a1212;">
+          {% for lim in view.limitations %}
+          <li>{{ lim }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+
+      <div style="padding-top: 10px; border-top: 1px solid var(--line);">
+        <strong style="color: var(--brand); display: block; margin-bottom: 4px;">🚀 建議下一步 (Next Steps)</strong>
+        <ol style="margin: 0; padding-left: 20px;">
+          {% for step in view.next_steps %}
+          <li>{{ step }}</li>
+          {% endfor %}
+        </ol>
+      </div>
+    </div>
+  </article>
+</section>
+
+<!-- Warnings Alert Bar -->
+{% if view.warnings %}
+<section class="section-space" style="margin-bottom: 24px; display: flex; flex-direction: column; gap: 8px;">
+  {% for w in view.warnings %}
+    {% if w.level == "error" %}
+      <div class="error-box" style="margin: 0; display: flex; align-items: center; gap: 10px; border: 1px solid #fee4e2;">
+        <span>🛑</span> <span><strong>[{{ w.category | upper }}]</strong> {{ w.message }}</span>
+      </div>
+    {% else %}
+      <div class="warning-box" style="margin: 0; display: flex; align-items: center; gap: 10px; border: 1px solid #fedf89;">
+        <span>⚠️</span> <span><strong>[{{ w.category | upper }}]</strong> {{ w.message }}</span>
+      </div>
+    {% endif %}
+  {% endfor %}
+</section>
+{% endif %}
+
+<!-- Section 2: Scoring Breakdown -->
+<section class="card section-space" style="margin-bottom: 24px;">
+  <h2 style="font-size: 18px; margin-bottom: 14px;">🎛️ 評分拆解與維度評估 (Scoring Breakdown)</h2>
+  
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+    {% for score in view.scores %}
+    <div style="background: #f8fafc; padding: 12px 16px; border-radius: 10px; border: 1px solid var(--line); display: flex; flex-direction: column; justify-content: space-between;">
+      <div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <strong style="font-size: 14.5px; color: var(--text);">{{ score.label }}</strong>
+          <span class="status-badge {{ score.status_class }}" style="padding: 2px 8px; font-size: 12px; font-weight: bold;">
+            {{ "%.3f"|format(score.score) }}
+          </span>
+        </div>
+        <p class="muted" style="font-size: 12px; margin: 0 0 10px 0; line-height: 1.4;">{{ score.description }}</p>
+      </div>
+      <div class="progress" style="height: 6px; background: #e2e8f0;">
+        <span style="width: {{ score.percent }}%; background: {% if score.score >= 0.85 %}#12b76a{% elif score.score >= 0.70 %}#f79009{% else %}#f04438{% endif %};"></span>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+<!-- Section 3: Logical Design -->
+<section class="grid grid-2 section-space" style="margin-bottom: 24px;">
+  <!-- Verilog & Boolean -->
+  <article class="card" style="display: flex; flex-direction: column; justify-content: space-between;">
+    <div>
+      <h2 style="font-size: 18px; margin-bottom: 12px;">⌨️ 邏輯設計提案 (Logical Design)</h2>
+      <div style="margin-bottom: 14px;">
+        <span class="muted" style="font-size: 12px; display: block; margin-bottom: 4px;">布林邏輯表達式 (Boolean Expression)</span>
+        <code style="font-family: monospace; font-size: 14px; background: var(--brand-soft); color: var(--brand); padding: 4px 8px; border-radius: 6px; display: inline-block;">
+          {{ view.boolean_expression }}
+        </code>
+      </div>
+      <div>
+        <span class="muted" style="font-size: 12px; display: block; margin-bottom: 4px;">Verilog 硬體描述代碼</span>
+        <pre style="background: #1e293b; color: #f8fafc; padding: 14px; border-radius: 8px; font-family: monospace; font-size: 12.5px; overflow-x: auto; max-height: 240px; margin: 0; border: 1px solid #0f172a;">{{ view.verilog_code }}</pre>
+      </div>
+    </div>
+  </article>
+
+  <!-- Interactive Topology Graph -->
+  <article class="card" style="display: flex; flex-direction: column; justify-content: space-between;">
+    <div>
+      <h2 style="font-size: 18px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
+        <span>🕸️ 邏輯閘拓撲結構圖 (Topology Graph)</span>
+        <div style="display: flex; gap: 4px;">
+          <button class="button secondary" style="padding: 2px 8px; font-size: 11px;" onclick="graphTop.zoomIn()">+</button>
+          <button class="button secondary" style="padding: 2px 8px; font-size: 11px;" onclick="graphTop.zoomOut()">-</button>
+          <button class="button secondary" style="padding: 2px 8px; font-size: 11px;" onclick="graphTop.resetView()">重設</button>
+        </div>
+      </h2>
+      
+      {% if view.topology_graph.nodes %}
+      <div style="position: relative; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #fafafa;">
+        <canvas id="topology-canvas" width="500" height="280" style="display: block; cursor: grab; width: 100%; height: 280px;"></canvas>
+        <div id="topology-details" style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(255,255,255,0.92); border-top: 1px solid var(--line); padding: 8px 12px; font-size: 12px; color: var(--muted); min-height: 36px; line-height: 1.4;">
+          滑鼠懸停於節點上可檢視邏輯訊號或門詳情。
+        </div>
+      </div>
+      <!-- Legend -->
+      <div style="display: flex; gap: 12px; margin-top: 8px; font-size: 11px; justify-content: center; flex-wrap: wrap;">
+        <span><span style="display:inline-block; width:10px; height:10px; background:#2563eb; border-radius:50%; margin-right:4px; vertical-align: middle;"></span>輸入 (Input)</span>
+        <span><span style="display:inline-block; width:10px; height:10px; background:#f79009; border-radius:3px; margin-right:4px; vertical-align: middle;"></span>邏輯門 (Gate)</span>
+        <span><span style="display:inline-block; width:10px; height:10px; background:#12b76a; border-radius:50%; margin-right:4px; vertical-align: middle;"></span>輸出 (Output)</span>
+      </div>
+      {% else %}
+      <p class="muted" style="text-align: center; padding: 40px 0;">無邏輯閘拓撲結構可供顯示。</p>
+      {% endif %}
+    </div>
+  </article>
+</section>
+
+<!-- Section 4: Biological Design -->
+<section class="card section-space" style="margin-bottom: 24px;">
+  <h2 style="font-size: 18px; margin-bottom: 14px;">🌱 生物設計結構 (Biological Design)</h2>
+
+  {% if view.cello_fallback_used %}
+  <div class="warning-box" style="background: #fffdf5; border: 1px solid #ffe8b3; color: #b54708; padding: 12px 18px; border-radius: 8px; margin-bottom: 16px; font-size: 13.5px; line-height: 1.5; box-shadow: none;">
+    <strong>⚠️ 模擬對應聲明 (Computational Placeholder Warning)</strong><br>
+    本設計是在 Cello 可用性測試為「使用模擬備援 (Fallback Mode)」的狀態下生成的。當前顯示的邏輯閘指派與啟動子/終止子映射均為<b>模擬占位符 (Mock Placeholders)</b>，不具備真實物理對應的可信度。請前往設定頁配置有效的 Cello 本機執行指令。
+  </div>
+  {% endif %}
+
+  <!-- Cello Mapping Status Info Callout -->
+  <div style="background: #f8fafc; border: 1px solid var(--line); padding: 14px; border-radius: 10px; margin-bottom: 20px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px;">
+    <div>
+      <span style="font-weight: bold; color: var(--text);">Cello mapping 狀態:</span>
+      <span class="badge" style="background: {% if view.cello_mapping_status == 'mapped' %}#ecfdf3{% else %}#fef3f2{% endif %}; color: {% if view.cello_mapping_status == 'mapped' %}var(--success){% else %}#b42318{% endif %}; font-size: 12.5px; margin-left: 6px;">
+        {{ view.cello_mapping_status | upper }}
+      </span>
+    </div>
+    <div>
+      <span style="font-weight: bold; color: var(--text);">備用元件指派 (Fallback):</span>
+      <span class="badge" style="background: {% if view.cello_fallback_used %}#fff7ed{% else %}#eff8ff{% endif %}; color: {% if view.cello_fallback_used %}var(--warning){% else %}#175cd3{% endif %}; font-size: 12.5px; margin-left: 6px;">
+        {{ "已使用" if view.cello_fallback_used else "未使用" }}
+      </span>
+    </div>
+  </div>
+
+  <!-- Interactive Regulatory Graph -->
+  <div class="section-space" style="margin-bottom: 24px; border-bottom: 1px solid var(--line); padding-bottom: 20px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+      <h3 style="font-size: 15px; margin: 0;">🧬 生物調控關係圖 (Regulatory Graph)</h3>
+      <div style="display: flex; gap: 4px;">
+        <button class="button secondary" style="padding: 2px 8px; font-size: 11px;" onclick="graphReg.zoomIn()">+</button>
+        <button class="button secondary" style="padding: 2px 8px; font-size: 11px;" onclick="graphReg.zoomOut()">-</button>
+        <button class="button secondary" style="padding: 2px 8px; font-size: 11px;" onclick="graphReg.resetView()">重設</button>
+      </div>
+    </div>
+    
+    {% if view.regulatory_graph.nodes %}
+    <div style="position: relative; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #fafafa;">
+      <canvas id="regulatory-canvas" width="1000" height="300" style="display: block; cursor: grab; width: 100%; height: 300px;"></canvas>
+      <div id="regulatory-details" style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(255,255,255,0.92); border-top: 1px solid var(--line); padding: 8px 12px; font-size: 12px; color: var(--muted); min-height: 36px; line-height: 1.4;">
+        滑鼠懸停於元件上可檢視調控關係及鹼基序列資訊。
+      </div>
+    </div>
+    <!-- Legend -->
+    <div style="display: flex; gap: 16px; margin-top: 8px; font-size: 11px; justify-content: center; flex-wrap: wrap;">
+      <span><span style="display:inline-block; width:10px; height:10px; background:#f79009; border-radius:3px; margin-right:4px; vertical-align: middle;"></span>CDS 轉錄阻遏/調控物</span>
+      <span><span style="display:inline-block; width:10px; height:10px; background:#7f56d9; border-radius:50%; margin-right:4px; vertical-align: middle;"></span>啟動子 / Target</span>
+      <span><span style="color:#94a3b8; font-weight:bold; margin-right:4px;">&rarr;</span> 轉錄啟動 (Activation)</span>
+      <span><span style="color:#f04438; font-weight:bold; margin-right:4px;">&mdash;|</span> 轉錄抑制 (Repression)</span>
+    </div>
+    {% else %}
+    <p class="muted" style="text-align: center; padding: 40px 0;">無生物調控關係可供顯示。</p>
+    {% endif %}
+  </div>
+
+  <!-- Genetic Constructs Table -->
+  <div class="section-space">
+    <h3 style="font-size: 15px; margin-bottom: 8px;">設計片段構造 (Genetic Constructs)</h3>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr style="background: #f8fafc;">
+            <th>構造 ID / 名稱</th>
+            <th>拓撲類型</th>
+            <th>骨架載體 (Backbone)</th>
+            <th>裝配方法 (Assembly)</th>
+            <th>包含元件 IDs</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in view.constructs %}
+          <tr>
+            <td><strong>{{ item.name }}</strong> <small class="muted">({{ item.id }})</small></td>
+            <td><span class="badge" style="font-size: 11px;">{{ item.topology }}</span></td>
+            <td><code>{{ item.backbone }}</code></td>
+            <td><span class="badge" style="font-size: 11px;">{{ item.assembly_method }}</span></td>
+            <td>
+              {% for p_id in item.parts %}
+              <code style="background: #f1f5f9; padding: 2px 5px; border-radius: 4px; font-size: 11px;">{{ p_id }}</code>
+              {% endfor %}
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="5" class="muted" style="text-align: center; padding: 16px;">無生物構造定義。</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Transcriptional Units Cassettes -->
+  <div class="section-space" style="margin-top: 24px;">
+    <h3 style="font-size: 15px; margin-bottom: 8px;">轉錄單元表達卡匣 (Transcriptional Units)</h3>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px;">
+      {% for tu in view.transcriptional_units %}
+      <div style="border: 1px solid var(--line); border-radius: 8px; padding: 12px; background: white;">
+        <strong style="display: block; font-size: 13.5px; color: var(--text); border-bottom: 1px solid var(--line); padding-bottom: 6px; margin-bottom: 8px;">
+          {{ tu.name }}
+        </strong>
+        <div style="display: flex; align-items: center; justify-content: space-between; font-size: 12px; gap: 4px;">
+          <span style="background: #fef3f2; color: #b42318; padding: 2px 6px; border-radius: 4px; font-weight: bold;" title="Promoter">P</span>
+          <span>&rarr;</span>
+          <span style="background: #fff7ed; color: #b54708; padding: 2px 6px; border-radius: 4px; font-weight: bold;" title="Ribosome Binding Site">RBS</span>
+          <span>&rarr;</span>
+          <span style="background: #eff8ff; color: #175cd3; padding: 2px 6px; border-radius: 4px; font-weight: bold;" title="Coding Sequence">CDS</span>
+          <span>&rarr;</span>
+          <span style="background: #f2f4f7; color: var(--muted); padding: 2px 6px; border-radius: 4px; font-weight: bold;" title="Terminator">T</span>
+        </div>
+        <div style="margin-top: 10px; font-size: 11.5px; display: grid; gap: 4px;">
+          <div><span class="muted">Promoter:</span> <code>{{ tu.promoter }}</code></div>
+          <div><span class="muted">RBS:</span> <code>{{ tu.rbs }}</code></div>
+          <div><span class="muted">CDS:</span> <code>{{ tu.cds }}</code></div>
+          <div><span class="muted">Terminator:</span> <code>{{ tu.terminator }}</code></div>
+        </div>
+      </div>
+      {% else %}
+      <p class="muted" style="grid-column: 1/-1; text-align: center; padding: 12px;">無表達卡匣配置。</p>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Assigned Parts Details -->
+  <div class="section-space" style="margin-top: 24px;">
+    <h3 style="font-size: 15px; margin-bottom: 8px;">分派生物元件詳情 (Assigned Parts Details)</h3>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr style="background: #f8fafc;">
+            <th>元件 ID / 名稱</th>
+            <th>元件類型 (Type)</th>
+            <th>分派實體元件 (Assignment)</th>
+            <th>證據等級 (Evidence)</th>
+            <th>角色與作用 (Role)</th>
+            <th>鹼基序列 (Sequence)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in view.parts %}
+          <tr>
+            <td><strong>{{ p.id }}</strong><br><small class="muted">{{ p.name }}</small></td>
+            <td><span class="badge" style="font-size: 11px;">{{ p.part_type | upper }}</span></td>
+            <td>
+              {% if p.assignment %}
+                <strong>{{ p.assignment.part_name }}</strong><br>
+                <code style="font-size: 11px;">{{ p.assignment.part_id }}</code>
+              {% else %}
+                <span class="muted">未分派實體元件</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if p.assignment %}
+                <span class="badge" style="font-size: 10px; background: #ecfdf3; color: var(--success);">{{ p.assignment.confidence }}</span>
+              {% else %}
+                <span class="badge" style="font-size: 10px; background: #f2f4f7; color: var(--muted);">{{ p.confidence }}</span>
+              {% endif %}
+            </td>
+            <td style="font-size: 12.5px; max-width: 200px;">{{ p.role }}</td>
+            <td style="font-size: 11px; font-family: monospace; max-width: 250px;">
+              {% set seq = p.assignment.sequence if p.assignment else p.sequence %}
+              {% if seq and seq != "未指定" %}
+                <div style="max-height: 50px; overflow-y: auto; overflow-x: hidden; overflow-wrap: break-word; border: 1px solid var(--line); padding: 4px; border-radius: 4px; background: #fafafa;">{{ seq }}</div>
+              {% else %}
+                <span class="muted">無可用序列</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="6" class="muted" style="text-align: center; padding: 16px;">無分派元件資訊。</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- Section 5: Advanced Info -->
+<section class="card section-space" style="margin-bottom: 24px;">
+  <h2 style="font-size: 18px; margin-bottom: 14px;">⚙️ 進階資訊與運行詮釋資料</h2>
+  
+  <div style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 20px; align-items: start; margin-bottom: 18px;">
+    
+    <!-- Left: Versions & Simulation Specs -->
+    <div style="display: flex; flex-direction: column; gap: 14px; font-size: 13px;">
+      <div style="background: #f8fafc; border: 1px solid var(--line); padding: 14px; border-radius: 10px;">
+        <strong style="display: block; margin-bottom: 8px;">模擬控制參數 (Simulation Specs)</strong>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
+          <div><span class="muted">模型版本:</span><br><code>{{ view.simulation_metadata.simulation_model_version }}</code></div>
+          <div><span class="muted">模擬狀態:</span><br><code>{{ view.simulation_metadata.ode_status }}</code></div>
+          <div><span class="muted">動態邊際 (Margin):</span><br><code>{{ view.simulation_metadata.dynamic_margin or "N/A" }}</code></div>
+          <div><span class="muted">蒙地卡羅次數:</span><br><code>{{ view.simulation_metadata.monte_carlo_runs or "N/A" }}</code></div>
+          <div><span class="muted">蒙地卡羅失敗率:</span><br><code>{{ view.simulation_metadata.monte_carlo_failure_rate or "N/A" }}</code></div>
+          <div><span class="muted">變異係數 (CV):</span><br><code>{{ view.simulation_metadata.metrics_cv or "N/A" }}</code></div>
+        </div>
+        <a class="button" href="/web/runs/{{ view.run_id }}/candidates/{{ view.index }}/simulate" style="width: 100%; text-align: center; text-decoration: none; display: block; background: var(--brand); color: white; border-radius: 6px; padding: 8px 12px; font-weight: bold;">🧪 執行自定義動態模擬</a>
+      </div>
+      
+      <div style="background: #f8fafc; border: 1px solid var(--line); padding: 14px; border-radius: 10px;">
+        <strong style="display: block; margin-bottom: 8px;">工具版本矩陣</strong>
+        {% if view.tool_versions %}
+        <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+          <tbody>
+            {% for tool, ver in view.tool_versions.items() %}
+            <tr style="border-bottom: 1px solid var(--line);">
+              <td style="padding: 6px 0; font-weight: bold;">{{ tool }}</td>
+              <td style="padding: 6px 0; font-family: monospace; text-align: right;">{{ ver }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <p class="muted">無工具版本資料。</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Right: Provenance Tree -->
+    <div style="background: #f8fafc; border: 1px solid var(--line); padding: 14px; border-radius: 10px;">
+      <strong style="display: block; margin-bottom: 8px;">來源追溯日誌 (Provenance)</strong>
+      {% if view.provenance %}
+      <div style="display: flex; flex-direction: column; gap: 8px; font-size: 12.5px; max-height: 250px; overflow-y: auto;">
+        {% for prov in view.provenance %}
+        <div style="border-left: 2px solid var(--brand); padding-left: 10px; margin-left: 4px;">
+          <div style="display: flex; justify-content: space-between; font-size: 11px;">
+            <strong style="color: var(--brand);">{{ prov.step | upper }}</strong>
+            <span class="muted">{{ prov.timestamp }}</span>
+          </div>
+          <div style="font-weight: 550;">{{ prov.details }}</div>
+          {% if prov.agent %}<div style="font-size: 11px; color: var(--muted);">執行智能體: {{ prov.agent }}</div>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="muted">無歷史探索追溯日誌。</p>
+      {% endif %}
+    </div>
+
+  </div>
+
+  <!-- Raw JSON details block -->
+  <details style="margin-top: 14px;">
+    <summary style="font-weight: bold; color: var(--brand); padding: 4px 0;">檢視原始 JSON 數據</summary>
+    <pre style="background: #1e293b; color: #f8fafc; padding: 14px; border-radius: 8px; font-family: monospace; font-size: 12px; overflow: auto; max-height: 380px; margin-top: 10px; border: 1px solid #0f172a;">{{ view.raw_json }}</pre>
+  </details>
+</section>
+
+<!-- JSON Data elements for HTML Injection safe scripting -->
+<script id="topology-data" type="application/json">
+  {{ view.topology_graph | tojson }}
+</script>
+<script id="regulatory-data" type="application/json">
+  {{ view.regulatory_graph | tojson }}
+</script>
+
+<!-- Interactive Canvas Engine Script -->
+<script>
+class CanvasGraph {
+  constructor(canvasId, detailsId, data, options = {}) {
+    this.canvas = document.getElementById(canvasId);
+    if (!this.canvas) return;
+    this.ctx = this.canvas.getContext('2d');
+    this.detailsEl = document.getElementById(detailsId);
+    this.nodes = JSON.parse(JSON.stringify(data.nodes || []));
+    this.edges = JSON.parse(JSON.stringify(data.edges || []));
+    this.options = options;
+    
+    // Zoom and pan state
+    this.scale = 1.0;
+    this.offsetX = 0;
+    this.offsetY = 0;
+    this.isPanning = false;
+    this.panStartX = 0;
+    this.panStartY = 0;
+    
+    // Drag state
+    this.draggedNode = null;
+    this.hoveredNode = null;
+    
+    this.resizeCanvas();
+    window.addEventListener('resize', () => this.resizeCanvas());
+    
+    this.initLayout();
+    this.runSimulation();
+    
+    this.setupEventListeners();
+    this.draw();
+  }
+
+  resizeCanvas() {
+    const rect = this.canvas.parentElement.getBoundingClientRect();
+    this.canvas.width = rect.width * window.devicePixelRatio;
+    this.canvas.height = (this.options.height || 280) * window.devicePixelRatio;
+    this.canvas.style.width = '100%';
+    this.canvas.style.height = `${this.options.height || 280}px`;
+    this.ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+  }
+
+  initLayout() {
+    const width = this.canvas.width / window.devicePixelRatio;
+    const height = this.canvas.height / window.devicePixelRatio;
+    
+    this.nodes.forEach(node => {
+      node.x = width / 2 + (Math.random() - 0.5) * 160;
+      node.y = height / 2 + (Math.random() - 0.5) * 160;
+      node.vx = 0;
+      node.vy = 0;
+    });
+  }
+
+  runSimulation() {
+    const width = this.canvas.width / window.devicePixelRatio;
+    const height = this.canvas.height / window.devicePixelRatio;
+    const k = 0.08;
+    const rep = 1500;
+    const ticks = 180;
+    
+    for (let t = 0; t < ticks; t++) {
+      for (let i = 0; i < this.nodes.length; i++) {
+        const n1 = this.nodes[i];
+        for (let j = i + 1; j < this.nodes.length; j++) {
+          const n2 = this.nodes[j];
+          const dx = n2.x - n1.x;
+          const dy = n2.y - n1.y;
+          const distSq = dx * dx + dy * dy + 1;
+          const dist = Math.sqrt(distSq);
+          if (dist < 180) {
+            const force = rep / distSq;
+            const fx = (dx / dist) * force;
+            const fy = (dy / dist) * force;
+            n1.vx -= fx;
+            n1.vy -= fy;
+            n2.vx += fx;
+            n2.vy += fy;
+          }
+        }
+      }
+      
+      this.edges.forEach(edge => {
+        const n1 = this.nodes.find(n => n.id === edge.source);
+        const n2 = this.nodes.find(n => n.id === edge.target);
+        if (n1 && n2) {
+          const dx = n2.x - n1.x;
+          const dy = n2.y - n1.y;
+          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+          const desiredDist = this.options.isRegulatory ? 100 : 80;
+          const force = k * (dist - desiredDist);
+          const fx = (dx / dist) * force;
+          const fy = (dy / dist) * force;
+          n1.vx += fx;
+          n1.vy += fy;
+          n2.vx -= fx;
+          n2.vy -= fy;
+        }
+      });
+      
+      this.nodes.forEach(node => {
+        const cx = width / 2;
+        const cy = height / 2;
+        node.vx += (cx - node.x) * 0.005;
+        node.vy += (cy - node.y) * 0.005;
+        
+        node.x += node.vx;
+        node.y += node.vy;
+        node.vx *= 0.82;
+        node.vy *= 0.82;
+      });
+    }
+  }
+
+  draw() {
+    const width = this.canvas.width / window.devicePixelRatio;
+    const height = this.canvas.height / window.devicePixelRatio;
+    
+    this.ctx.clearRect(0, 0, width, height);
+    
+    this.ctx.save();
+    this.ctx.translate(this.offsetX, this.offsetY);
+    this.ctx.scale(this.scale, this.scale);
+    
+    this.drawGrid(width, height);
+    
+    this.edges.forEach(edge => this.drawEdge(edge));
+    this.nodes.forEach(node => this.drawNode(node));
+    
+    this.ctx.restore();
+    
+    requestAnimationFrame(() => this.draw());
+  }
+
+  drawGrid(width, height) {
+    this.ctx.save();
+    this.ctx.strokeStyle = '#f1f5f9';
+    this.ctx.lineWidth = 1;
+    this.ctx.setLineDash([5, 5]);
+    
+    const startX = Math.floor((-this.offsetX) / this.scale / 40) * 40 - 80;
+    const endX = startX + (width / this.scale) + 160;
+    const startY = Math.floor((-this.offsetY) / this.scale / 40) * 40 - 80;
+    const endY = startY + (height / this.scale) + 160;
+    
+    for (let x = startX; x <= endX; x += 40) {
+      this.ctx.beginPath();
+      this.ctx.moveTo(x, startY);
+      this.ctx.lineTo(x, endY);
+      this.ctx.stroke();
+    }
+    for (let y = startY; y <= endY; y += 40) {
+      this.ctx.beginPath();
+      this.ctx.moveTo(startX, y);
+      this.ctx.lineTo(endX, y);
+      this.ctx.stroke();
+    }
+    this.ctx.restore();
+  }
+
+  drawEdge(edge) {
+    const fromNode = this.nodes.find(n => n.id === edge.source);
+    const toNode = this.nodes.find(n => n.id === edge.target);
+    if (!fromNode || !toNode) return;
+    
+    const isHovered = this.hoveredNode && (this.hoveredNode.id === edge.source || this.hoveredNode.id === edge.target);
+    const hasActiveHover = this.hoveredNode !== null;
+    
+    this.ctx.save();
+    
+    if (hasActiveHover) {
+      this.ctx.strokeStyle = isHovered ? '#3157d5' : '#e2e8f0';
+      this.ctx.lineWidth = isHovered ? 2.5 : 1.0;
+    } else {
+      this.ctx.strokeStyle = '#94a3b8';
+      this.ctx.lineWidth = 1.8;
+    }
+    
+    const dx = toNode.x - fromNode.x;
+    const dy = toNode.y - fromNode.y;
+    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+    
+    const toRadius = this.getNodeRadius(toNode);
+    const fromRadius = this.getNodeRadius(fromNode);
+    
+    const startX = fromNode.x + (dx / dist) * fromRadius;
+    const startY = fromNode.y + (dy / dist) * fromRadius;
+    const endX = toNode.x - (dx / dist) * toRadius;
+    const endY = toNode.y - (dy / dist) * toRadius;
+    
+    this.ctx.beginPath();
+    this.ctx.moveTo(startX, startY);
+    this.ctx.lineTo(endX, endY);
+    this.ctx.stroke();
+    
+    const angle = Math.atan2(dy, dx);
+    const isRepression = this.options.isRegulatory && 
+      (String(edge.type).toLowerCase() === 'repression' || 
+       String(edge.label).toLowerCase() === 'repression' || 
+       String(edge.type).toLowerCase() === 'inhibition');
+       
+    if (isRepression) {
+      this.ctx.save();
+      this.ctx.strokeStyle = hasActiveHover ? (isHovered ? '#f04438' : '#e2e8f0') : '#f04438';
+      this.ctx.lineWidth = isHovered ? 3 : 2;
+      
+      const barLen = 12;
+      const bx = endX;
+      const by = endY;
+      const perpX = -Math.sin(angle) * (barLen / 2);
+      const perpY = Math.cos(angle) * (barLen / 2);
+      
+      this.ctx.beginPath();
+      this.ctx.moveTo(bx - perpX, by - perpY);
+      this.ctx.lineTo(bx + perpX, by + perpY);
+      this.ctx.stroke();
+      this.ctx.restore();
+    } else {
+      this.ctx.save();
+      this.ctx.fillStyle = hasActiveHover ? (isHovered ? '#3157d5' : '#e2e8f0') : '#94a3b8';
+      
+      const arrowLen = 8;
+      const arrowAngle = Math.PI / 6;
+      
+      this.ctx.beginPath();
+      this.ctx.moveTo(endX, endY);
+      this.ctx.lineTo(
+        endX - arrowLen * Math.cos(angle - arrowAngle),
+        endY - arrowLen * Math.sin(angle - arrowAngle)
+      );
+      this.ctx.lineTo(
+        endX - arrowLen * Math.cos(angle + arrowAngle),
+        endY - arrowLen * Math.sin(angle + arrowAngle)
+      );
+      this.ctx.closePath();
+      this.ctx.fill();
+      this.ctx.restore();
+    }
+    
+    if (edge.label && edge.label !== 'logic' && edge.label !== 'expression') {
+      const midX = (startX + endX) / 2;
+      const midY = (startY + endY) / 2;
+      this.ctx.save();
+      this.ctx.font = '9px monospace';
+      this.ctx.fillStyle = hasActiveHover ? (isHovered ? 'var(--brand)' : '#cbd5e1') : 'var(--muted)';
+      this.ctx.fillText(edge.label, midX + 5, midY - 5);
+      this.ctx.restore();
+    }
+    
+    this.ctx.restore();
+  }
+
+  getNodeRadius(node) {
+    if (node.type === 'gate' || node.type === 'repressor' || node.type === 'cds') {
+      return 22;
+    }
+    return 18;
+  }
+
+  drawNode(node) {
+    const isHovered = this.hoveredNode && this.hoveredNode.id === node.id;
+    const isNeighbor = this.hoveredNode && this.isNeighbor(this.hoveredNode.id, node.id);
+    const hasActiveHover = this.hoveredNode !== null;
+    
+    this.ctx.save();
+    
+    let color = '#94a3b8';
+    let isRect = false;
+    
+    if (node.type === 'input' || node.type === 'sensor' || node.type === 'signal') {
+      color = '#2563eb';
+    } else if (node.type === 'output' || node.type === 'reporter') {
+      color = '#12b76a';
+    } else if (node.type === 'gate' || node.type === 'repressor' || node.type === 'cds') {
+      color = '#f79009';
+      isRect = true;
+    } else if (node.type === 'promoter') {
+      color = '#7f56d9';
+    }
+    
+    if (hasActiveHover) {
+      this.ctx.globalAlpha = (isHovered || isNeighbor) ? 1.0 : 0.25;
+    }
+    
+    this.ctx.fillStyle = color;
+    this.ctx.shadowColor = 'rgba(16, 24, 40, 0.08)';
+    this.ctx.shadowBlur = isHovered ? 8 : 3;
+    this.ctx.shadowOffsetY = 2;
+    
+    if (isRect) {
+      const w = 44;
+      const h = 26;
+      this.ctx.beginPath();
+      this.ctx.roundRect(node.x - w/2, node.y - h/2, w, h, 6);
+      this.ctx.fill();
+      if (isHovered) {
+        this.ctx.strokeStyle = '#101828';
+        this.ctx.lineWidth = 2.0;
+        this.ctx.stroke();
+      }
+    } else {
+      const r = this.getNodeRadius(node);
+      this.ctx.beginPath();
+      this.ctx.arc(node.x, node.y, r, 0, 2 * Math.PI);
+      this.ctx.fill();
+      if (isHovered) {
+        this.ctx.strokeStyle = '#101828';
+        this.ctx.lineWidth = 2.0;
+        this.ctx.stroke();
+      }
+    }
+    
+    this.ctx.shadowColor = 'transparent';
+    this.ctx.fillStyle = '#ffffff';
+    this.ctx.font = 'bold 11px sans-serif';
+    this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'middle';
+    
+    let label = node.label || node.id;
+    if (label.length > 8) label = label.slice(0, 6) + '..';
+    this.ctx.fillText(label, node.x, node.y);
+    
+    this.ctx.restore();
+  }
+
+  isNeighbor(id1, id2) {
+    return this.edges.some(edge => 
+      (edge.source === id1 && edge.target === id2) || 
+      (edge.source === id2 && edge.target === id1)
+    );
+  }
+
+  setupEventListeners() {
+    const getMouseCoords = (evt) => {
+      const rect = this.canvas.getBoundingClientRect();
+      const clientX = evt.clientX - rect.left;
+      const clientY = evt.clientY - rect.top;
+      
+      const x = (clientX - this.offsetX) / this.scale;
+      const y = (clientY - this.offsetY) / this.scale;
+      return { x, y, clientX, clientY };
+    };
+
+    const findNodeAt = (x, y) => {
+      return this.nodes.find(node => {
+        const dx = node.x - x;
+        const dy = node.y - y;
+        const r = this.getNodeRadius(node);
+        return (dx * dx + dy * dy) < (r * r + 20);
+      });
+    };
+
+    this.canvas.addEventListener('mousedown', (evt) => {
+      const coords = getMouseCoords(evt);
+      const node = findNodeAt(coords.x, coords.y);
+      
+      if (node) {
+        this.draggedNode = node;
+        this.canvas.style.cursor = 'grabbing';
+      } else {
+        this.isPanning = true;
+        this.panStartX = coords.clientX - this.offsetX;
+        this.panStartY = coords.clientY - this.offsetY;
+        this.canvas.style.cursor = 'move';
+      }
+    });
+
+    this.canvas.addEventListener('mousemove', (evt) => {
+      const coords = getMouseCoords(evt);
+      
+      if (this.draggedNode) {
+        this.draggedNode.x = coords.x;
+        this.draggedNode.y = coords.y;
+        return;
+      }
+      
+      if (this.isPanning) {
+        this.offsetX = coords.clientX - this.panStartX;
+        this.offsetY = coords.clientY - this.panStartY;
+        return;
+      }
+      
+      const node = findNodeAt(coords.x, coords.y);
+      if (node !== this.hoveredNode) {
+        this.hoveredNode = node;
+        this.updateDetails(node);
+      }
+      
+      this.canvas.style.cursor = node ? 'pointer' : (this.isPanning ? 'move' : 'grab');
+    });
+
+    this.canvas.addEventListener('mouseup', () => {
+      this.isPanning = false;
+      this.draggedNode = null;
+      this.canvas.style.cursor = this.hoveredNode ? 'pointer' : 'grab';
+    });
+
+    this.canvas.addEventListener('mouseleave', () => {
+      this.isPanning = false;
+      this.draggedNode = null;
+      this.hoveredNode = null;
+      this.updateDetails(null);
+    });
+
+    this.canvas.addEventListener('wheel', (evt) => {
+      evt.preventDefault();
+      const coords = getMouseCoords(evt);
+      
+      const zoomFactor = 1.05;
+      const nextScale = evt.deltaY < 0 ? this.scale * zoomFactor : this.scale / zoomFactor;
+      
+      if (nextScale < 0.3 || nextScale > 3.0) return;
+      
+      this.offsetX = coords.clientX - (coords.clientX - this.offsetX) * (nextScale / this.scale);
+      this.offsetY = coords.clientY - (coords.clientY - this.offsetY) * (nextScale / this.scale);
+      this.scale = nextScale;
+    });
+  }
+
+  updateDetails(node) {
+    if (!this.detailsEl) return;
+    if (!node) {
+      this.detailsEl.innerHTML = this.options.defaultText || '滑鼠懸停於節點上可檢視詳情。';
+      return;
+    }
+    
+    let typeLabel = node.type;
+    let desc = '';
+    
+    if (this.options.isRegulatory) {
+      const details = this.options.partsList ? this.options.partsList.find(p => p.id === node.id || (p.assignment && p.assignment.part_id === node.id)) : null;
+      if (details) {
+        const type = details.part_type || 'Unknown';
+        const role = details.role || '未指定角色';
+        const seqLen = details.sequence ? details.sequence.length : 0;
+        
+        desc = `
+          <strong>分派元件 ID:</strong> <code>${node.id}</code> · 
+          <strong>元件類型:</strong> <span class="badge" style="font-size:10px; padding:1px 5px; background:var(--brand-soft); color:var(--brand);">${type.toUpperCase()}</span> · 
+          <strong>鹼基長度:</strong> ${seqLen} bp <br>
+          <strong>角色與說明:</strong> ${role}
+        `;
+      } else {
+        desc = `<strong>調控節點:</strong> <code>${node.id}</code> · <strong>類型:</strong> ${typeLabel}`;
+      }
+    } else {
+      if (node.type === 'input') {
+        desc = `<strong>輸入信號 (Input):</strong> <code>${node.id}</code> · 檢測外部輸入之電路啟動信號。`;
+      } else if (node.type === 'output') {
+        desc = `<strong>輸出信號 (Output):</strong> <code>${node.id}</code> · 電路運行之結果螢光或蛋白輸出指標。`;
+      } else {
+        desc = `<strong>邏輯閘 (Gate):</strong> <code>${node.id}</code> · 執行組合邏輯運算。`;
+      }
+    }
+    
+    this.detailsEl.innerHTML = desc;
+  }
+
+  zoomIn() {
+    this.scale *= 1.15;
+    if (this.scale > 3.0) this.scale = 3.0;
+  }
+
+  zoomOut() {
+    this.scale /= 1.15;
+    if (this.scale < 0.3) this.scale = 0.3;
+  }
+
+  resetView() {
+    this.scale = 1.0;
+    this.offsetX = 0;
+    this.offsetY = 0;
+    this.initLayout();
+    this.runSimulation();
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const topologyData = JSON.parse(document.getElementById('topology-data').textContent);
+  const regulatoryData = JSON.parse(document.getElementById('regulatory-data').textContent);
+  
+  // Clean special characters injection inside json string
+  const cleanJsonText = (text) => {
+    return text.replace(/<\/script>/g, '<\\/script>');
+  };
+
+  // Parts list passed from Jinja template
+  const partsList = {{ view.parts | tojson }};
+
+  window.graphTop = new CanvasGraph('topology-canvas', 'topology-details', topologyData, {
+    height: 280,
+    defaultText: '滑鼠懸停於節點上可檢視邏輯訊號或門詳情。'
+  });
+  
+  window.graphReg = new CanvasGraph('regulatory-canvas', 'regulatory-details', regulatoryData, {
+    height: 300,
+    isRegulatory: true,
+    partsList: partsList,
+    defaultText: '滑鼠懸停於元件上可檢視調控關係及鹼基序列資訊。'
+  });
+});
+</script>
+
+{% endblock %}

@@ -166,6 +166,9 @@ class DesignIRV2:
     revision: DesignRevisionV2 = field(
         default_factory=lambda: DesignRevisionV2(revision_id="revision_1")
     )
+    is_archived: bool = False
+    is_deleted: bool = False
+    is_pinned: bool = False
     schema_version: str = DESIGN_IR_V2_SCHEMA_VERSION
 
     def to_dict(self) -> dict[str, Any]:
@@ -306,6 +309,9 @@ def design_ir_v2_from_dict(payload: dict[str, Any]) -> DesignIRV2:
             ),
             changes=list(revision_payload.get("changes") or []),
         ),
+        is_archived=bool(payload.get("is_archived", False)),
+        is_deleted=bool(payload.get("is_deleted", False)),
+        is_pinned=bool(payload.get("is_pinned", False)),
         schema_version=str(
             payload.get("schema_version") or DESIGN_IR_V2_SCHEMA_VERSION
         ),

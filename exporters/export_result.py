@@ -9,7 +9,7 @@ class ExportResult:
     format: str
     filename: str
     media_type: str
-    content: str
+    content: str | bytes
     status: str
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)

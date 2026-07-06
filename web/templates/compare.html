@@ -25,6 +25,6 @@
   <article class="card"><span class="muted">Construct changes</span><div class="metric">{{ comparison.construct_changes|length }}</div></article>
   <article class="card"><span class="muted">Validation changes</span><div class="metric">{{ comparison.validation_changes|length }}</div></article>
 </section>
-<article class="card" style="margin-top:18px"><h2>摘要</h2><p>{{ comparison.summary }}</p><pre>{{ comparison | tojson(indent=2) }}</pre></article>
+<article class="card" style="margin-top:18px"><h2>摘要</h2><p>{{ comparison.summary }}</p><pre class="advanced-only">{{ comparison | tojson(indent=2) }}</pre></article>
 {% endif %}
 {% endblock %}

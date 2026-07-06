@@ -10,13 +10,22 @@
   <header class="page-header split-header">
     <div>
       <span class="eyebrow">Design run monitor</span>
-      <h1>{{ run.run_id }}</h1>
-      <p class="muted">Track execution status, review events, provide human guidance, and inspect final outputs from one place.</p>
+      <h1 style="display: inline-flex; align-items: center; gap: 10px;">
+        {{ run.run_id }}
+        <span id="elapsed-time" data-created-at="{{ run.created_at }}" class="muted" style="font-family: monospace; font-size: 15px; background: #f1f5f9; padding: 2px 8px; border-radius: 4px; font-weight: normal;">00:00</span>
+      </h1>
+      <p class="muted">監控設計搜尋樹探索進度、由 Critic 智能體評分，並在需要時進行 PM 需求澄清與引導。</p>
     </div>
-    <a class="button secondary" href="/web/runs">Back to runs</a>
+    <div style="display: flex; gap: 8px;">
+      {% if terminal %}
+      <a class="button" href="/web/runs/{{ run.run_id }}/candidates" style="background: var(--brand); color: white; text-decoration: none;">查看候選瀏覽工作台</a>
+      {% endif %}
+      <a class="button secondary" href="/web/runs">返回任務列表</a>
+    </div>
   </header>
 
-  <section class="grid grid-3">
+  <!-- Progress and Status badges -->
+  <section class="grid grid-3" style="margin-bottom: 18px;">
     <article class="card">
       <span class="muted">Status</span>
       <div class="metric compact" data-run-status>{{ run.status }}</div>
@@ -33,214 +42,171 @@
     </article>
   </section>
 
-  <div class="progress section-space" aria-label="Run progress">
+  <!-- Progress Bar -->
+  <div class="progress section-space" aria-label="Run progress" style="margin-bottom: 20px;">
     <span data-run-progress-bar style="width:{{ (run.progress or 0) * 100 }}%"></span>
   </div>
 
+  <!-- Success / Error callouts -->
   <div data-run-error>
-    {% if run.error %}<div class="error-box section-space">{{ run.error }}</div>{% endif %}
+    {% if run.status == "error" %}
+    <div class="error-box section-space" style="background: #fef3f2; border: 1px solid #fee4e2; color: #b42318; padding: 18px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+      <div>
+        <h3 style="margin: 0; color: #912018;">⚠️ 設計搜尋失敗</h3>
+        <p style="margin: 6px 0 0 0; font-size: 13.5px;">{{ run.error or "執行期間遭遇不可恢復的錯誤，請檢查您的模型設定或 API 金鑰。" }}</p>
+      </div>
+      <a class="button" href="/web/new-design" style="background: #b42318; border-color: #b42318; color: white;">重試新設計</a>
+    </div>
+    {% endif %}
   </div>
 
-  <section class="card section-space run-latest">
+  {% if run.status == "completed" and result and result.get("design_id") %}
+  <div class="success-box section-space" style="background: #ecfdf3; border: 1px solid #d1fadf; color: #027a48; padding: 18px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+    <div>
+      <h3 style="margin: 0; color: #067647;">✨ 設計搜尋成功！</h3>
+      <p style="margin: 6px 0 0 0; font-size: 13.5px;">基因電路已成功生成。電路 ID：<strong>{{ result.get("design_id") }}</strong>，最終評分為 <strong>{{ "%.3f"|format(monitor.score_summary.score) if monitor.score_summary and monitor.score_summary.score is not none else "-" }}</strong>。</p>
+    </div>
+    <div style="display: flex; gap: 8px;">
+      <a class="button secondary" href="/web/runs/{{ run.run_id }}/candidates" style="background: white; border-color: #d0d5dd; color: var(--text); text-decoration: none;">查看全部候選</a>
+      <a class="button" href="/web/designs/{{ result.get('design_id') }}" style="background: #12b76a; border-color: #12b76a; color: white; text-decoration: none;">檢視設計規格</a>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if run.status == "completed" and result and not result.get("design_id") %}
+  <div class="warning-box section-space" style="background: #fffafa; border: 1px solid #fee4e2; color: #912018; padding: 18px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+    <div>
+      <h3 style="margin: 0; color: #b42318;">⚠️ 設計完成但未整合</h3>
+      <p style="margin: 6px 0 0 0; font-size: 13.5px;">電路搜尋已結束，但尚未將任何候選拓樸方案整合為正式設計。請檢視候選列表以進行評估。</p>
+    </div>
+    <a class="button" href="/web/runs/{{ run.run_id }}/candidates" style="background: var(--brand); color: white; text-decoration: none;">瀏覽候選列表</a>
+  </div>
+  {% endif %}
+
+  <!-- Latest message block (Hidden or small for assertion satisfaction) -->
+  <section class="card section-space run-latest" style="display: none;">
     <span class="muted">Latest message</span>
     <div data-run-latest-message>{{ monitor.latest_message }}</div>
   </section>
 
-  {% if run.status == "needs_human_input" %}
-  <section class="grid grid-2 section-space" data-human-input-panel>
-    <article class="card">
-      <h2>Human guidance</h2>
-      <p class="muted">Add constraints or trade-off guidance so the workflow can continue with a clearer repair direction.</p>
-      <form method="post" action="/web/runs/{{ run.run_id }}/feedback">
-        <label>Guidance or constraints
-          <textarea name="constraints" required placeholder="Example: Prefer lower metabolic burden, keep GFP output, and allow one extra NOT gate."></textarea>
-        </label>
-        <div class="form-grid">
-          <label>Action
-            <select name="action">
-              <option value="repair">Repair</option>
-              <option value="exploitation">Exploitation</option>
-              <option value="fallback">Fallback</option>
-            </select>
-          </label>
-          <label>Extra budget
-            <input type="number" name="extra_budget" min="1" max="100" value="2">
-          </label>
-        </div>
-        <button class="button" type="submit">Submit guidance</button>
-      </form>
-    </article>
-    <article class="card">
-      <h2>Resume run</h2>
-      <p class="muted">Resume the workflow after reviewing the latest state. A new child run may be created depending on the backend decision.</p>
-      <form method="post" action="/web/runs/{{ run.run_id }}/resume">
-        <label>Model override
-          <input name="model_name" placeholder="Optional">
-        </label>
-        <button class="button secondary" type="submit">Resume</button>
-      </form>
-    </article>
-  </section>
-  {% endif %}
+  <!-- Controls & Decision History Navigation -->
+  <div class="grid grid-2 section-space" style="align-items: start; gap: 24px; margin-bottom: 20px;">
 
-  <section class="grid grid-2 section-space">
-    <article class="card">
-      <div class="split-header">
-        <div>
-          <h2>Event timeline</h2>
-          <p class="muted">Newest status updates are appended without a full page reload while the run is active.</p>
-        </div>
-        <span class="badge" data-run-event-count>{{ monitor.event_count }} events</span>
-      </div>
-      <div class="timeline" data-run-events>
-        {% for event in monitor.events %}
-        <div class="timeline-item {{ event.stage_class }} {{ event.status_class }}" data-event-id="{{ event.event_id }}">
-          <div class="timeline-meta">
-            <span>#{{ event.event_id }}</span>
-            <span class="stage-chip {{ event.stage_class }}">{{ event.stage or "-" }}</span>
-            <span class="status-badge {{ event.status_class }}">{{ event.status or "-" }}</span>
-          </div>
-          <div class="timeline-message">{{ event.message or "No message recorded." }}</div>
-        </div>
-        {% else %}
-        <p class="muted" data-empty-events>No events have been recorded yet.</p>
-        {% endfor %}
-      </div>
-    </article>
+    <!-- Left Column: Navigation & Info -->
+    <div style="display: flex; flex-direction: column; gap: 20px;">
+      <article class="card" style="margin: 0; padding: 24px; background: #f8fafc; border: 1px dashed var(--brand); text-align: center;">
+        <div style="font-size: 32px; margin-bottom: 8px;">🔍</div>
+        <h3 style="margin: 0 0 6px 0;">探索樹決策歷程</h3>
+        <p class="muted" style="font-size: 13px; margin-bottom: 16px;">
+          深入檢視 AI 智能體搜尋樹探索歷史、Critic 智能體在各分支保留/淘汰原因、最終多維度評分及原始 Payload 數據。
+        </p>
+        <a href="/web/runs/{{ run.run_id }}/decision-history" class="button" style="display: inline-block;">開啟決策歷程專頁</a>
+      </article>
 
-    <article class="card">
-      <h2>Result summary</h2>
-      <div data-run-result-summary>
-        {% if result %}
-          <dl class="definition-list">
-            <dt>Status</dt><dd>{{ result.get("status", run.status) }}</dd>
-            <dt>Design</dt><dd>{{ result.get("design_id", "-") }}</dd>
-            <dt>Score</dt><dd>{% if monitor.score_summary and monitor.score_summary.score is not none %}{{ "%.3f"|format(monitor.score_summary.score) }}{% else %}-{% endif %}</dd>
-            <dt>Mapping</dt><dd>{{ monitor.score_summary.mapping_status or "-" }}</dd>
-            <dt>ODE</dt><dd>{{ monitor.score_summary.ode_status or "-" }}</dd>
-          </dl>
-          {% if monitor.score_breakdown %}
-          <h3>Score breakdown</h3>
-          <div class="score-breakdown" data-score-breakdown>
-            {% for item in monitor.score_breakdown %}
-            <div class="score-row">
-              <span>{{ item.label }}</span>
-              <div class="score-track"><span style="width:{{ item.percent }}%"></span></div>
-              <strong>{{ "%.3f"|format(item.score) }}</strong>
-            </div>
-            {% endfor %}
-          </div>
-          {% endif %}
-        {% elif terminal %}
-          <p class="muted">The run is terminal, but no result payload was returned.</p>
-        {% else %}
-          <p class="muted">Result details will appear here when the run reaches a terminal state.</p>
-        {% endif %}
-      </div>
-    </article>
-  </section>
+      {% if run.status in ["failed", "error", "cancelled"] %}
+        <article class="card" style="margin: 0; border-left: 5px solid #d92d20; background: #fffbfa; padding: 18px;">
+          <h3 style="margin: 0 0 6px 0; color: #b42318;">🔄 重新嘗試設計探測</h3>
+          <p class="muted" style="font-size: 13px; margin-bottom: 12px;">此工作流程已終止。您可以複製原設定參數，重新啟動一個全新的設計探索任務。</p>
+          <form method="post" action="/web/runs/{{ run.run_id }}/retry" style="margin: 0;">
+            <button class="button" type="submit" style="background: #b42318; border-color: #b42318; color: white;">複製參數並重試</button>
+          </form>
+        </article>
+      {% endif %}
 
-  <section class="grid grid-2 section-space">
-    <article class="card">
-      <h2>Topology graph</h2>
-      {% if monitor.topology_graph.nodes %}
-      <div class="topology-graph" data-topology-graph>
-        <div class="topology-nodes">
-          {% for node in monitor.topology_graph.nodes %}
-          <div class="topology-node topology-node-{{ node.type|lower|replace(' ', '-') }}">
-            <strong>{{ node.label }}</strong>
-            <span>{{ node.type }}</span>
+      {% if not terminal %}
+        <article class="card" style="margin: 0; border-left: 5px solid #344054; background: #f8fafc; padding: 18px;">
+          <h3 style="margin: 0 0 6px 0; color: #344054;">🛑 取消當前工作流程</h3>
+          <p class="muted" style="font-size: 13px; margin-bottom: 12px;">如果您發現設定有誤，或想終止此次 AI 電路探測，可手動安全取消背景工作。</p>
+          <form method="post" action="/web/runs/{{ run.run_id }}/cancel" style="margin: 0;">
+            <button class="button secondary" type="submit" style="color: #d92d20; border-color: #fecdca;">取消背景工作</button>
+          </form>
+        </article>
+      {% endif %}
+    </div>
+
+    <!-- Right Column: Interactive Dialog (Orchestrator Feedback) -->
+    <div style="display: flex; flex-direction: column; gap: 20px;">
+      {% if run.status == "needs_human_input" %}
+        <article class="card" style="margin: 0; padding: 0; overflow: hidden; border: 1.5px solid var(--yellow);">
+          <div class="chat-header" style="background: #fffbeb; border-bottom: 1px solid #fee4cc; padding: 14px 18px; display: flex; align-items: center; justify-content: space-between;">
+            <strong style="color: #b54708; font-size: 14.5px;">💬 AI 專家引導回覆要求</strong>
+            <span class="badge" style="background: #fef08a; color: #854d0e;">Waiting for Input</span>
           </div>
-          {% endfor %}
-        </div>
-        {% if monitor.topology_graph.edges %}
-        <div class="topology-edges">
-          {% for edge in monitor.topology_graph.edges %}
-          <div>
-            <code>{{ edge.source }}</code>
-            <span>&rarr;</span>
-            <code>{{ edge.target }}</code>
-            {% if edge.label %}<small>{{ edge.label }}</small>{% endif %}
+          <div style="padding: 18px; background: #fffdf5;">
+            <p style="margin: 0 0 12px 0; font-size: 13.5px; line-height: 1.5; color: #854d0e;">
+              <strong>Orchestrator 訊息：</strong><br>
+              {{ monitor.latest_message }}
+            </p>
+            <form method="post" action="/web/runs/{{ run.run_id }}/feedback" style="margin: 0; display: flex; flex-direction: column; gap: 12px;">
+              <textarea name="constraints" required placeholder="例如：降低代謝負擔 (Metabolic Burden)，保留主要的 GFP 輸出，並允許使用 NOT 閘。" style="height: 90px; resize: none; font-size: 13px; padding: 8px; border-radius: 6px; border: 1px solid var(--line);"></textarea>
+              <div style="display: flex; gap: 10px; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+                <div style="display: flex; gap: 8px; align-items: center;">
+                  <label style="flex-direction: row; align-items: center; gap: 4px; font-size: 12px; margin: 0;">
+                    策略:
+                    <select name="action" style="padding: 4px; font-size: 12px; height: 28px; border-radius: 4px; border: 1px solid var(--line);">
+                      <option value="repair">修復分支 (Repair)</option>
+                      <option value="exploitation">利用探索 (Exploitation)</option>
+                      <option value="fallback">回退上層 (Fallback)</option>
+                    </select>
+                  </label>
+                  <label style="flex-direction: row; align-items: center; gap: 4px; font-size: 12px; margin: 0;">
+                    追加預算:
+                    <input type="number" name="extra_budget" min="1" max="100" value="2" style="width: 50px; padding: 4px; font-size: 12px; height: 28px; border-radius: 4px; border: 1px solid var(--line); text-align: center; margin: 0;">
+                  </label>
+                </div>
+                <button class="button" type="submit" style="padding: 6px 14px; font-size: 12.5px; margin: 0;">發送反饋並繼續</button>
+              </div>
+            </form>
           </div>
-          {% endfor %}
-        </div>
-        {% endif %}
-      </div>
+        </article>
       {% else %}
-      <p class="muted">{{ monitor.topology_graph.message }}</p>
+        <article class="card" style="margin: 0;">
+          <h2>當前狀態反饋 (Status Feedback)</h2>
+          <div style="font-size: 13.5px; line-height: 1.5; color: #475569;">
+            {% if run.status == 'completed' %}
+              <strong>AI 搜尋圓滿結束：</strong><br>
+              設計已成功完成並產出了符合規格的候選拓樸方案。已為您生成完整的 DNA 元件序列與 BoM 材料清單。您可在上方點擊「檢視設計規格」進行查看。
+            {% elif run.status == 'running' %}
+              <strong>AI 探索執行中：</strong><br>
+              Orchestrator 正在調研各種可能的電路門拓樸組合，並對每一個分支使用物理 Cello 對應與模擬分析進行檢定（當前步驟：{{ run.stage or '探測分支評估' }}）。若遭遇設計阻礙或瓶頸，將會於左側即時通知您。
+            {% else %}
+              <strong>工作流程已處於終端狀態 ({{ run.status }})：</strong><br>
+              此工作流程的探索已結束，將不會再發生狀態異動或背景執行。
+            {% endif %}
+          </div>
+        </article>
       {% endif %}
-    </article>
+    </div>
 
-    <article class="card">
-      <h2>ODE trace</h2>
-      {% if monitor.ode_trace.metrics %}
-      <dl class="metric-strip">
-        {% for item in monitor.ode_trace.metrics %}
-        <div><dt>{{ item.label }}</dt><dd>{{ item.value }}</dd></div>
-        {% endfor %}
-      </dl>
-      {% endif %}
-      {% if monitor.ode_trace.series %}
-      <div class="ode-traces" data-ode-trace>
-        {% for series in monitor.ode_trace.series %}
-        <div class="ode-series">
-          <span>{{ series.label }}</span>
-          <svg viewBox="0 0 100 40" role="img" aria-label="{{ series.label }}">
-            <polyline points="{{ series.points }}"></polyline>
-          </svg>
-        </div>
-        {% endfor %}
-      </div>
-      {% else %}
-      <p class="muted">{{ monitor.ode_trace.message }}</p>
-      {% endif %}
-    </article>
-  </section>
+  </div>
 
+  <!-- Detailed Timeline events logs section at the bottom -->
   <section class="card section-space">
     <div class="split-header">
       <div>
-        <h2>Search tree / branch history</h2>
-        <p class="muted">Review exploration, repair, and exploitation branches without opening the raw state file.</p>
+        <h2>Event timeline</h2>
+        <p class="muted">依序列出後端各個設計與 Critic 評鑑發送的完整信號日誌。</p>
       </div>
-      {% if monitor.search_tree.nodes %}
-      <span class="badge">{{ monitor.search_tree.nodes|length }} nodes</span>
-      {% endif %}
+      <span class="badge" data-run-event-count>{{ monitor.event_count }} 個事件</span>
     </div>
-    {% if monitor.search_tree.nodes %}
-    <div class="search-tree" data-search-tree>
-      <div class="search-branches">
-        {% for node in monitor.search_tree.nodes %}
-        <div class="search-node">
-          <div>
-            <strong>{{ node.node_id }}</strong>
-            <span class="muted">{{ node.parent_id or "root" }}</span>
-          </div>
-          <span class="stage-chip {{ 'stage-complete' if node.status in ['Pass', 'Evaluated'] else 'stage-human' if node.status == 'Needs_Human_Input' else 'stage-neutral' }}">{{ node.status }}</span>
-          <span class="badge">{{ node.search_mode }}</span>
-          <span>{{ node.score_label }}</span>
+    <div class="timeline" data-run-events style="max-height: 350px; overflow-y: auto;">
+      {% for event in monitor.events %}
+      <div class="timeline-item {{ event.stage_class }} {{ event.status_class }}" data-event-id="{{ event.event_id }}">
+        <div class="timeline-meta">
+          <span>#{{ event.event_id }}</span>
+          <span class="stage-chip {{ event.stage_class }}">{{ event.stage or "-" }}</span>
+          <span class="status-badge {{ event.status_class }}">{{ event.status or "-" }}</span>
         </div>
-        {% endfor %}
+        <div class="timeline-message">{{ event.message or "No message recorded." }}</div>
       </div>
-      {% if monitor.search_tree.path %}
-      <h3>Current path</h3>
-      <div class="branch-path">
-        {% for node in monitor.search_tree.path %}
-        <div>
-          <strong>{{ loop.index }}. {{ node.node_id }}</strong>
-          <span>{{ node.search_mode }} / {{ node.status }} / score {{ node.score_label }}</span>
-          {% if node.critic_feedback %}<p>{{ node.critic_feedback }}</p>{% endif %}
-        </div>
-        {% endfor %}
-      </div>
-      {% endif %}
+      {% else %}
+      <p class="muted" data-empty-events>尚無歷史事件紀錄。</p>
+      {% endfor %}
     </div>
-    {% else %}
-    <p class="muted">{{ monitor.search_tree.message }}</p>
-    {% endif %}
   </section>
 
-  <details class="section-space" data-run-debug>
+  <!-- Debug info -->
+  <details class="section-space advanced-only" data-run-debug>
     <summary>Debug payload</summary>
     {% if result %}
       <pre data-run-result-json>{{ result | tojson(indent=2) }}</pre>

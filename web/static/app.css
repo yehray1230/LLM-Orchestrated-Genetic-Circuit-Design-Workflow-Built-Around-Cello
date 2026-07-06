@@ -291,3 +291,70 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; background: #101828; color
   .content { padding: 20px; }
   .ode-series, .search-node { grid-template-columns: 1fr; }
 }
+
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.skip-link {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 1000;
+  padding: 8px 12px;
+  background: #fff;
+  color: var(--brand);
+  border: 2px solid var(--brand);
+  transform: translateY(-160%);
+}
+
+.skip-link:focus { transform: translateY(0); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* --- View Mode Toggle Switch & Advanced-Only Styles --- */
+.advanced-only {
+  display: none !important;
+}
+
+body.view-mode-advanced .advanced-only {
+  display: block !important;
+}
+
+/* For details, pre, and sections */
+body.view-mode-advanced details.advanced-only,
+body.view-mode-advanced pre.advanced-only,
+body.view-mode-advanced div.advanced-only,
+body.view-mode-advanced section.advanced-only,
+body.view-mode-advanced article.advanced-only {
+  display: block !important;
+}
+
+/* Slider Toggle Switch */
+.switch-toggle input:checked + .slider {
+  background-color: var(--brand) !important;
+}
+
+.switch-toggle .slider::before {
+  content: "";
+  position: absolute;
+  height: 14px;
+  width: 14px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: .3s;
+  border-radius: 50%;
+}
+
+.switch-toggle input:checked + .slider::before {
+  transform: translateX(16px);
+}

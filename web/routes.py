@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 import json
 import re
+import logging
+import shutil
 from typing import Annotated, Any
 from uuid import uuid4
 
@@ -24,6 +26,7 @@ from application.services import ApplicationServices
 from schemas.import_draft import FieldEvidence, ImportDraft
 
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 templates = Jinja2Templates(
     directory=str(Path(__file__).resolve().parent / "templates")
@@ -46,6 +49,24 @@ def dashboard(
     designs = services.designs.list()
     run_data = services.runs.list(limit=5)
     runs = run_data.get("runs", []) if isinstance(run_data, dict) else []
+
+    from tools.cello_wrapper import CelloWrapper
+    from tools.tool_adapters import CelloLogicSynthesisAdapter
+    settings = services.settings.get_settings_masked()
+    cello_cmd = settings.get("cello_command") or None
+    wrapper = CelloWrapper(cello_command=cello_cmd)
+    adapter = CelloLogicSynthesisAdapter(wrapper=wrapper)
+    try:
+        cello_status = adapter.available().to_dict()
+    except Exception as e:
+        cello_status = {
+            "status": "error",
+            "version": None,
+            "adapter_name": "cello_wrapper",
+            "fallback_used": True,
+            "warnings": [{"category": "ERROR", "message": str(e)}]
+        }
+
     return _template(
         request,
         "dashboard.html",
@@ -56,19 +77,254 @@ def dashboard(
             str(item.get("status")) not in TERMINAL_RUN_STATUSES
             for item in runs
         ),
+        cello_status=cello_status,
     )
 
 
 @router.get("/web/designs", response_class=HTMLResponse)
 def designs_page(
     request: Request,
+    q: str = "",
+    host: str = "",
+    status: str = "",
+    show_archived: bool = False,
+    show_deleted: bool = False,
+    page: int = 1,
     services: ApplicationServices = Depends(get_services),
 ) -> HTMLResponse:
+    from benchmark_suite.readiness_evaluator import evaluate_readiness
+
+    # 1. Fetch v2 designs
+    designs_v2 = services.designs.list_v2(show_archived=show_archived, show_deleted=show_deleted)
+
+    # 2. Enrich and filter
+    enriched = []
+    for d in designs_v2:
+        readiness = evaluate_readiness(d)
+        host_org = d.biological_context.host_organism.value or ""
+
+        # Search filter
+        if q:
+            q_lower = q.lower()
+            if (
+                q_lower not in d.name.lower()
+                and q_lower not in d.design_id.lower()
+                and not (d.specification.user_intent and q_lower in d.specification.user_intent.lower())
+            ):
+                continue
+
+        # Host filter
+        if host:
+            if host.lower() not in host_org.lower():
+                continue
+
+        # Status filter
+        if status:
+            if status != readiness.readiness_status:
+                continue
+
+        enriched.append({
+            "design_id": d.design_id,
+            "name": d.name,
+            "inputs": d.specification.inputs,
+            "outputs": d.specification.outputs,
+            "parts_count": len(d.parts),
+            "host_organism": host_org or "Unknown",
+            "readiness_status": readiness.readiness_status,
+            "is_pinned": getattr(d, "is_pinned", False),
+            "is_archived": getattr(d, "is_archived", False),
+            "is_deleted": getattr(d, "is_deleted", False),
+            "updated_at": d.revision.created_at or "Unknown",
+        })
+
+    # Sort pinned first
+    enriched.sort(key=lambda x: x["is_pinned"], reverse=True)
+
+    # Pagination
+    page_size = 10
+    total_count = len(enriched)
+    total_pages = (total_count + page_size - 1) // page_size if total_count > 0 else 1
+    page = max(1, min(page, total_pages))
+    start_idx = (page - 1) * page_size
+    paginated = enriched[start_idx : start_idx + page_size]
+
+    # Fetch all options for filters
+    all_raw = services.designs.list_v2(show_archived=True, show_deleted=True)
+    all_hosts = sorted(list({
+        d.biological_context.host_organism.value
+        for d in all_raw
+        if d.biological_context.host_organism.value
+    }))
+    all_statuses = sorted(list({
+        evaluate_readiness(d).readiness_status
+        for d in all_raw
+    }))
+
     return _template(
         request,
         "designs.html",
-        designs=services.designs.list(),
+        designs=paginated,
+        q=q,
+        selected_host=host,
+        selected_status=status,
+        show_archived=show_archived,
+        show_deleted=show_deleted,
+        all_hosts=all_hosts,
+        all_statuses=all_statuses,
+        page=page,
+        total_pages=total_pages,
+        total_count=total_count,
     )
+
+
+@router.post("/web/designs/{design_id}/pin")
+def pin_design_route(
+    design_id: str,
+    services: ApplicationServices = Depends(get_services),
+) -> RedirectResponse:
+    services.designs.pin(design_id)
+    return RedirectResponse(f"/web/designs/{design_id}", status_code=303)
+
+
+@router.post("/web/designs/{design_id}/unpin")
+def unpin_design_route(
+    design_id: str,
+    services: ApplicationServices = Depends(get_services),
+) -> RedirectResponse:
+    services.designs.unpin(design_id)
+    return RedirectResponse(f"/web/designs/{design_id}", status_code=303)
+
+
+@router.post("/web/designs/{design_id}/archive")
+def archive_design_route(
+    design_id: str,
+    services: ApplicationServices = Depends(get_services),
+) -> RedirectResponse:
+    services.designs.archive(design_id)
+    return RedirectResponse("/web/designs", status_code=303)
+
+
+@router.post("/web/designs/{design_id}/unarchive")
+def unarchive_design_route(
+    design_id: str,
+    services: ApplicationServices = Depends(get_services),
+) -> RedirectResponse:
+    services.designs.unarchive(design_id)
+    return RedirectResponse(f"/web/designs/{design_id}", status_code=303)
+
+
+@router.post("/web/designs/{design_id}/delete")
+def delete_design_route(
+    design_id: str,
+    services: ApplicationServices = Depends(get_services),
+) -> RedirectResponse:
+    services.designs.soft_delete(design_id)
+    return RedirectResponse("/web/designs", status_code=303)
+
+
+@router.post("/web/designs/{design_id}/restore")
+def restore_design_route(
+    design_id: str,
+    services: ApplicationServices = Depends(get_services),
+) -> RedirectResponse:
+    services.designs.restore(design_id)
+    return RedirectResponse(f"/web/designs/{design_id}", status_code=303)
+
+
+@router.get("/web/designs/{design_id}/delete_preview", response_class=HTMLResponse)
+def delete_preview_page(
+    design_id: str,
+    request: Request,
+    services: ApplicationServices = Depends(get_services),
+) -> HTMLResponse:
+    design = services.designs.get_v2(design_id)
+    if not design:
+        raise HTTPException(status_code=404, detail="Design not found.")
+
+    revisions = services.designs.revisions(design_id) or []
+
+    # Count related deliverables
+    all_deliverables = services.assembly_deliverables.repository.list()
+    matching_deliverables = [
+        d for d in all_deliverables
+        if d.get("assembly", {}).get("design_id") == design_id
+        or d.get("source_context", {}).get("design_id") == design_id
+    ]
+
+    # Count associated runs
+    related_runs = []
+    try:
+        research_runs = services.research.list(limit=100).get("runs", [])
+        related_runs = [
+            r for r in research_runs
+            if _research_run_design_id(r) == design_id
+        ]
+    except (KeyError, TypeError, ValueError):
+        logger.warning(
+            "Unable to enumerate research runs for delete preview.",
+            exc_info=True,
+        )
+
+    return _template(
+        request,
+        "delete_preview.html",
+        design=design,
+        revisions_count=len(revisions),
+        deliverables_count=len(matching_deliverables),
+        runs_count=len(related_runs),
+    )
+
+
+@router.post("/web/designs/{design_id}/purge")
+def purge_design_route(
+    design_id: str,
+    understand: Annotated[bool, Form()],
+    confirm_design_id: Annotated[str, Form()],
+    services: ApplicationServices = Depends(get_services),
+) -> RedirectResponse:
+    if not understand or confirm_design_id.strip() != design_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Destructive action confirmation did not match the design ID.",
+        )
+
+    # 1. Clean up associated assembly deliverables & files
+    all_deliverables = services.assembly_deliverables.repository.list()
+    matching_deliverables = [
+        d for d in all_deliverables
+        if d.get("assembly", {}).get("design_id") == design_id
+        or d.get("source_context", {}).get("design_id") == design_id
+    ]
+    for deliverable in matching_deliverables:
+        deliverable_id = deliverable.get("deliverable_id")
+        if deliverable_id:
+            services.assembly_deliverables.repository.delete(deliverable_id)
+            deliverable_dir = (
+                services.assembly_deliverables.output_dir / deliverable_id
+            )
+            if deliverable_dir.exists():
+                shutil.rmtree(deliverable_dir)
+
+    # 2. Delete design from repository
+    purged = services.designs.purge(design_id)
+    if not purged:
+        raise HTTPException(status_code=404, detail="Design not found or could not be purged.")
+
+    return RedirectResponse("/web/designs", status_code=303)
+
+
+def _research_run_design_id(run: dict[str, Any]) -> str | None:
+    """Return the explicit design association stored by a research run."""
+    for container in (
+        run,
+        run.get("request"),
+        run.get("input"),
+        run.get("summary"),
+        run.get("result"),
+    ):
+        if isinstance(container, dict) and container.get("design_id"):
+            return str(container["design_id"])
+    return None
 
 
 @router.get("/web/assembly", response_class=HTMLResponse)
@@ -317,11 +573,19 @@ def benchmark_detail(
 def design_detail(
     design_id: str,
     request: Request,
+    rev: int | None = None,
     services: ApplicationServices = Depends(get_services),
 ) -> HTMLResponse:
     design = services.designs.get(design_id)
     if design is None:
         raise HTTPException(status_code=404, detail="Design not found.")
+
+    from web.design_views import build_design_context_view
+    view = build_design_context_view(design_id, rev, services)
+
+    is_historical = rev is not None
+    viewed_rev = rev if rev is not None else view.latest_rev
+
     return _template(
         request,
         "design_detail.html",
@@ -329,6 +593,10 @@ def design_detail(
         design_v2=services.designs.get_v2(design_id),
         simulation_spec=services.designs.simulation_spec(design_id),
         revisions=services.designs.revisions(design_id),
+        view=view,
+        readiness=view.readiness,
+        is_historical=is_historical,
+        viewed_rev=viewed_rev,
     )
 
 
@@ -592,6 +860,10 @@ def start_run(
     )
     if result.get("status") == "error":
         raise HTTPException(status_code=400, detail=result.get("error"))
+    try:
+        services.design_drafts.clear()
+    except Exception:
+        pass
     return RedirectResponse(
         f"/web/runs/{result['run_id']}",
         status_code=303,
@@ -703,16 +975,136 @@ def compare_page(
     )
 
 
+GLOSSARY = {
+    "設計資料庫": "Design Library",
+    "已確認並持久化的外部或計算設計。": "Confirmed and persisted computational or external designs.",
+    "名稱": "Name",
+    "輸入": "Inputs",
+    "輸出": "Outputs",
+    "零件": "Parts",
+    "驗證狀態": "Validation",
+    "開啟模擬工作區": "Open Simulation Workspace",
+    "生物情境": "Biological Context",
+    "宿主生物": "Host Organism",
+    "底盤": "Chassis",
+    "假設數量": "Assumptions Count",
+    "警告數量": "Warnings Count",
+    "設計規格與評估": "Design Specification & Evaluation",
+    "材料清單 (BoM)": "Bill of Materials (BoM)",
+    "裝配與交付下載": "Assembly & Delivery Downloads",
+    "匯出中心": "Export Center",
+    "版本歷程": "Revision History",
+    "最佳化": "Optimization",
+    "邏輯設計規格": "Logic Design Specification",
+    "邏輯表達式": "Logic Expression",
+    "輸入信號": "Input Signals",
+    "輸出信號": "Output Signals",
+    "零件總數": "Total Parts",
+    "未設定": "Not configured",
+    "封存": "Archive",
+    "取消封存": "Unarchive",
+    "刪除": "Delete",
+    "還原": "Restore",
+    "永久刪除": "Purge",
+    "釘選": "Pin",
+    "取消釘選": "Unpin",
+    "搜尋": "Search",
+    "篩選": "Filter",
+    "狀態": "Status",
+    "最近瀏覽": "Recently Viewed",
+    "成熟度": "Maturity",
+    "分頁": "Pagination",
+    "清除": "Clear",
+    "確定": "Confirm",
+    "取消": "Cancel",
+    "封存設計": "Archive Design",
+    "刪除影響預覽": "Delete Impact Preview",
+    "關閉": "Close",
+    "無資料": "No data",
+    "儀表板": "Dashboard",
+    "工作執行紀錄": "Runs",
+    "外部設計匯入": "External Imports",
+    "研究工作區": "Research Workspace",
+    "裝配交付中心": "Assembly Delivery",
+    "基準測試": "Benchmarks",
+    "設定": "Settings",
+    "API文件": "API Docs",
+    "語系": "Language",
+    "跳至主要內容": "Skip to main content",
+    "輸入設計 ID 以確認": "Enter the design ID to confirm",
+}
+
+
 def _template(
     request: Request,
     name: str,
     **context: object,
-) -> HTMLResponse:
-    return templates.TemplateResponse(
+) -> Response:
+    lang = request.query_params.get("lang") or request.cookies.get("lang") or "zh-Hant"
+    if lang not in ["zh-Hant", "en"]:
+        lang = "zh-Hant"
+
+    def _t(text: str) -> str:
+        if lang == "en":
+            return GLOSSARY.get(text, text)
+        return text
+
+    from api.dependencies import get_services
+    services = get_services()
+    unread_notifications = 0
+    running_jobs = []
+    try:
+        unread_notifications = len(services.notifications.list_unread())
+    except Exception:
+        pass
+    try:
+        all_runs = services.runs.list(limit=100).get("runs", [])
+        running_jobs = [
+            r for r in all_runs
+            if r.get("status") not in ["completed", "failed", "cancelled"]
+        ]
+    except Exception:
+        pass
+
+    settings = {}
+    try:
+        settings = services.settings.get_settings_masked()
+    except Exception:
+        pass
+
+    cello_status = None
+    try:
+        from tools.cello_wrapper import CelloWrapper
+        from tools.tool_adapters import CelloLogicSynthesisAdapter
+        cello_cmd = settings.get("cello_command") or None
+        wrapper = CelloWrapper(cello_command=cello_cmd)
+        adapter = CelloLogicSynthesisAdapter(wrapper=wrapper)
+        cello_status = adapter.available().to_dict()
+    except Exception as e:
+        cello_status = {
+            "status": "error",
+            "version": None,
+            "adapter_name": "cello_wrapper",
+            "fallback_used": True,
+            "warnings": [{"category": "ERROR", "message": str(e)}]
+        }
+
+    response = templates.TemplateResponse(
         request=request,
         name=name,
-        context={"active_path": request.url.path, **context},
+        context={
+            "active_path": request.url.path,
+            "lang": lang,
+            "_t": _t,
+            "unread_notifications": unread_notifications,
+            "running_jobs": running_jobs,
+            "settings": settings,
+            "cello_status": cello_status,
+            **context
+        },
     )
+    response.set_cookie("lang", lang, max_age=30*24*3600)
+    return response
 
 
 def _run_monitor_payload(
@@ -1204,3 +1596,1081 @@ def _assembly_template(
 
 def _comma_list(value: str) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
+
+
+_SENSITIVE_KEYS = re.compile(r"api_key|token|password|secret|key", re.IGNORECASE)
+
+
+def _sanitize_shareable(value: Any) -> Any:
+    if isinstance(value, str):
+        # 1. Mask paths
+        if re.search(r'[a-zA-Z]:\\', value):
+            return "[local_path]"
+
+        # 2. Mask secrets / tokens
+        masked = re.sub(
+            r'(token|api_key|password|secret|key)\s*[:=]\s*[^\s&"\'}]+',
+            r'\1=[hidden]',
+            value,
+            flags=re.IGNORECASE
+        )
+        return masked
+
+    if isinstance(value, dict):
+        return {
+            key: "[hidden]" if _SENSITIVE_KEYS.search(str(key)) else _sanitize_shareable(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_sanitize_shareable(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_sanitize_shareable(item) for item in value)
+    return value
+
+
+@router.get("/web/designs/{design_id}/exports/project_package")
+def download_project_package(
+    design_id: str,
+    rev: int | None = None,
+    services: ApplicationServices = Depends(get_services),
+) -> Response:
+    import io
+    import zipfile
+    import json
+    import hashlib
+    from datetime import datetime, timezone
+
+    # 1. Fetch design revision
+    if rev is not None:
+        design_v2 = services.designs.get_revision(design_id, rev)
+    else:
+        design_v2 = services.designs.get_v2(design_id)
+    if design_v2 is None:
+        raise HTTPException(status_code=404, detail="Design not found.")
+
+    from application.services import design_ir_from_dict, design_ir_v2_to_v1_payload
+    design = design_ir_from_dict(design_ir_v2_to_v1_payload(design_v2.to_dict()))
+
+    # 2. Package Zip
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        # File 1: design.json
+        design_json = json.dumps(design_v2.to_dict(), indent=2, ensure_ascii=False)
+        zip_file.writestr("design.json", design_json)
+
+        # File 2: circuit.v
+        verilog_content = design_v2.extensions.get("verilog", "")
+        if verilog_content:
+            zip_file.writestr(f"{design.design_id}.v", verilog_content)
+
+        # File 3: parts_bom.csv
+        from exporters.bom_exporter import export_bom_csv
+        bom_result = export_bom_csv(design)
+        if bom_result.ok:
+            zip_file.writestr("parts_bom.csv", bom_result.content)
+
+        # File 4: sequences.gb
+        from exporters.genbank_exporter import export_genbank
+        gb_result = export_genbank(design)
+        if gb_result.ok:
+            zip_file.writestr("sequences.gb", gb_result.content)
+
+        # File 5: design_sbol3.ttl
+        from exporters.sbol3_exporter import export_sbol3_turtle
+        sbol_result = export_sbol3_turtle(design)
+        if sbol_result.ok:
+            zip_file.writestr("design_sbol3.ttl", sbol_result.content)
+
+        # File 6: manifest.json
+        manifest = {
+            "project_id": design.design_id,
+            "name": design.name,
+            "revision_id": design_v2.revision.revision_id,
+            "revision_number": design_v2.revision.revision_number,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "schema_version": "2.0",
+            "provenance": _sanitize_shareable([
+                {
+                    "id": p.id,
+                    "source_type": p.source_type,
+                    "source_uri": p.source_uri,
+                    "generated_at": p.generated_at,
+                    "metadata": p.metadata,
+                }
+                for p in design_v2.provenance
+            ]),
+            "files": [
+                {"filename": "design.json", "sha256": hashlib.sha256(design_json.encode('utf-8')).hexdigest()},
+            ]
+        }
+        if verilog_content:
+            manifest["files"].append({"filename": f"{design.design_id}.v", "sha256": hashlib.sha256(verilog_content.encode('utf-8')).hexdigest()})
+        if bom_result.ok:
+            manifest["files"].append({"filename": "parts_bom.csv", "sha256": hashlib.sha256(bom_result.content.encode('utf-8')).hexdigest()})
+        if gb_result.ok:
+            manifest["files"].append({"filename": "sequences.gb", "sha256": hashlib.sha256(gb_result.content.encode('utf-8')).hexdigest()})
+        if sbol_result.ok:
+            manifest["files"].append({"filename": "design_sbol3.ttl", "sha256": hashlib.sha256(sbol_result.content.encode('utf-8')).hexdigest()})
+
+        zip_file.writestr("manifest.json", json.dumps(manifest, indent=2, ensure_ascii=False))
+
+    zip_buffer.seek(0)
+
+    headers = {
+        "Content-Disposition": f'attachment; filename="{design.design_id}_project_package.zip"',
+    }
+    return Response(
+        content=zip_buffer.getvalue(),
+        media_type="application/zip",
+        headers=headers,
+    )
+
+
+@router.get("/web/designs/{design_id}/share_summary", response_class=HTMLResponse)
+def share_summary(
+    design_id: str,
+    request: Request,
+    rev: int | None = None,
+    services: ApplicationServices = Depends(get_services),
+) -> HTMLResponse:
+    from copy import deepcopy
+    # 1. Fetch design revision
+    if rev is not None:
+        design_v2 = services.designs.get_revision(design_id, rev)
+    else:
+        design_v2 = services.designs.get_v2(design_id)
+    if design_v2 is None:
+        raise HTTPException(status_code=404, detail="Design not found.")
+
+    from application.services import design_ir_from_dict, design_ir_v2_to_v1_payload
+    design = design_ir_from_dict(design_ir_v2_to_v1_payload(design_v2.to_dict()))
+
+    # Apply recursive masking before any design field reaches the share template.
+    sanitized_payload = _sanitize_shareable(deepcopy(design_v2).to_dict())
+    from schemas.design_ir_v2 import design_ir_v2_from_dict
+    design_v2_masked = design_ir_v2_from_dict(sanitized_payload)
+    design = design_ir_from_dict(
+        design_ir_v2_to_v1_payload(design_v2_masked.to_dict())
+    )
+
+    from web.design_views import build_design_context_view
+    view = build_design_context_view(design_id, rev, services)
+
+    return _template(
+        request,
+        "share_summary.html",
+        design=design,
+        design_v2=design_v2_masked,
+        view=view,
+        readiness=view.readiness,
+    )
+
+
+# ==============================================================================
+# Settings, Candidates, Decision History, and Simulation routes
+# ==============================================================================
+
+@router.get("/web/settings", response_class=HTMLResponse)
+def web_settings_page(
+    request: Request,
+    services: ApplicationServices = Depends(get_services),
+) -> HTMLResponse:
+    from tools.cello_wrapper import CelloWrapper
+    from tools.tool_adapters import CelloLogicSynthesisAdapter
+
+    settings = services.settings.get_settings_masked()
+
+    cello_cmd = settings.get("cello_command") or None
+    wrapper = CelloWrapper(cello_command=cello_cmd)
+    adapter = CelloLogicSynthesisAdapter(wrapper=wrapper)
+    try:
+        cello_status = adapter.available().to_dict()
+    except Exception as e:
+        cello_status = {
+            "status": "error",
+            "version": None,
+            "adapter_name": "cello_wrapper",
+            "fallback_used": True,
+            "warnings": [{"category": "ERROR", "message": str(e)}]
+        }
+
+    return _template(
+        request,
+        "settings.html",
+        settings=settings,
+        cello_status=cello_status,
+    )
+
+
+@router.post("/web/settings", response_class=HTMLResponse)
+def web_save_settings(
+    request: Request,
+    provider: Annotated[str, Form()],
+    model_name: Annotated[str, Form()],
+    api_key: Annotated[str, Form()],
+    api_base: Annotated[str, Form()],
+    cello_command: Annotated[str, Form()],
+    ucf_path: Annotated[str, Form()],
+    default_host: Annotated[str, Form()],
+    default_compute_budget: Annotated[int, Form()] = 6,
+    services: ApplicationServices = Depends(get_services),
+) -> HTMLResponse:
+    from tools.cello_wrapper import CelloWrapper
+    from tools.tool_adapters import CelloLogicSynthesisAdapter
+
+    payload = {
+        "provider": provider.strip(),
+        "model_name": model_name.strip(),
+        "api_key": api_key.strip(),
+        "api_base": api_base.strip(),
+        "cello_command": cello_command.strip(),
+        "ucf_path": ucf_path.strip(),
+        "default_host": default_host.strip(),
+        "default_compute_budget": default_compute_budget,
+    }
+    services.settings.save_settings(payload)
+    settings = services.settings.get_settings_masked()
+
+    cello_cmd = settings.get("cello_command") or None
+    wrapper = CelloWrapper(cello_command=cello_cmd)
+    adapter = CelloLogicSynthesisAdapter(wrapper=wrapper)
+    try:
+        cello_status = adapter.available().to_dict()
+    except Exception as e:
+        cello_status = {
+            "status": "error",
+            "version": None,
+            "adapter_name": "cello_wrapper",
+            "fallback_used": True,
+            "warnings": [{"category": "ERROR", "message": str(e)}]
+        }
+
+    return _template(
+        request,
+        "settings.html",
+        settings=settings,
+        cello_status=cello_status,
+        success_msg="設定儲存成功！",
+    )
+
+
+@router.post("/web/settings/api-key/delete", response_class=HTMLResponse)
+def web_clear_settings_api_key(
+    request: Request,
+    services: ApplicationServices = Depends(get_services),
+) -> HTMLResponse:
+    from tools.cello_wrapper import CelloWrapper
+    from tools.tool_adapters import CelloLogicSynthesisAdapter
+
+    services.settings.clear_api_key()
+    settings = services.settings.get_settings_masked()
+
+    cello_cmd = settings.get("cello_command") or None
+    wrapper = CelloWrapper(cello_command=cello_cmd)
+    adapter = CelloLogicSynthesisAdapter(wrapper=wrapper)
+    try:
+        cello_status = adapter.available().to_dict()
+    except Exception as e:
+        cello_status = {
+            "status": "error",
+            "version": None,
+            "adapter_name": "cello_wrapper",
+            "fallback_used": True,
+            "warnings": [{"category": "ERROR", "message": str(e)}]
+        }
+
+    return _template(
+        request,
+        "settings.html",
+        settings=settings,
+        cello_status=cello_status,
+        success_msg="金鑰已清除！",
+    )
+
+
+@router.get("/web/runs/{run_id}/candidates", response_class=HTMLResponse)
+def web_candidates_list(
+    run_id: str,
+    request: Request,
+    services: ApplicationServices = Depends(get_services),
+) -> HTMLResponse:
+    try:
+        run_status = services.runs.status(run_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Run not found.")
+    if run_status.get("status") == "not_found":
+        raise HTTPException(status_code=404, detail="Run not found.")
+
+    try:
+        run_result = services.runs.result(run_id)
+    except Exception:
+        run_result = None
+
+    from web.candidate_views import build_candidate_list_view
+    view = build_candidate_list_view(run_id, run_status, run_result)
+
+    return _template(
+        request,
+        "candidates.html",
+        view=view,
+    )
+
+
+@router.get("/web/runs/{run_id}/candidates/compare", response_class=HTMLResponse)
+def web_candidate_compare(
+    run_id: str,
+    indexes: str,
+    request: Request,
+    services: ApplicationServices = Depends(get_services),
+) -> HTMLResponse:
+    try:
+        run_status = services.runs.status(run_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Run not found.")
+    if run_status.get("status") == "not_found":
+        raise HTTPException(status_code=404, detail="Run not found.")
+
+    try:
+        run_result = services.runs.result(run_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Run result not available.")
+
+    try:
+        idx_list = [int(i.strip()) for i in indexes.split(",") if i.strip()]
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid indexes parameter format. Expected comma-separated integers.")
+
+    if not idx_list:
+        raise HTTPException(status_code=400, detail="Invalid indexes parameter format. No indexes provided.")
+
+    from web.candidate_views import build_candidate_comparison_view
+    try:
+        view = build_candidate_comparison_view(run_id, run_status, run_result, idx_list)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return _template(
+        request,
+        "candidate_compare.html",
+        view=view,
+    )
+
+
+@router.get("/web/runs/{run_id}/candidates/{candidate_index}", response_class=HTMLResponse)
+def web_candidate_detail(
+    run_id: str,
+    candidate_index: int,
+    request: Request,
+    services: ApplicationServices = Depends(get_services),
+) -> HTMLResponse:
+    try:
+        run_status = services.runs.status(run_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Run not found.")
+    if run_status.get("status") == "not_found":
+        raise HTTPException(status_code=404, detail="Run not found.")
+
+    status_str = run_status.get("status", "unknown")
+    if status_str not in TERMINAL_RUN_STATUSES:
+        raise HTTPException(status_code=400, detail="Run is not completed yet.")
+
+    try:
+        run_result = services.runs.result(run_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Run result not available or unparseable.")
+
+    from web.candidate_views import build_candidate_detail_view
+    try:
+        view = build_candidate_detail_view(run_id, run_status, run_result, candidate_index)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    return _template(
+        request,
+        "candidate_detail.html",
+        view=view,
+    )
+
+
+def _extract_inputs_from_verilog(verilog: str) -> list[str]:
+    clean_verilog = re.sub(r"//.*", "", verilog)
+    clean_verilog = re.sub(r"/\*.*?\*/", "", clean_verilog, flags=re.DOTALL)
+    inputs = []
+    for m in re.findall(r"\binput\b\s+([^;)]+)", clean_verilog):
+        parts = m.split(",")
+        for p in parts:
+            name = p.strip()
+            if name.startswith("input "):
+                name = name[6:].strip()
+            if "output" in name:
+                name = name.split("output")[0].strip()
+            if name and name not in ["output", "module", "wire", "reg", "assign"]:
+                name = re.sub(r"[^a-zA-Z0-9_]", "", name)
+                if name and name not in inputs:
+                    inputs.append(name)
+    if not inputs:
+        inputs = ["A"]
+    return inputs
+
+
+@router.get("/web/runs/{run_id}/candidates/{candidate_index}/simulate", response_class=HTMLResponse)
+def web_candidate_simulate_get(
+    run_id: str,
+    candidate_index: int,
+    request: Request,
+    services: ApplicationServices = Depends(get_services),
+) -> HTMLResponse:
+    try:
+        run_status = services.runs.status(run_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Run not found.")
+    if run_status.get("status") == "not_found":
+        raise HTTPException(status_code=404, detail="Run not found.")
+
+    try:
+        run_result = services.runs.result(run_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Run result not available.")
+
+    from web.candidate_views import build_candidate_detail_view
+    try:
+        view = build_candidate_detail_view(run_id, run_status, run_result, candidate_index)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    inputs = _extract_inputs_from_verilog(view.verilog_code)
+
+    form_data = {
+        "simulation_time": 300,
+        "sample_count": 50,
+        "noise_fraction": 0.1,
+        "random_seed": "",
+    }
+
+    return _template(
+        request,
+        "candidate_simulation.html",
+        view=view,
+        inputs=inputs,
+        form_data=form_data,
+        results=None,
+    )
+
+
+@router.post("/web/runs/{run_id}/candidates/{candidate_index}/simulate", response_class=HTMLResponse)
+async def web_candidate_simulate_post(
+    run_id: str,
+    candidate_index: int,
+    request: Request,
+    services: ApplicationServices = Depends(get_services),
+) -> HTMLResponse:
+    try:
+        run_status = services.runs.status(run_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Run not found.")
+    if run_status.get("status") == "not_found":
+        raise HTTPException(status_code=404, detail="Run not found.")
+
+    try:
+        run_result = services.runs.result(run_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Run result not available.")
+
+    from web.candidate_views import build_candidate_detail_view
+    try:
+        view = build_candidate_detail_view(run_id, run_status, run_result, candidate_index)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    form = await request.form()
+    simulation_time = float(form.get("simulation_time", 300.0))
+    sample_count = int(form.get("sample_count", 50))
+    noise_fraction = float(form.get("noise_fraction", 0.1))
+    random_seed_str = form.get("random_seed", "")
+    random_seed = int(random_seed_str) if random_seed_str.strip() else None
+
+    inputs = _extract_inputs_from_verilog(view.verilog_code)
+
+    input_specs = {}
+    for sig in inputs:
+        input_type = form.get(f"input_type_{sig}", "constant")
+        if input_type == "constant":
+            input_specs[sig] = {
+                "type": "constant",
+                "value": float(form.get(f"input_value_{sig}", 1.0)),
+            }
+        elif input_type == "step":
+            input_specs[sig] = {
+                "type": "step",
+                "step_start": float(form.get(f"input_step_start_{sig}", 0.0)),
+                "step_end": float(form.get(f"input_step_end_{sig}", 1.0)),
+                "step_time": float(form.get(f"input_step_time_{sig}", 150.0)),
+            }
+        elif input_type == "pulse":
+            input_specs[sig] = {
+                "type": "pulse",
+                "pulse_basal": float(form.get(f"input_pulse_basal_{sig}", 0.0)),
+                "pulse_active": float(form.get(f"input_pulse_active_{sig}", 1.0)),
+                "pulse_start": float(form.get(f"input_pulse_start_{sig}", 100.0)),
+                "pulse_end": float(form.get(f"input_pulse_end_{sig}", 300.0)),
+            }
+
+    from web.candidate_views import _extract_candidate_topologies
+    refs = _extract_candidate_topologies(run_id, run_result)
+    ref = refs[candidate_index]
+
+    payload = {
+        "simulation_time": simulation_time,
+        "sample_count": sample_count,
+        "noise_fraction": noise_fraction,
+        "random_seed": random_seed,
+        "input_specs": input_specs,
+        "candidate": ref.topology,
+    }
+
+    sim_result = services.simulations.simulate(payload)
+
+    form_data = {
+        "simulation_time": simulation_time,
+        "sample_count": sample_count,
+        "noise_fraction": noise_fraction,
+        "random_seed": random_seed_str,
+    }
+    for sig in inputs:
+        form_data[f"input_type_{sig}"] = form.get(f"input_type_{sig}", "constant")
+        form_data[f"input_value_{sig}"] = form.get(f"input_value_{sig}", "1.0")
+        form_data[f"input_step_start_{sig}"] = form.get(f"input_step_start_{sig}", "0.0")
+        form_data[f"input_step_end_{sig}"] = form.get(f"input_step_end_{sig}", "1.0")
+        form_data[f"input_step_time_{sig}"] = form.get(f"input_step_time_{sig}", "150.0")
+        form_data[f"input_pulse_basal_{sig}"] = form.get(f"input_pulse_basal_{sig}", "0.0")
+        form_data[f"input_pulse_active_{sig}"] = form.get(f"input_pulse_active_{sig}", "1.0")
+        form_data[f"input_pulse_start_{sig}"] = form.get(f"input_pulse_start_{sig}", "100.0")
+        form_data[f"input_pulse_end_{sig}"] = form.get(f"input_pulse_end_{sig}", "300.0")
+
+    results = dict(sim_result["candidate"]) if sim_result else None
+    if results:
+        import json
+        results["raw_json"] = json.dumps(sim_result, indent=2, ensure_ascii=False)
+
+    return _template(
+        request,
+        "candidate_simulation.html",
+        view=view,
+        inputs=inputs,
+        form_data=form_data,
+        results=results,
+    )
+
+
+
+
+@router.post("/web/runs/{run_id}/candidates/{candidate_index}/promote")
+def web_candidate_promote(
+    run_id: str,
+    candidate_index: int,
+    services: ApplicationServices = Depends(get_services),
+) -> RedirectResponse:
+    try:
+        run_status = services.runs.status(run_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Run not found.")
+    if run_status.get("status") == "not_found":
+        raise HTTPException(status_code=404, detail="Run not found.")
+
+    try:
+        run_result = services.runs.result(run_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Run result not available.")
+
+    from web.candidate_views import _extract_candidate_topologies
+    refs = _extract_candidate_topologies(run_id, run_result)
+    if candidate_index < 0 or candidate_index >= len(refs):
+        raise HTTPException(status_code=404, detail="Candidate index is out of range.")
+
+    ref = refs[candidate_index]
+    host_organism = run_status.get("summary", {}).get("host_organism") or run_status.get("request", {}).get("host_organism") or "Escherichia coli"
+
+    from uuid import uuid4
+    design_id = f"design_{uuid4().hex[:12]}"
+
+    from schemas.design_ir import topology_to_design_ir
+    design_ir = topology_to_design_ir(ref.topology, host_organism=host_organism, design_id=design_id)
+    design_ir.name = f"Design from Run {run_id[:8]} Candidate #{candidate_index + 1}"
+
+    services.designs.save(design_ir)
+    return RedirectResponse(f"/web/designs/{design_ir.design_id}", status_code=303)
+
+
+@router.get("/web/runs/{run_id}/decision-history", response_class=HTMLResponse)
+def web_run_decision_history(
+    run_id: str,
+    request: Request,
+    services: ApplicationServices = Depends(get_services),
+) -> HTMLResponse:
+    try:
+        status = services.runs.status(run_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Run not found.")
+    if status.get("status") == "not_found":
+        raise HTTPException(status_code=404, detail="Run not found.")
+    events = services.runs.events(run_id, limit=100).get("events", [])
+    try:
+        result = services.runs.result(run_id)
+    except Exception:
+        result = None
+    monitor = _run_monitor_view(status, events, result)
+    return _template(
+        request,
+        "run_decision_history.html",
+        run=status,
+        events=events,
+        result=result,
+        monitor=monitor,
+    )
+
+
+@router.post("/web/runs/{run_id}/cancel")
+def web_run_cancel(
+    run_id: str,
+    services: ApplicationServices = Depends(get_services),
+) -> RedirectResponse:
+    try:
+        services.runs.cancel(run_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Run not found.")
+    return RedirectResponse(f"/web/runs/{run_id}", status_code=303)
+
+
+@router.post("/web/runs/{run_id}/retry")
+def web_run_retry(
+    run_id: str,
+    services: ApplicationServices = Depends(get_services),
+) -> RedirectResponse:
+    try:
+        status = services.runs.status(run_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Run not found.")
+
+    req = status.get("request") or {}
+    user_intent = req.get("user_intent") or status.get("user_intent") or "Retry run"
+    host_organism = req.get("host_organism") or status.get("host_organism") or "E. coli"
+    compute_budget = req.get("compute_budget") or status.get("compute_budget") or 5
+
+    new_run = services.runs.start({
+        "user_intent": user_intent,
+        "host_organism": host_organism,
+        "compute_budget": compute_budget,
+    })
+    new_run_id = new_run["run_id"]
+    return RedirectResponse(f"/web/runs/{new_run_id}", status_code=303)
+
+
+@router.post("/web/research/runs/{run_id}/cancel")
+def web_research_run_cancel(
+    run_id: str,
+    services: ApplicationServices = Depends(get_services),
+) -> RedirectResponse:
+    try:
+        services.research.cancel(run_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Run not found.")
+    return RedirectResponse(f"/web/research/runs/{run_id}", status_code=303)
+
+
+@router.post("/web/research/runs/{run_id}/retry")
+def web_research_run_retry(
+    run_id: str,
+    services: ApplicationServices = Depends(get_services),
+) -> RedirectResponse:
+    try:
+        status = services.research.status(run_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Run not found.")
+
+    req = status.get("request") or {}
+    name = req.get("name") or status.get("name") or "Retry run"
+    logic_expression = req.get("logic_expression") or status.get("logic_expression") or ""
+    host_organism = req.get("host_organism") or status.get("host_organism") or "Escherichia coli"
+    extra_budget = req.get("extra_budget") or status.get("extra_budget") or 5
+
+    new_run = services.research.submit_run(
+        name=name,
+        logic_expression=logic_expression,
+        host_organism=host_organism,
+        extra_budget=extra_budget,
+    )
+    new_run_id = new_run.run_id
+    return RedirectResponse(f"/web/research/runs/{new_run_id}", status_code=303)
+
+
+def _get_design_topology(design_id: str, services: ApplicationServices) -> dict[str, Any]:
+    design = services.designs.get_v2(design_id)
+    if design is None:
+        raise HTTPException(status_code=404, detail="Design not found.")
+    spec = services.designs.simulation_spec(design_id)
+    if spec is None:
+        raise HTTPException(status_code=404, detail="Design simulation spec not found.")
+    verilog = str(spec.get("verilog") or "")
+    if not verilog:
+        raise ValueError("The selected design has no Verilog topology.")
+    return {
+        "verilog": verilog,
+        "truth_table": design.specification.truth_table,
+        "chassis": spec.get("chassis"),
+        "copy_number": spec.get("copy_number"),
+        "biokinetic_parameters": spec.get("parameters", {}),
+    }
+
+
+def _handle_simulation_get(
+    design_id: str,
+    request: Request,
+    rev: int | None,
+    run_id: str | None,
+    template_name: str,
+    services: ApplicationServices,
+) -> HTMLResponse:
+    design = services.designs.get(design_id)
+    if design is None:
+        raise HTTPException(status_code=404, detail="Design not found.")
+
+    design_v2 = services.designs.get_v2(design_id)
+    if design_v2 is None:
+        raise HTTPException(status_code=404, detail="Design not found.")
+
+    from web.design_views import build_design_context_view
+    try:
+        view = build_design_context_view(design_id, rev, services)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Design not found.")
+
+    run_data = None
+    if run_id:
+        try:
+            status = services.research.status(run_id)
+            try:
+                result = services.research.result(run_id)
+            except Exception:
+                result = None
+            run_data = {
+                "status": status.get("status"),
+                "result": result,
+            }
+        except KeyError:
+            pass
+
+    is_historical = rev is not None
+    viewed_rev = rev if rev is not None else view.latest_rev
+
+    extra_context = {}
+    if template_name == "simulation_fit.html":
+        extra_context["snapshots"] = services.simulations.parameter_fit_repository.list()
+
+    return _template(
+        request,
+        template_name,
+        design=design,
+        design_v2=design_v2,
+        view=view,
+        run_id=run_id,
+        run_data=run_data,
+        is_historical=is_historical,
+        viewed_rev=viewed_rev,
+        **extra_context
+    )
+
+
+@router.get("/web/designs/{design_id}/simulation/ode", response_class=HTMLResponse)
+def web_simulation_ode_get(
+    design_id: str,
+    request: Request,
+    rev: int | None = None,
+    run_id: str | None = None,
+    services: ApplicationServices = Depends(get_services),
+) -> HTMLResponse:
+    return _handle_simulation_get(design_id, request, rev, run_id, "simulation_ode.html", services)
+
+
+@router.post("/web/designs/{design_id}/simulation/ode")
+async def web_simulation_ode_post(
+    design_id: str,
+    request: Request,
+    rev: int | None = None,
+    services: ApplicationServices = Depends(get_services),
+) -> RedirectResponse:
+    form = await request.form()
+    simulation_time = float(form.get("simulation_time", 600.0))
+    sample_count = int(form.get("sample_count", 80))
+    noise_fraction = float(form.get("noise_fraction", 0.15))
+    random_seed_str = form.get("random_seed", "")
+    random_seed = int(random_seed_str) if random_seed_str.strip() else None
+
+    topology = _get_design_topology(design_id, services)
+    inputs = _extract_inputs_from_verilog(topology.get("verilog", ""))
+
+    temporal_inputs = {}
+    for sig in inputs:
+        input_type = form.get(f"input_type_{sig}", "constant")
+        if input_type == "constant":
+            temporal_inputs[sig] = {
+                "type": "constant",
+                "value": float(form.get(f"input_value_{sig}", 1.0)),
+            }
+        elif input_type == "step":
+            temporal_inputs[sig] = {
+                "type": "step",
+                "step_start": float(form.get(f"input_step_start_{sig}", 0.0)),
+                "step_end": float(form.get(f"input_step_end_{sig}", 1.0)),
+                "step_time": float(form.get(f"input_step_time_{sig}", 150.0)),
+            }
+        elif input_type == "pulse":
+            temporal_inputs[sig] = {
+                "type": "pulse",
+                "pulse_start": float(form.get(f"input_pulse_start_{sig}", 100.0)),
+                "pulse_end": float(form.get(f"input_pulse_end_{sig}", 300.0)),
+                "pulse_active": float(form.get(f"input_pulse_active_{sig}", 1.5)),
+                "pulse_basal": float(form.get(f"input_pulse_basal_{sig}", 0.0)),
+            }
+
+    payload = {
+        "design_id": design_id,
+        "topology": topology,
+        "simulation_time": simulation_time,
+        "sample_count": sample_count,
+        "noise_fraction": noise_fraction,
+        "random_seed": random_seed,
+        "temporal_inputs": temporal_inputs,
+    }
+
+    run = services.research.start_simulation(payload)
+    run_id = run["run_id"]
+
+    rev_param = f"&rev={rev}" if rev is not None else ""
+    return RedirectResponse(
+        f"/web/designs/{design_id}/simulation/ode?run_id={run_id}{rev_param}",
+        status_code=303
+    )
+
+
+@router.get("/web/designs/{design_id}/simulation/ssa", response_class=HTMLResponse)
+def web_simulation_ssa_get(
+    design_id: str,
+    request: Request,
+    rev: int | None = None,
+    run_id: str | None = None,
+    services: ApplicationServices = Depends(get_services),
+) -> HTMLResponse:
+    return _handle_simulation_get(design_id, request, rev, run_id, "simulation_ssa.html", services)
+
+
+@router.post("/web/designs/{design_id}/simulation/ssa")
+async def web_simulation_ssa_post(
+    design_id: str,
+    request: Request,
+    rev: int | None = None,
+    services: ApplicationServices = Depends(get_services),
+) -> RedirectResponse:
+    form = await request.form()
+    runs = int(form.get("runs", 5))
+    scale_factor = float(form.get("scale_factor", 5.0))
+    max_steps = int(form.get("max_steps", 1000))
+
+    topology = _get_design_topology(design_id, services)
+
+    payload = {
+        "design_id": design_id,
+        "topology": topology,
+        "runs": runs,
+        "scale_factor": scale_factor,
+        "max_steps": max_steps,
+    }
+
+    run = services.research.start_ssa_simulation(payload)
+    run_id = run["run_id"]
+
+    rev_param = f"&rev={rev}" if rev is not None else ""
+    return RedirectResponse(
+        f"/web/designs/{design_id}/simulation/ssa?run_id={run_id}{rev_param}",
+        status_code=303
+    )
+
+
+@router.get("/web/designs/{design_id}/simulation/sweep", response_class=HTMLResponse)
+def web_simulation_sweep_get(
+    design_id: str,
+    request: Request,
+    rev: int | None = None,
+    run_id: str | None = None,
+    services: ApplicationServices = Depends(get_services),
+) -> HTMLResponse:
+    return _handle_simulation_get(design_id, request, rev, run_id, "simulation_sweep.html", services)
+
+
+@router.post("/web/designs/{design_id}/simulation/sweep")
+async def web_simulation_sweep_post(
+    design_id: str,
+    request: Request,
+    rev: int | None = None,
+    services: ApplicationServices = Depends(get_services),
+) -> RedirectResponse:
+    form = await request.form()
+    parameter_name = form.get("parameter_name")
+    sweep_values_str = form.get("sweep_values", "")
+    sweep_values = [float(v.strip()) for v in sweep_values_str.split(",") if v.strip()]
+
+    topology = _get_design_topology(design_id, services)
+
+    payload = {
+        "design_id": design_id,
+        "topology": topology,
+        "parameter_name": parameter_name,
+        "sweep_values": sweep_values,
+    }
+
+    run = services.research.start_parameter_sweep(payload)
+    run_id = run["run_id"]
+
+    rev_param = f"&rev={rev}" if rev is not None else ""
+    return RedirectResponse(
+        f"/web/designs/{design_id}/simulation/sweep?run_id={run_id}{rev_param}",
+        status_code=303
+    )
+
+
+@router.get("/web/designs/{design_id}/simulation/bifurcation", response_class=HTMLResponse)
+def web_simulation_bifurcation_get(
+    design_id: str,
+    request: Request,
+    rev: int | None = None,
+    run_id: str | None = None,
+    services: ApplicationServices = Depends(get_services),
+) -> HTMLResponse:
+    return _handle_simulation_get(design_id, request, rev, run_id, "simulation_bifurcation.html", services)
+
+
+@router.post("/web/designs/{design_id}/simulation/bifurcation")
+async def web_simulation_bifurcation_post(
+    design_id: str,
+    request: Request,
+    rev: int | None = None,
+    services: ApplicationServices = Depends(get_services),
+) -> RedirectResponse:
+    form = await request.form()
+    input_name = form.get("input_name")
+    input_values_str = form.get("input_values", "")
+    input_values = [float(v.strip()) for v in input_values_str.split(",") if v.strip()]
+
+    topology = _get_design_topology(design_id, services)
+
+    payload = {
+        "design_id": design_id,
+        "topology": topology,
+        "input_name": input_name,
+        "input_values": input_values,
+    }
+
+    run = services.research.start_bifurcation_sweep(payload)
+    run_id = run["run_id"]
+
+    rev_param = f"&rev={rev}" if rev is not None else ""
+    return RedirectResponse(
+        f"/web/designs/{design_id}/simulation/bifurcation?run_id={run_id}{rev_param}",
+        status_code=303
+    )
+
+
+@router.get("/web/designs/{design_id}/simulation/fit", response_class=HTMLResponse)
+def web_simulation_fit_get(
+    design_id: str,
+    request: Request,
+    rev: int | None = None,
+    services: ApplicationServices = Depends(get_services),
+) -> HTMLResponse:
+    design = services.designs.get(design_id)
+    if design is None:
+        raise HTTPException(status_code=404, detail="Design not found.")
+    design_v2 = services.designs.get_v2(design_id)
+    if design_v2 is None:
+        raise HTTPException(status_code=404, detail="Design not found.")
+
+    from web.design_views import build_design_context_view
+    try:
+        view = build_design_context_view(design_id, rev, services)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Design not found.")
+
+    snapshots = services.simulations.parameter_fit_repository.list()
+    is_historical = rev is not None
+    viewed_rev = rev if rev is not None else view.latest_rev
+
+    return _template(
+        request,
+        "simulation_fit.html",
+        design=design,
+        design_v2=design_v2,
+        view=view,
+        snapshots=snapshots,
+        selected_snapshot_id=None,
+        comparison_result=None,
+        error=None,
+        is_historical=is_historical,
+        viewed_rev=viewed_rev,
+    )
+
+
+@router.post("/web/designs/{design_id}/simulation/fit", response_class=HTMLResponse)
+async def web_simulation_fit_post(
+    design_id: str,
+    request: Request,
+    rev: int | None = None,
+    services: ApplicationServices = Depends(get_services),
+) -> HTMLResponse:
+    design = services.designs.get(design_id)
+    if design is None:
+        raise HTTPException(status_code=404, detail="Design not found.")
+    design_v2 = services.designs.get_v2(design_id)
+    if design_v2 is None:
+        raise HTTPException(status_code=404, detail="Design not found.")
+
+    from web.design_views import build_design_context_view
+    try:
+        view = build_design_context_view(design_id, rev, services)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Design not found.")
+
+    form = await request.form()
+    snapshot_id = form.get("snapshot_id")
+    simulation_time = float(form.get("simulation_time", 600.0))
+    sample_count = int(form.get("sample_count", 80))
+
+    topology = _get_design_topology(design_id, services)
+
+    comparison_result = None
+    error = None
+    try:
+        comparison_result = services.simulations.compare_default_vs_fitted(
+            topology,
+            snapshot_id,
+            simulation_time=simulation_time,
+            sample_count=sample_count,
+        )
+    except Exception as e:
+        error = str(e)
+
+    snapshots = services.simulations.parameter_fit_repository.list()
+    is_historical = rev is not None
+    viewed_rev = rev if rev is not None else view.latest_rev
+
+    return _template(
+        request,
+        "simulation_fit.html",
+        design=design,
+        design_v2=design_v2,
+        view=view,
+        snapshots=snapshots,
+        selected_snapshot_id=snapshot_id,
+        comparison_result=comparison_result,
+        error=error,
+        is_historical=is_historical,
+        viewed_rev=viewed_rev,
+    )

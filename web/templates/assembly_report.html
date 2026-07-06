@@ -5,6 +5,14 @@
   <div>
     <span class="eyebrow">Assembly report</span>
     <h1>{{ deliverable.deliverable_id }}</h1>
+    {% if design %}
+      <p style="margin: 4px 0; font-size: 14px;">
+        <strong>Design:</strong> <a href="/web/designs/{{ design.design_id }}?rev={{ deliverable.revision_number }}">{{ design.name }} (Rev {{ deliverable.revision_number }})</a>
+        {% if design.provenance %}
+          · <span class="muted">Source Run: {{ design.provenance[0].id[:8] }}</span>
+        {% endif %}
+      </p>
+    {% endif %}
     <p class="muted">{{ deliverable.plan.method }} · {{ deliverable.plan.target_length }} bp · {{ deliverable.readiness.readiness_status }}</p>
   </div>
   <a class="button" href="/web/assembly/deliverables/{{ deliverable.deliverable_id }}/downloads">Downloads</a>

@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -288,3 +287,69 @@ class BifurcationSweepRequest(BaseModel):
     input_name: str = Field(min_length=1, max_length=128)
     input_values: list[float] = Field(min_length=1, max_length=100)
     host_profile_id: str | None = Field(default=None, max_length=128)
+
+
+class SettingsUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    provider: str = Field(default="OpenAI", max_length=256)
+    model_name: str = Field(default="gpt-5.4-mini", max_length=256)
+    api_key: str = Field(default="", max_length=2048)
+    api_base: str = Field(default="", max_length=2048)
+
+
+class SettingsTestRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    provider: str = Field(default="OpenAI", max_length=256)
+    model_name: str = Field(default="gpt-5.4-mini", max_length=256)
+    api_key: str = Field(default="", max_length=2048)
+    api_base: str = Field(default="", max_length=2048)
+
+
+class DesignDraftUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    current_step: int = Field(default=1, ge=1, le=4)
+    user_intent: str = Field(default="", max_length=20_000)
+    host_organism: str = Field(default="Escherichia coli", max_length=512)
+    compute_budget: int = Field(default=6, ge=1, le=100)
+    enable_rag: bool = True
+    enable_ode: bool = True
+    enable_skill_extraction: bool = True
+    model_name: str = Field(default="", max_length=256)
+    api_base: str = Field(default="", max_length=2048)
+    structured_spec: dict[str, Any] = Field(default_factory=dict)
+    pm_chat_history: list[dict[str, str]] = Field(default_factory=list)
+    pending_proposal: dict[str, Any] = Field(default_factory=dict)
+    pm_stage: str = Field(default="elicitation", max_length=128)
+
+
+class ElicitationProposeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    choice: Literal["agree", "override"]
+    value: Any = None
+
+
+class OdeSimulationFormRequest(BaseModel):
+    simulation_time: float = Field(default=600.0, ge=10.0, le=86400.0)
+    sample_count: int = Field(default=80, ge=5, le=2000)
+    noise_fraction: float = Field(default=0.15, ge=0.0, le=2.0)
+    random_seed: int | None = Field(default=None, ge=0)
+
+
+class SsaSimulationFormRequest(BaseModel):
+    runs: int = Field(default=50, ge=1, le=1000)
+    scale_factor: float = Field(default=10.0, ge=0.01, le=1000.0)
+    max_steps: int = Field(default=15000, ge=100, le=1000000)
+
+
+class ParameterSweepFormRequest(BaseModel):
+    parameter_name: str = Field(min_length=1, max_length=128)
+    sweep_values: list[float] = Field(min_length=1, max_length=100)
+
+
+class BifurcationSweepFormRequest(BaseModel):
+    input_name: str = Field(min_length=1, max_length=128)
+    input_values: list[float] = Field(min_length=1, max_length=100)

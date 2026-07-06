@@ -1,32 +1,145 @@
 {% extends "base.html" %}
-{% block title %}Review Import{% endblock %}
+{% block title %}草稿審查與修正 - Review Import{% endblock %}
 {% block content %}
 <header class="page-header">
-  <h1>草稿審查</h1>
-  <p class="muted">{{ draft.name or draft.draft_id }}</p>
+  <span class="eyebrow">Import Review Workspace</span>
+  <h1>設計草稿審查與校準</h1>
+  <p class="muted">草稿 ID: {{ draft.draft_id }} · 建立時間: {{ draft.created_at }}</p>
 </header>
-<section class="grid grid-3">
-  <article class="card"><span class="muted">完整度</span><div class="metric">{{ "%.0f"|format(validation.completeness * 100) }}%</div></article>
-  <article class="card"><span class="muted">證據品質</span><div class="metric">{{ "%.0f"|format(validation.evidence_quality * 100) }}%</div></article>
-  <article class="card"><span class="muted">可評估區段</span><div class="metric">{{ validation.applicable_sections|length }}</div></article>
-</section>
-<section class="grid grid-2" style="margin-top:18px">
+
+<section class="grid grid-3 section-space">
   <article class="card">
-    <h2>設計摘要</h2>
-    <p><strong>Inputs:</strong> {{ draft.inputs|join(", ") or "未填寫" }}</p>
-    <p><strong>Outputs:</strong> {{ draft.outputs|join(", ") or "未填寫" }}</p>
-    <p><strong>Host:</strong> {{ draft.host_organism }}</p>
-    <pre>{{ draft.logic_expression or "Logic not provided" }}</pre>
+    <span class="muted">欄位完整度 (Completeness)</span>
+    <div class="metric" style="color: {% if validation.completeness >= 0.8 %}var(--success){% else %}var(--warning){% endif %};">
+      {{ "%.0f"|format(validation.completeness * 100) }}%
+    </div>
   </article>
   <article class="card">
-    <h2>驗證訊息</h2>
-    {% for error in validation.errors %}<div class="error-box" style="margin-bottom:8px">{{ error }}</div>{% endfor %}
-    {% for warning in validation.warnings %}<div class="warning-box" style="margin-bottom:8px">{{ warning }}</div>{% endfor %}
-    {% if validation.can_import %}
-    <form method="post" action="/web/imports/{{ draft.draft_id }}/confirm">
-      <button class="button" type="submit">確認並建立 DesignIR</button>
+    <span class="muted">證據信賴等級 (Evidence Quality)</span>
+    <div class="metric" style="color: {% if validation.evidence_quality >= 0.7 %}var(--success){% else %}var(--warning){% endif %};">
+      {{ "%.0f"|format(validation.evidence_quality * 100) }}%
+    </div>
+  </article>
+  <article class="card">
+    <span class="muted">適用評估元件 (Applicable Sections)</span>
+    <div class="metric compact">{{ validation.applicable_sections|length }} 個元件</div>
+  </article>
+</section>
+
+<div class="grid grid-2 section-space" style="grid-template-columns: 1.1fr 0.9fr; align-items: start; gap: 24px;">
+  <!-- Column 1: Provenance & Correction Form -->
+  <article class="card" style="box-shadow: none; border: 1px solid var(--line);">
+    <h2>來源追溯與草稿修正 (Provenance & Corrections)</h2>
+    <p class="muted" style="margin-bottom: 20px;">檢視或修改本設計草稿的來源文獻、宿主菌株、輸入與輸出信號，修改後將即時重新計算驗證指標。</p>
+
+    <form method="post" action="/web/imports/{{ draft.draft_id }}/update">
+      <div style="display: flex; flex-direction: column; gap: 16px;">
+        <label style="font-weight: 600;">設計名稱 (Design Name)
+          <input name="name" value="{{ draft.name }}" placeholder="例如：雙輸入 AND 閘電路" required style="width: 100%; margin-top: 4px;">
+        </label>
+
+        <div class="grid grid-2" style="gap: 12px; grid-template-columns: 1fr 1fr;">
+          <label style="font-weight: 600;">來源類型 (Source Type)
+            <select name="source_type" style="width: 100%; margin-top: 4px;">
+              <option value="literature" {% if draft.source_type == 'literature' %}selected{% endif %}>文獻 (Literature)</option>
+              <option value="user_upload" {% if draft.source_type == 'user_upload' %}selected{% endif %}>使用者上傳 (User Upload)</option>
+              <option value="database" {% if draft.source_type == 'database' %}selected{% endif %}>資料庫匯入 (Database)</option>
+            </select>
+          </label>
+          <label style="font-weight: 600;">宿主菌株 (Host Organism)
+            <input name="host_organism" value="{{ draft.host_organism }}" placeholder="例如：Escherichia coli" style="width: 100%; margin-top: 4px;">
+          </label>
+        </div>
+
+        <label style="font-weight: 600;">來源 URI / DOI
+          <input name="source_uri" value="{{ draft.source_uri or '' }}" placeholder="例如：doi:10.1038/nbt.3659" style="width: 100%; margin-top: 4px;">
+        </label>
+
+        <label style="font-weight: 600;">文獻引用 (Citation)
+          <textarea name="citation" placeholder="輸入詳細期刊與發表人資訊" style="width: 100%; height: 50px; margin-top: 4px; font-family: inherit;">{{ draft.citation }}</textarea>
+        </label>
+
+        <div class="grid grid-2" style="gap: 12px; grid-template-columns: 1fr 1fr;">
+          <label style="font-weight: 600;">輸入信號 (Inputs - 逗號分隔)
+            <input name="inputs" value="{{ draft.inputs|join(', ') }}" placeholder="例如：Ara, IPTG" style="width: 100%; margin-top: 4px;">
+          </label>
+          <label style="font-weight: 600;">輸出信號 (Outputs - 逗號分隔)
+            <input name="outputs" value="{{ draft.outputs|join(', ') }}" placeholder="例如：YFP" style="width: 100%; margin-top: 4px;">
+          </label>
+        </div>
+
+        <label style="font-weight: 600;">邏輯表達式 (Logic Expression)
+          <input name="logic_expression" value="{{ draft.logic_expression }}" placeholder="例如：YFP = Ara & IPTG" style="width: 100%; margin-top: 4px; font-family: monospace;">
+        </label>
+
+        {% set first_ev = draft.evidence[0] if draft.evidence else None %}
+        <div class="grid grid-2" style="gap: 12px; grid-template-columns: 1fr 1fr;">
+          <label style="font-weight: 600;">證據完整狀態 (Evidence Status)
+            <select name="evidence_status" style="width: 100%; margin-top: 4px;">
+              <option value="explicit" {% if first_ev and first_ev.status == 'explicit' %}selected{% endif %}>確鑿 (Explicit)</option>
+              <option value="derived" {% if first_ev and first_ev.status == 'derived' %}selected{% endif %}>推導 (Derived)</option>
+              <option value="inferred" {% if first_ev and first_ev.status == 'inferred' %}selected{% endif %}>推斷 (Inferred)</option>
+              <option value="assumed" {% if first_ev and first_ev.status == 'assumed' %}selected{% endif %}>假設 (Assumed)</option>
+              <option value="unknown" {% if not first_ev or first_ev.status == 'unknown' %}selected{% endif %}>未知 (Unknown)</option>
+            </select>
+          </label>
+          <label style="font-weight: 600;">證據定位 (Locator)
+            <input name="locator" value="{{ first_ev.locator or '' if first_ev else '' }}" placeholder="例如：Figure 3A / Table 2" style="width: 100%; margin-top: 4px;">
+          </label>
+        </div>
+
+        <label style="font-weight: 600;">備註說明 (Notes)
+          <textarea name="notes" placeholder="輸入關於此設計匯入的備註資訊" style="width: 100%; height: 50px; margin-top: 4px; font-family: inherit;">{{ draft.notes }}</textarea>
+        </label>
+
+        <div style="margin-top: 8px;">
+          <button class="button secondary" type="submit" style="width: 100%;">儲存修正並重新驗證 (Save & Re-validate)</button>
+        </div>
+      </div>
     </form>
-    {% endif %}
   </article>
-</section>
+
+  <!-- Column 2: Validation Findings & Action -->
+  <div style="display: flex; flex-direction: column; gap: 24px;">
+    <article class="card" style="box-shadow: none; border: 1px solid var(--line);">
+      <h2>自動化驗證結果 (Validation Findings)</h2>
+      <p class="muted" style="margin-bottom: 20px;">系統將根據規格定義、宿主與邏輯一致性檢查草稿是否可完整匯入。</p>
+
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        {% for error in validation.errors %}
+          <div class="error-box" style="margin: 0; padding: 10px 14px;">
+            <strong>錯誤</strong> · {{ error }}
+          </div>
+        {% endfor %}
+        {% for warning in validation.warnings %}
+          <div class="warning-box" style="margin: 0; padding: 10px 14px;">
+            <strong>警告</strong> · {{ warning }}
+          </div>
+        {% endfor %}
+        {% if not validation.errors and not validation.warnings %}
+          <div class="status-badge status-ready" style="width: 100%; text-align: center; font-size: 13px; padding: 10px;">
+            ✓ 所有檢查通過！電路定義完整。
+          </div>
+        {% endif %}
+      </div>
+    </article>
+
+    <article class="card" style="box-shadow: none; border: 1px solid var(--line); background: #f8fafc;">
+      <h2>確認匯入 (Confirm & Import)</h2>
+      <p class="muted" style="margin-bottom: 20px;">當草稿中無阻礙性錯誤時，可直接提升至正式設計庫 (Promote to DesignIR)。</p>
+
+      {% if validation.can_import %}
+        <form method="post" action="/web/imports/{{ draft.draft_id }}/confirm">
+          <button class="button" type="submit" style="width: 100%; padding: 12px; font-size: 15px;">
+            確認並建立 DesignIR（正式設計）
+          </button>
+        </form>
+      {% else %}
+        <div class="warning-box" style="margin: 0; padding: 12px;">
+          請修正左側表單中的阻礙性錯誤 (如輸入、輸出或名稱缺失) 重新驗證後，即可匯入電路。
+        </div>
+      {% endif %}
+    </article>
+  </div>
+</div>
 {% endblock %}

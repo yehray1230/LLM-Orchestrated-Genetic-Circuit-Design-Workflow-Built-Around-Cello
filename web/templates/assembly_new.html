@@ -27,9 +27,13 @@
   <h2>Assembly and primer settings</h2>
   <form action="/web/assembly/deliverables" method="post">
     <div class="form-grid">
-      <label>Design
+      <label>Design & Revision (設計與版本)
         <select name="design_id" required>
-          {% for design in designs %}<option value="{{ design.design_id }}">{{ design.name }} ({{ design.design_id }})</option>{% endfor %}
+          {% for design in designs %}
+            <option value="{{ design.design_id }}@{{ design.revision.revision_number }}">
+              {{ design.name }} (Rev {{ design.revision.revision_number }} - {{ design.design_id[:8] }}...{% if design.provenance %}, Source: Run {{ design.provenance[0].id[:8] }}{% endif %})
+            </option>
+          {% endfor %}
         </select>
       </label>
       <label>Plasmid ID<input name="plasmid_id" placeholder="plasmid_1" required></label>

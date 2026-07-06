@@ -1,31 +1,164 @@
 {% extends "base.html" %}
-{% block title %}New Design{% endblock %}
+{% block title %}New Design - 建立新設計{% endblock %}
 {% block content %}
 <header class="page-header">
   <h1>建立新設計</h1>
-  <p class="muted">提交後會建立背景任務。模型金鑰只從伺服器環境變數取得。</p>
+  <p class="muted">透過四步驟設計精靈，配置您的基因電路規格並啟動自動化設計流程。</p>
 </header>
+
+<div id="draft-recovery-banner" class="warning-box" style="margin-bottom: 18px; display: none; background: #fffbeb; color: #b54708; border: 1px solid #fed7aa; display: flex; justify-content: space-between; align-items: center; padding: 12px 16px;">
+  <span>⚠️ 偵測到您有上次未完成的設計草稿（最後儲存於 <span id="draft-saved-time">-</span>），是否恢復進度？</span>
+  <div style="display: flex; gap: 8px;">
+    <button class="button" id="btn-restore-draft" style="padding: 6px 12px; font-size: 13px;">恢復草稿</button>
+    <button class="button secondary" id="btn-discard-draft" style="padding: 6px 12px; font-size: 13px;">重新開始</button>
+  </div>
+</div>
+
+<div class="workspace-steps" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 24px;">
+  <span class="active" id="step-indicator-1">1. 描述目標</span>
+  <span id="step-indicator-2">2. AI 規格引導</span>
+  <span id="step-indicator-3">3. 進階選項</span>
+  <span id="step-indicator-4">4. 確認規格</span>
+</div>
+
 <article class="card">
-  <form method="post" action="/web/runs">
-    <label>自然語言需求
-      <textarea name="user_intent" required placeholder="例如：只有 A 存在且 B 不存在時表達 GFP。"></textarea>
-    </label>
-    <div class="grid grid-2">
-      <label>宿主
-        <input name="host_organism" value="Escherichia coli" required>
-      </label>
-      <label>計算預算
-        <input type="number" name="compute_budget" min="1" max="100" value="6">
+  <form id="wizard-form" method="post" action="/web/runs">
+    <!-- Step 1: User Intent -->
+    <div class="wizard-step" id="step-content-1">
+      <label>自然語言設計需求
+        <textarea name="user_intent" id="wizard-user-intent" required placeholder="例如：只有 A 存在且 B 不存在時表達 GFP。當兩者皆存在或皆不存在時關閉。" style="height: 120px;"></textarea>
       </label>
     </div>
-    <label>模型名稱（選填）
-      <input name="model_name" placeholder="留空時使用伺服器預設模型">
-    </label>
-    <div class="inline">
-      <label><input type="checkbox" name="enable_rag" checked> 啟用 RAG</label>
-      <label><input type="checkbox" name="enable_ode" checked> 啟用 ODE</label>
+
+    <!-- Step 2: PM Elicitation (AI Assistant Consultation) -->
+    <div class="wizard-step" id="step-content-2" style="display: none;">
+      <!-- Hidden inputs to submit when launching the design -->
+      <input type="hidden" name="host_organism" id="wizard-host-organism" value="{{ settings.default_host or 'Escherichia coli' }}">
+      <input type="hidden" name="compute_budget" id="wizard-compute-budget" value="{{ settings.default_compute_budget or 6 }}">
+
+      <div class="elicitation-container" style="display: grid; grid-template-columns: 3fr 2fr; gap: 24px; min-height: 420px; max-height: 550px;">
+
+        <!-- Chat History Column -->
+        <div class="elicitation-chat-col" style="display: flex; flex-direction: column; background: #ffffff; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);">
+          <!-- Chat Header -->
+          <div class="chat-header" style="background: var(--bg-card); padding: 12px 16px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 8px;">
+            <div style="width: 8px; height: 8px; background: #12b886; border-radius: 50%;"></div>
+            <strong style="font-size: 14px; color: var(--text-dark);">PM Agent 引導對話</strong>
+            <span style="font-size: 11px; color: var(--text-light); margin-left: auto;">AI 規格優化中</span>
+          </div>
+
+          <!-- Chat Messages (Scrollable) -->
+          <div class="chat-messages" id="elicitation-chat-messages" style="flex-grow: 1; padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; font-size: 13.5px; background: #fafbfc;">
+            <!-- Dynamic chat messages go here -->
+          </div>
+        </div>
+
+        <!-- Proposal Card & Specs Column -->
+        <div class="elicitation-info-col" style="display: flex; flex-direction: column; gap: 16px;">
+
+          <!-- Dynamic Proposal Card -->
+          <div class="proposal-card-container" id="elicitation-proposal-card" style="background: #ffffff; border: 1px solid var(--line); border-radius: 12px; padding: 16px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);">
+            <!-- Dynamic proposal card content goes here -->
+          </div>
+
+          <!-- Specs Preview Card -->
+          <div class="specs-preview-card" style="background: #ffffff; border: 1px solid var(--line); border-radius: 12px; padding: 16px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03); flex-grow: 1; display: flex; flex-direction: column;">
+            <strong style="font-size: 13.5px; color: var(--text-dark); display: block; margin-bottom: 12px;">📊 當前確認規格 (Specs Preview)</strong>
+            <div id="elicitation-specs-preview" style="font-size: 12.5px; line-height: 1.6; color: var(--text-dark); flex-grow: 1; overflow-y: auto;">
+              <!-- Dynamic specs preview goes here -->
+            </div>
+
+            <!-- Skip Button -->
+            <div style="margin-top: 16px; border-top: 1px solid var(--line); padding-top: 12px; text-align: center;">
+              <button type="button" class="button secondary" id="elicitation-skip-btn" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 12.5px; padding: 8px 12px;">
+                <span>⚡</span> 略過剩餘對話，直接套用預設值
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
     </div>
-    <button class="button" type="submit">啟動背景設計</button>
+
+    <!-- Step 3: Tools & Model Selection -->
+    <div class="wizard-step" id="step-content-3" style="display: none;">
+      <div class="inline" style="margin-bottom: 18px; gap: 18px;">
+        <label style="flex-direction: row; align-items: center; gap: 6px;">
+          <input type="checkbox" name="enable_rag" id="wizard-enable-rag" value="on" checked> 啟用 RAG 知識增強
+        </label>
+        <label style="flex-direction: row; align-items: center; gap: 6px;">
+          <input type="checkbox" name="enable_ode" id="wizard-enable-ode" value="on" checked> 啟用 ODE 模擬
+        </label>
+        <label style="flex-direction: row; align-items: center; gap: 6px;">
+          <input type="checkbox" name="enable_skill_extraction" id="wizard-enable-skill" value="on" checked> 啟用技能提取
+        </label>
+      </div>
+
+      <div class="grid grid-2">
+        <label>LiteLLM 模型名稱（選填，留空時使用預設）
+          <input name="model_name" id="wizard-model-name" placeholder="預設：{{ settings.model_name or 'gpt-5.4-mini' }}">
+        </label>
+        <label>API Base URL (端點，選填)
+          <input name="api_base" id="wizard-api-base" placeholder="例如：https://api.openai.com/v1">
+        </label>
+      </div>
+
+      <!-- Cello status card in design wizard -->
+      <div style="margin-top: 18px; background: #f8fafc; border: 1px solid var(--line); padding: 12px 16px; border-radius: 8px; font-size: 13px; display: flex; align-items: center; justify-content: space-between;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span>⚙️</span>
+          <strong>Cello 物理映射狀態：</strong>
+          {% if cello_status.status == 'available' %}
+            <span class="badge" style="background: #ecfdf3; color: var(--success); font-weight: bold; font-size: 11.5px; padding: 2px 8px; border-radius: 4px;">🟢 正常可用 (Available)</span>
+          {% elif cello_status.status == 'fallback' or cello_status.fallback_used %}
+            <span class="badge" style="background: #fff9db; color: #f08c00; font-weight: bold; font-size: 11.5px; padding: 2px 8px; border-radius: 4px;">🟡 使用模擬備援 (Fallback Mode)</span>
+          {% else %}
+            <span class="badge" style="background: #fff5f5; color: var(--error); font-weight: bold; font-size: 11.5px; padding: 2px 8px; border-radius: 4px;">🔴 偵測失敗 (Unavailable)</span>
+          {% endif %}
+        </div>
+        <a href="/web/settings" target="_blank" style="color: var(--brand); text-decoration: none; font-weight: 500; font-size: 12.5px;">⚙️ 前往設定頁配置</a>
+      </div>
+    </div>
+
+    <!-- Step 4: Preview Specification -->
+    <div class="wizard-step" id="step-content-4" style="display: none;">
+      <h3 style="margin-top: 0;">設計案最終確認</h3>
+      <div class="card" style="background: #f8fafc; border: 1px solid var(--line); padding: 20px; margin-bottom: 12px; box-shadow: none;">
+        <dl class="definition-list" style="grid-template-columns: 180px minmax(0, 1fr);">
+          <dt>設計目標</dt>
+          <dd id="preview-user-intent">-</dd>
+
+          <dt>宿主生物</dt>
+          <dd id="preview-host-organism">-</dd>
+
+          <dt>計算預算</dt>
+          <dd id="preview-compute-budget">-</dd>
+
+          <dt>模型配置</dt>
+          <dd id="preview-model-config">-</dd>
+
+          <dt>分析工具</dt>
+          <dd id="preview-tools">-</dd>
+        </dl>
+      </div>
+
+      <div class="warning-box" style="margin-top: 14px; font-size: 13px;">
+        💡 點擊「啟動背景設計」後，系統會生成背景執行任務。您可以在背景任務監控頁面查看 AI 設計搜尋樹及 Critic 反饋，並在此之後處理 PM 需求澄清。
+      </div>
+    </div>
+
+    <!-- Footer Controls -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 24px; padding-top: 14px; border-top: 1px solid var(--line);">
+      <div>
+        <span id="draft-autosave-indicator" class="muted" style="font-size: 12.5px; transition: opacity 0.3s ease;"></span>
+      </div>
+      <div class="inline" style="gap: 8px;">
+        <button class="button secondary" type="button" id="btn-wizard-prev" style="display: none;">上一步</button>
+        <button class="button" type="button" id="btn-wizard-next">下一步</button>
+        <button class="button" type="submit" id="btn-wizard-submit" style="display: none;">啟動背景設計</button>
+      </div>
+    </div>
   </form>
 </article>
 {% endblock %}

@@ -64,6 +64,21 @@ class JsonRepository:
     def exists(self, record_id: str) -> bool:
         return self._path(record_id).exists()
 
+    def delete(self, record_id: str) -> bool:
+        path = self._path(record_id)
+        import time
+        with self._lock:
+            if path.exists():
+                for i in range(10):
+                    try:
+                        path.unlink()
+                        return True
+                    except PermissionError:
+                        if i == 9:
+                            raise
+                        time.sleep(0.05)
+            return False
+
     def _path(self, record_id: str) -> Path:
         if not SAFE_ID.fullmatch(record_id):
             raise RepositoryError(

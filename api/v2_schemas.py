@@ -196,6 +196,7 @@ class AssemblyPlanRequest(BaseModel):
     backbone_version: str = Field(min_length=1, max_length=64)
     insertion_region_id: str = Field(min_length=1, max_length=128)
     insertion_start: int = Field(ge=0)
+    revision_number: int | None = Field(default=None)
     insertion_end: int = Field(ge=0)
     method: str = Field(
         pattern=r"^(restriction_cloning|gibson|golden_gate)$"

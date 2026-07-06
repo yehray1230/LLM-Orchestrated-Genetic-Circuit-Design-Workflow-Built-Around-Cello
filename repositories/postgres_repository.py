@@ -11,7 +11,7 @@ from schemas.simulation import canonical_payload_hash
 
 
 SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")
-POSTGRES_SCHEMA_VERSION = 1
+POSTGRES_SCHEMA_VERSION = 2
 
 
 class PostgresDesignRepository:
@@ -127,17 +127,35 @@ class PostgresDesignRepository:
         _validate_id(record_id)
         with self._connect() as connection:
             row = connection.execute(
-                "SELECT payload_json FROM designs WHERE id = %s",
+                "SELECT payload_json, is_archived, is_deleted, is_pinned FROM designs WHERE id = %s",
                 (record_id,),
             ).fetchone()
-        return _payload(row["payload_json"]) if row else None
+        if row:
+            payload = _payload(row["payload_json"])
+            payload["is_archived"] = bool(row["is_archived"])
+            payload["is_deleted"] = bool(row["is_deleted"])
+            payload["is_pinned"] = bool(row["is_pinned"])
+            return payload
+        return None
 
-    def list(self) -> list[dict[str, Any]]:
+    def list(self, show_archived: bool = False, show_deleted: bool = False) -> list[dict[str, Any]]:
+        query = "SELECT payload_json, is_archived, is_deleted, is_pinned FROM designs WHERE 1=1"
+        if not show_deleted:
+            query += " AND is_deleted = FALSE"
+        if not show_archived:
+            query += " AND is_archived = FALSE"
+        query += " ORDER BY updated_at DESC, id"
         with self._connect() as connection:
-            rows = connection.execute(
-                "SELECT payload_json FROM designs ORDER BY updated_at DESC, id"
-            ).fetchall()
-        return [_payload(row["payload_json"]) for row in rows]
+            rows = connection.execute(query).fetchall()
+
+        results = []
+        for row in rows:
+            payload = _payload(row["payload_json"])
+            payload["is_archived"] = bool(row["is_archived"])
+            payload["is_deleted"] = bool(row["is_deleted"])
+            payload["is_pinned"] = bool(row["is_pinned"])
+            results.append(payload)
+        return results
 
     def exists(self, record_id: str) -> bool:
         _validate_id(record_id)
@@ -178,6 +196,60 @@ class PostgresDesignRepository:
                 (record_id, int(revision_number)),
             ).fetchone()
         return _payload(row["payload_json"]) if row else None
+
+    def archive(self, record_id: str) -> None:
+        _validate_id(record_id)
+        with self._transaction() as connection:
+            connection.execute(
+                "UPDATE designs SET is_archived = TRUE, updated_at = %s WHERE id = %s",
+                (_now_iso(), record_id),
+            )
+
+    def unarchive(self, record_id: str) -> None:
+        _validate_id(record_id)
+        with self._transaction() as connection:
+            connection.execute(
+                "UPDATE designs SET is_archived = FALSE, updated_at = %s WHERE id = %s",
+                (_now_iso(), record_id),
+            )
+
+    def soft_delete(self, record_id: str) -> None:
+        _validate_id(record_id)
+        with self._transaction() as connection:
+            connection.execute(
+                "UPDATE designs SET is_deleted = TRUE, updated_at = %s WHERE id = %s",
+                (_now_iso(), record_id),
+            )
+
+    def restore(self, record_id: str) -> None:
+        _validate_id(record_id)
+        with self._transaction() as connection:
+            connection.execute(
+                "UPDATE designs SET is_deleted = FALSE, updated_at = %s WHERE id = %s",
+                (_now_iso(), record_id),
+            )
+
+    def pin(self, record_id: str) -> None:
+        _validate_id(record_id)
+        with self._transaction() as connection:
+            connection.execute(
+                "UPDATE designs SET is_pinned = TRUE, updated_at = %s WHERE id = %s",
+                (_now_iso(), record_id),
+            )
+
+    def unpin(self, record_id: str) -> None:
+        _validate_id(record_id)
+        with self._transaction() as connection:
+            connection.execute(
+                "UPDATE designs SET is_pinned = FALSE, updated_at = %s WHERE id = %s",
+                (_now_iso(), record_id),
+            )
+
+    def purge(self, record_id: str) -> bool:
+        _validate_id(record_id)
+        with self._transaction() as connection:
+            cursor = connection.execute("DELETE FROM designs WHERE id = %s", (record_id,))
+            return cursor.rowcount > 0
 
     def record_payload_migration(
         self,
@@ -230,8 +302,18 @@ class PostgresDesignRepository:
                     payload_json JSONB NOT NULL,
                     payload_hash TEXT NOT NULL,
                     created_at TIMESTAMPTZ NOT NULL,
-                    updated_at TIMESTAMPTZ NOT NULL
+                    updated_at TIMESTAMPTZ NOT NULL,
+                    is_archived BOOLEAN NOT NULL DEFAULT FALSE,
+                    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+                    is_pinned BOOLEAN NOT NULL DEFAULT FALSE
                 )
+                """
+            )
+            connection.execute(
+                """
+                ALTER TABLE designs ADD COLUMN IF NOT EXISTS is_archived BOOLEAN NOT NULL DEFAULT FALSE;
+                ALTER TABLE designs ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;
+                ALTER TABLE designs ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN NOT NULL DEFAULT FALSE;
                 """
             )
             connection.execute(

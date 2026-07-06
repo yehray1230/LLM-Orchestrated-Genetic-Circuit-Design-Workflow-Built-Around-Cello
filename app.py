@@ -153,6 +153,10 @@ def main() -> None:
     st.set_page_config(page_title="基因電路設計器", layout="wide")
     _inject_styles()
     _ensure_session_state()
+    st.warning(
+        "注意：此 Streamlit 介面已進入維護模式（Legacy / Maintenance-only）。"
+        "所有新功能與更新僅在正式的 HTML 前端（http://127.0.0.1:8000/web）提供，推薦使用正式工作台。"
+    )
     _render_tutorial()
 
     state = st.session_state.design_state
