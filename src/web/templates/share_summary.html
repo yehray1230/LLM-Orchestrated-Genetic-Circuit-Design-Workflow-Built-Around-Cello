@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ design.name }} — 設計摘要</title>
+  <style>
+    /* ── Reset & base ──────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.6;
+      color: #1a1a2e;
+      background: #f8f9fb;
+      padding: 40px 24px;
+    }
+
+    .page {
+      max-width: 820px;
+      margin: 0 auto;
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.06);
+      padding: 48px 48px 40px;
+    }
+
+    /* ── Typography ────────────────────────────────── */
+    h1 { font-size: 22px; font-weight: 700; color: #0f1729; }
+    h2 {
+      font-size: 14px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      color: #1570ef;
+      border-bottom: 2px solid #e5eaf2;
+      padding-bottom: 6px;
+      margin-bottom: 14px;
+    }
+    p, li, td, th, dd, dt, code { font-size: 13px; }
+    a { color: #1570ef; text-decoration: none; }
+
+    .muted  { color: #667085; }
+    .eyebrow {
+      display: block;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: #667085;
+      margin-bottom: 2px;
+    }
+
+    /* ── Header ────────────────────────────────────── */
+    .report-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 24px;
+      margin-bottom: 32px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid #e5eaf2;
+    }
+    .report-header .rev-badge {
+      display: inline-block;
+      background: #eff4ff;
+      color: #1570ef;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 12px;
+      white-space: nowrap;
+    }
+    .report-header .timestamp {
+      font-size: 12px;
+      color: #98a2b3;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    /* ── Section spacing ──────────────────────────── */
+    .section { margin-bottom: 32px; }
+
+    /* ── Metric grid ──────────────────────────────── */
+    .metric-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+      margin-bottom: 32px;
+    }
+    .metric-card {
+      background: #f8f9fb;
+      border: 1px solid #e5eaf2;
+      border-radius: 8px;
+      padding: 14px 16px;
+      text-align: center;
+    }
+    .metric-card .label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #667085; }
+    .metric-card .value { font-size: 22px; font-weight: 700; color: #0f1729; }
+
+    /* ── Definition list ──────────────────────────── */
+    dl.def {
+      display: grid;
+      grid-template-columns: 120px 1fr;
+      gap: 6px 16px;
+    }
+    dl.def dt { font-weight: 600; color: #344054; }
+    dl.def dd { color: #475467; }
+
+    /* ── Tables ────────────────────────────────────── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    th {
+      text-align: left;
+      font-weight: 600;
+      color: #344054;
+      padding: 8px 10px;
+      background: #f8f9fb;
+      border-bottom: 2px solid #e5eaf2;
+    }
+    td {
+      padding: 8px 10px;
+      border-bottom: 1px solid #eef0f4;
+      color: #475467;
+    }
+    tr:last-child td { border-bottom: none; }
+    .empty-row { color: #98a2b3; font-style: italic; }
+
+    /* ── Badges ────────────────────────────────────── */
+    .status-badge {
+      display: inline-block;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 12px;
+      line-height: 1.4;
+    }
+    .status-ready   { background: #ecfdf3; color: #067647; }
+    .status-warning  { background: #fffaeb; color: #b54708; }
+    .status-blocked  { background: #fef3f2; color: #b42318; }
+    .prov-badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 10px;
+      background: #eff4ff;
+      color: #1570ef;
+    }
+
+    /* ── Blocker / warning cards ───────────────────── */
+    .issue-card {
+      padding: 10px 14px;
+      border-radius: 6px;
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+    .issue-card.blocker { background: #fef3f2; border-left: 3px solid #d92d20; color: #912018; }
+    .issue-card.warning { background: #fffaeb; border-left: 3px solid #f79009; color: #93370d; }
+    .issue-card strong  { font-weight: 600; }
+
+    /* ── Provenance list ──────────────────────────── */
+    .prov-entry {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 0;
+      border-bottom: 1px solid #f2f4f7;
+    }
+    .prov-entry:last-child { border-bottom: none; }
+    .prov-entry code {
+      font-size: 12px;
+      background: #f2f4f7;
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: #344054;
+    }
+
+    /* ── Print button ─────────────────────────────── */
+    .print-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #1570ef;
+      color: #fff;
+      border: none;
+      padding: 8px 20px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .print-btn:hover { background: #1259bf; }
+
+    /* ── Footer ────────────────────────────────────── */
+    .report-footer {
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid #e5eaf2;
+      font-size: 11px;
+      color: #98a2b3;
+      text-align: center;
+      line-height: 1.7;
+    }
+
+    /* ── Logic expression ─────────────────────────── */
+    pre.logic {
+      background: #f8f9fb;
+      border: 1px solid #e5eaf2;
+      border-radius: 6px;
+      padding: 12px 16px;
+      font-size: 13px;
+      font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+      overflow-x: auto;
+      color: #1a1a2e;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    /* ── Print styles ─────────────────────────────── */
+    @media print {
+      body {
+        background: #fff;
+        padding: 0;
+        font-size: 12px;
+      }
+      .page {
+        box-shadow: none;
+        border-radius: 0;
+        padding: 0;
+        max-width: 100%;
+      }
+      .no-print { display: none !important; }
+      .report-header { break-after: avoid; }
+      .section { break-inside: avoid; }
+      table { break-inside: auto; }
+      tr    { break-inside: avoid; break-after: auto; }
+      h2 { break-after: avoid; }
+      .metric-row { break-inside: avoid; }
+      .status-badge, .prov-badge, .issue-card {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+
+    {# ── Header ──────────────────────────────────── #}
+    <header class="report-header">
+      <div>
+        <span class="eyebrow">Genetic Circuit Research Studio · 設計摘要</span>
+        <h1>{{ design.name }}</h1>
+        <p class="muted" style="margin-top: 4px;">
+          ID: {{ design.design_id }}
+          {% if design_v2 and design_v2.revision %}
+            <span class="rev-badge" style="margin-left: 8px;">Rev {{ design_v2.revision.revision_number }}</span>
+          {% endif %}
+        </p>
+      </div>
+      <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px;">
+        <span class="timestamp">生成時間: {{ now().strftime('%Y-%m-%d %H:%M') if now is defined else '—' }}</span>
+        <button class="print-btn no-print" onclick="window.print()">🖨 列印 / 匯出 PDF</button>
+      </div>
+    </header>
+
+    {# ── Metrics overview ────────────────────────── #}
+    <div class="metric-row">
+      <div class="metric-card">
+        <div class="label">輸入訊號</div>
+        <div class="value">{{ design.inputs|length }}</div>
+      </div>
+      <div class="metric-card">
+        <div class="label">輸出訊號</div>
+        <div class="value">{{ design.outputs|length }}</div>
+      </div>
+      <div class="metric-card">
+        <div class="label">零件數</div>
+        <div class="value">{{ design.parts|length }}</div>
+      </div>
+      <div class="metric-card">
+        <div class="label">構建體</div>
+        <div class="value">{{ design_v2.constructs|length if design_v2 and design_v2.constructs else 0 }}</div>
+      </div>
+    </div>
+
+    {# ── Design Specification ────────────────────── #}
+    <section class="section">
+      <h2>設計規格</h2>
+      <p style="font-weight:600; margin-bottom:6px;">邏輯表達式</p>
+      <pre class="logic">{{ design.logic_expression or '未定義' }}</pre>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-top:16px;">
+        <div>
+          <p style="font-weight:600; margin-bottom:4px;">輸入</p>
+          {% if design.inputs %}
+            <ul style="padding-left:18px;">
+              {% for inp in design.inputs %}<li>{{ inp }}</li>{% endfor %}
+            </ul>
+          {% else %}
+            <p class="muted">無輸入定義</p>
+          {% endif %}
+        </div>
+        <div>
+          <p style="font-weight:600; margin-bottom:4px;">輸出</p>
+          {% if design.outputs %}
+            <ul style="padding-left:18px;">
+              {% for out in design.outputs %}<li>{{ out }}</li>{% endfor %}
+            </ul>
+          {% else %}
+            <p class="muted">無輸出定義</p>
+          {% endif %}
+        </div>
+      </div>
+    </section>
+
+    {# ── Biological Context ──────────────────────── #}
+    <section class="section">
+      <h2>生物背景</h2>
+      <dl class="def">
+        <dt>宿主生物</dt>
+        <dd>{{ design_v2.biological_context.host_organism.value if design_v2 and design_v2.biological_context and design_v2.biological_context.host_organism else '未知' }}</dd>
+        <dt>底盤</dt>
+        <dd>{{ design_v2.biological_context.chassis.value if design_v2 and design_v2.biological_context and design_v2.biological_context.chassis else '繼承自宿主' }}</dd>
+      </dl>
+    </section>
+
+    {# ── Parts List (no sequences) ───────────────── #}
+    <section class="section">
+      <h2>零件清單</h2>
+      <table>
+        <thead>
+          <tr><th>名稱</th><th>類型</th><th>角色</th></tr>
+        </thead>
+        <tbody>
+          {% for part in design.parts %}
+          <tr>
+            <td>{{ part.name }}</td>
+            <td>{{ part.type }}</td>
+            <td>{{ part.role or '—' }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="3" class="empty-row">尚未定義零件。</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+    {# ── Constructs ──────────────────────────────── #}
+    <section class="section">
+      <h2>構建體</h2>
+      {% if design_v2 and design_v2.constructs %}
+      <table>
+        <thead>
+          <tr><th>名稱</th><th>拓撲</th><th>零件數</th><th>組裝方法</th></tr>
+        </thead>
+        <tbody>
+          {% for c in design_v2.constructs %}
+          <tr>
+            <td>{{ c.name }}</td>
+            <td>{{ c.topology }}</td>
+            <td>{{ c.part_instances|length }}</td>
+            <td>{{ c.assembly_method.value if c.assembly_method else '未知' }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="empty-row">尚未定義構建體。</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="muted">尚未定義構建體。</p>
+      {% endif %}
+    </section>
+
+    {# ── Readiness Summary ───────────────────────── #}
+    <section class="section">
+      <h2>就緒狀態</h2>
+      <div style="margin-bottom: 14px;">
+        {% if readiness %}
+          {% set rs = readiness.readiness_status %}
+          <span class="status-badge {{ 'status-ready' if rs == 'ready' else ('status-warning' if rs == 'warning' else 'status-blocked') }}">
+            {{ rs|upper }}
+          </span>
+        {% else %}
+          <span class="status-badge status-warning">未評估</span>
+        {% endif %}
+      </div>
+
+      {% if readiness and readiness.blockers %}
+        <p style="font-weight:600; margin-bottom:6px;">🚫 阻斷項目</p>
+        {% for b in readiness.blockers %}
+        <div class="issue-card blocker">
+          <strong>{{ b.code }}</strong> — {{ b.message }}
+          {% if b.source %}<span class="muted" style="margin-left:6px;">({{ b.source }})</span>{% endif %}
+        </div>
+        {% endfor %}
+      {% endif %}
+
+      {% if readiness and readiness.warnings %}
+        <p style="font-weight:600; margin-bottom:6px; margin-top:12px;">⚠ 警告</p>
+        {% for w in readiness.warnings %}
+        <div class="issue-card warning">{{ w.message }}</div>
+        {% endfor %}
+      {% endif %}
+
+      {% if readiness and not readiness.blockers and not readiness.warnings %}
+        <p class="muted">未發現任何阻斷項目或警告。</p>
+      {% endif %}
+    </section>
+
+    {# ── Field Provenance ────────────────────────── #}
+    <section class="section">
+      <h2>欄位來源追蹤</h2>
+      {% if design_v2 and design_v2.field_provenance %}
+        {% for fp in design_v2.field_provenance %}
+        <div class="prov-entry">
+          <code>{{ fp.field_path }}</code>
+          <span class="prov-badge">{{ fp.status }}</span>
+        </div>
+        {% endfor %}
+      {% else %}
+        <p class="muted">無欄位級別來源資訊。</p>
+      {% endif %}
+    </section>
+
+    {# ── Footer ──────────────────────────────────── #}
+    <footer class="report-footer">
+      <p>此文件由 <strong>Genetic Circuit Research Studio</strong> 自動生成，僅供參考用途。</p>
+      <p>所有設計結果均為計算預測，實際表現可能因實驗條件而異。</p>
+      <p>請勿將此文件視為最終實驗方案；實施前應由專業人員審核。</p>
+    </footer>
+
+  </div>
+</body>
+</html>

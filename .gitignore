@@ -41,3 +41,6 @@ Thumbs.db
 *.tmp
 *.bak
 scratch/
+pytest_temp*/
+pytest_temp/
+*.egg-info/

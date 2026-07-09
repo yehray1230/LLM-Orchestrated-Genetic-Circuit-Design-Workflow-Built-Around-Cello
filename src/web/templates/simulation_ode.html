@@ -1,0 +1,243 @@
+{% extends "base.html" %}
+{% block title %}ODE Simulation - {{ design.name }}{% endblock %}
+{% block content %}
+<style>
+  .sub-tab-button.active {
+    background: var(--brand) !important;
+    color: white !important;
+    border-color: var(--brand) !important;
+  }
+</style>
+
+{% if is_historical %}
+<div class="warning-box" style="margin-bottom: 18px; background: #fff9e6; border: 1px solid #ffe199; color: #b54708; display: flex; justify-content: space-between; align-items: center; border-radius: 8px; padding: 12px 18px;">
+  <span style="font-size: 14.5px;">⚠️ 您目前正在查看版本 <strong>[Rev {{ viewed_rev }}]</strong> 的歷史快照。</span>
+  <a href="/web/designs/{{ view.design_id }}" class="button" style="padding: 4px 10px; font-size: 12px; height: auto;">回到最新版本</a>
+</div>
+{% endif %}
+
+<header class="page-header split-header">
+  <div>
+    <span class="eyebrow">模擬與分析中心</span>
+    <h1>{{ design.name }}</h1>
+    <p class="muted">{{ design.design_id }} · revision {{ design_v2.revision.revision_number }}</p>
+  </div>
+  <div style="display: flex; gap: 8px;">
+    <a class="button secondary" href="/web/designs/{{ view.design_id }}{% if is_historical %}?rev={{ viewed_rev }}{% endif %}">返回總覽</a>
+  </div>
+</header>
+
+<!-- Secondary Sub-Navigation -->
+<nav class="section-tabs" style="border-bottom: 2px solid var(--line); padding-bottom: 6px; display: flex; gap: 8px; overflow-x: auto; white-space: nowrap; margin-bottom: 20px;">
+  <a href="/web/designs/{{ view.design_id }}{% if is_historical %}?rev={{ viewed_rev }}{% endif %}" class="tab-button">總覽</a>
+  <a href="/web/designs/{{ view.design_id }}#source" class="tab-button">候選來源</a>
+  <a href="/web/designs/{{ view.design_id }}/simulation/ode{% if is_historical %}?rev={{ viewed_rev }}{% endif %}" class="tab-button active">模擬</a>
+  <a href="/web/designs/{{ view.design_id }}#optimization" class="tab-button">最佳化</a>
+  <a href="/web/designs/{{ view.design_id }}#assembly" class="tab-button">組裝</a>
+  <a href="/web/designs/{{ view.design_id }}#export" class="tab-button">匯出</a>
+  <a href="/web/designs/{{ view.design_id }}#history" class="tab-button">歷程</a>
+</nav>
+
+<!-- Simulation Sub-Navigation -->
+<div class="simulation-sub-tabs" style="display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid var(--line); padding-bottom: 8px; overflow-x: auto;">
+  <a href="/web/designs/{{ view.design_id }}/simulation/ode{% if is_historical %}?rev={{ viewed_rev }}{% endif %}" class="sub-tab-button active" style="padding: 6px 12px; border: 1px solid var(--line); border-radius: 4px; background: white; cursor: pointer; font-size: 13px; text-decoration: none; color: var(--text);">動態 ODE 模擬</a>
+  <a href="/web/designs/{{ view.design_id }}/simulation/ssa{% if is_historical %}?rev={{ viewed_rev }}{% endif %}" class="sub-tab-button" style="padding: 6px 12px; border: 1px solid var(--line); border-radius: 4px; background: white; cursor: pointer; font-size: 13px; text-decoration: none; color: var(--text);">隨機 SSA 模擬</a>
+  <a href="/web/designs/{{ view.design_id }}/simulation/sweep{% if is_historical %}?rev={{ viewed_rev }}{% endif %}" class="sub-tab-button" style="padding: 6px 12px; border: 1px solid var(--line); border-radius: 4px; background: white; cursor: pointer; font-size: 13px; text-decoration: none; color: var(--text);">參數敏感度分析</a>
+  <a href="/web/designs/{{ view.design_id }}/simulation/bifurcation{% if is_historical %}?rev={{ viewed_rev }}{% endif %}" class="sub-tab-button" style="padding: 6px 12px; border: 1px solid var(--line); border-radius: 4px; background: white; cursor: pointer; font-size: 13px; text-decoration: none; color: var(--text);">分岔與轉移函數</a>
+  <a href="/web/designs/{{ view.design_id }}/simulation/fit{% if is_historical %}?rev={{ viewed_rev }}{% endif %}" class="sub-tab-button" style="padding: 6px 12px; border: 1px solid var(--line); border-radius: 4px; background: white; cursor: pointer; font-size: 13px; text-decoration: none; color: var(--text);">參數配適對比</a>
+</div>
+
+<div class="grid grid-3" style="grid-template-columns: 1fr 2fr; gap: 24px; align-items: start;">
+
+  <!-- Left Column: Settings Form -->
+  <article class="card" style="padding: 20px;">
+    <h2 style="font-size: 16px; margin-top: 0; margin-bottom: 16px; border-bottom: 1px solid var(--line); padding-bottom: 8px;">🎛️ ODE 模擬設定</h2>
+
+    <form method="POST" action="/web/designs/{{ view.design_id }}/simulation/ode{% if is_historical %}?rev={{ viewed_rev }}{% endif %}" id="simulation-form">
+      <div style="display: grid; gap: 12px; margin-bottom: 20px;">
+        <div>
+          <label style="display: block; font-size: 12px; font-weight: bold; margin-bottom: 4px;">模擬時間 (秒)</label>
+          <input type="number" name="simulation_time" value="600" min="10" max="86400" required style="width: 100%; padding: 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 13px;">
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div>
+            <label style="display: block; font-size: 12px; font-weight: bold; margin-bottom: 4px;">取樣點數</label>
+            <input type="number" name="sample_count" value="80" min="5" max="2000" required style="width: 100%; padding: 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 13px;">
+          </div>
+          <div>
+            <label style="display: block; font-size: 12px; font-weight: bold; margin-bottom: 4px;">噪聲比例</label>
+            <input type="number" step="0.01" name="noise_fraction" value="0.15" min="0.0" max="2.0" required style="width: 100%; padding: 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 13px;">
+          </div>
+        </div>
+
+        <div>
+          <label style="display: block; font-size: 12px; font-weight: bold; margin-bottom: 4px;">隨機晶種</label>
+          <input type="number" name="random_seed" placeholder="隨機" style="width: 100%; padding: 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 13px;">
+        </div>
+      </div>
+
+      <!-- Temporal Inputs -->
+      <h3 style="font-size: 13.5px; border-top: 1px solid var(--line); padding-top: 12px; margin-top: 12px; margin-bottom: 10px;">🧬 輸入訊號控制</h3>
+      <div style="display: flex; flex-direction: column; gap: 14px;">
+        {% for sig in design_v2.specification.inputs %}
+        <div style="background: #f8fafc; border: 1px solid var(--line); border-radius: 8px; padding: 10px;">
+          <strong style="font-size: 13px; color: var(--brand); display: block; margin-bottom: 6px;">訊號 {{ sig }}</strong>
+          <div style="margin-bottom: 8px;">
+            <select name="input_type_{{ sig }}" onchange="toggleSignalConfig('{{ sig }}', this.value)" style="width: 100%; padding: 6px; border: 1px solid var(--line); border-radius: 4px; font-size: 12.5px;">
+              <option value="constant">恆定值 (Constant)</option>
+              <option value="step">階躍信號 (Step)</option>
+              <option value="pulse">單次脈衝 (Pulse)</option>
+            </select>
+          </div>
+
+          <div id="sig-config-constant-{{ sig }}" class="sig-config-block-{{ sig }}">
+            <input type="number" step="0.1" name="input_value_{{ sig }}" value="1.0" style="width: 100%; padding: 6px; border: 1px solid var(--line); border-radius: 4px; font-size: 12.5px;">
+          </div>
+
+          <div id="sig-config-step-{{ sig }}" class="sig-config-block-{{ sig }}" style="display: none;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 6px;">
+              <input type="number" step="0.1" name="input_step_start_{{ sig }}" value="0.0" placeholder="起始值" style="width: 100%; padding: 6px; border: 1px solid var(--line); border-radius: 4px; font-size: 12.5px;">
+              <input type="number" step="0.1" name="input_step_end_{{ sig }}" value="1.0" placeholder="結束值" style="width: 100%; padding: 6px; border: 1px solid var(--line); border-radius: 4px; font-size: 12.5px;">
+            </div>
+            <input type="number" name="input_step_time_{{ sig }}" value="150" placeholder="觸發時間 (秒)" style="width: 100%; padding: 6px; border: 1px solid var(--line); border-radius: 4px; font-size: 12.5px;">
+          </div>
+
+          <div id="sig-config-pulse-{{ sig }}" class="sig-config-block-{{ sig }}" style="display: none;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 6px;">
+              <input type="number" name="input_pulse_start_{{ sig }}" value="100" placeholder="脈衝起" style="width: 100%; padding: 6px; border: 1px solid var(--line); border-radius: 4px; font-size: 12.5px;">
+              <input type="number" name="input_pulse_end_{{ sig }}" value="300" placeholder="脈衝止" style="width: 100%; padding: 6px; border: 1px solid var(--line); border-radius: 4px; font-size: 12.5px;">
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
+              <input type="number" step="0.1" name="input_pulse_active_{{ sig }}" value="1.5" placeholder="脈衝強度" style="width: 100%; padding: 6px; border: 1px solid var(--line); border-radius: 4px; font-size: 12.5px;">
+              <input type="number" step="0.1" name="input_pulse_basal_{{ sig }}" value="0.0" placeholder="基底強度" style="width: 100%; padding: 6px; border: 1px solid var(--line); border-radius: 4px; font-size: 12.5px;">
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <button type="submit" class="button" style="width: 100%; margin-top: 20px;">🚀 開始模擬運算</button>
+    </form>
+  </article>
+
+  <!-- Right Column: Job Status & Result -->
+  <section class="grid grid-1" style="gap: 24px;">
+
+    <!-- 1. 問題說明 -->
+    <article class="card" style="background: #f8fafc; border-left: 4px solid var(--brand);">
+      <h3 style="margin: 0 0 6px 0;">動態動力學分析回答的問題</h3>
+      <p style="margin: 0; font-size: 13.5px; line-height: 1.5; color: #475569;">
+        本分析旨在解答：<strong>「在特定的輸入信號隨時間變化的情況下，此基因電路的各節點表現量如何隨時間推移進行動態回應？」</strong>
+      </p>
+    </article>
+
+    <!-- 2. 工作狀態 / 主要圖表 -->
+    <article class="card" style="min-height: 400px;">
+      {% if run_id and run_data and run_data.status not in ["completed", "failed", "cancelled", "error"] %}
+        <div style="text-align: center; padding: 80px 24px;">
+          <div style="animation: spin 1s linear infinite; width: 40px; height: 40px; border: 4px solid var(--line); border-top-color: var(--brand); border-radius: 50%; margin: 0 auto 16px auto;"></div>
+          <h3 style="margin: 0 0 8px 0;">背景模擬執行中...</h3>
+          <p class="muted" style="margin: 0 0 16px 0;">正在計算常微分方程 (ODE) 的動態時間軌跡。本頁面將在完成後自動重整。</p>
+          <div style="background: #e2e8f0; height: 8px; border-radius: 4px; max-width: 300px; margin: 0 auto; overflow: hidden;">
+            <div style="background: var(--brand); height: 100%; width: 50%; animation: pulse 1.5s infinite;"></div>
+          </div>
+          <script>
+            setTimeout(() => { window.location.reload(); }, 2000);
+          </script>
+        </div>
+      {% elif run_data and run_data.status == "completed" and run_data.result %}
+        <h2>📊 動態模擬響應軌跡 (ODE Trace)</h2>
+        <div style="position: relative; height: 320px; width: 100%; margin-bottom: 20px;">
+          <canvas id="simulation-chart" style="height: 100%; width: 100%;"></canvas>
+        </div>
+
+        <!-- 3. 白話解釋 -->
+        <div style="background: #ecfdf3; border: 1px solid #abfdf1; border-radius: 8px; padding: 16px; margin-top: 20px;">
+          <h4 style="margin: 0 0 6px 0; color: #027a48;">💡 動態軌跡白話解釋</h4>
+          <p style="margin: 0; font-size: 13.5px; line-height: 1.5; color: #027a48;">
+            此線路在高/低輸入信號的刺激下展現出可預測的轉變。您可以觀察到代表目標輸出訊號的綠色曲線，在輸入端觸發或持續刺激後，經歷轉錄與轉譯延遲，逐步達到新的動態平衡。
+          </p>
+        </div>
+
+        <!-- 4. 限制／證據 -->
+        <div style="background: #fffbeb; border: 1px solid #fee4cc; border-radius: 8px; padding: 16px; margin-top: 16px;">
+          <h4 style="margin: 0 0 6px 0; color: #b54708;">⚠️ 模擬限制與可信度聲明</h4>
+          <p style="margin: 0; font-size: 13px; line-height: 1.5; color: #b54708;">
+            此常微分方程 (ODE) 模擬基於確定性動力學模型，假設細胞內部資源無限。在大規模代謝負擔或極低分子拷貝數下，系統可能展現隨機漲落（請參考 SSA 隨機模擬）。
+          </p>
+        </div>
+
+        <!-- 5. 原始資料下載 -->
+        <div style="margin-top: 24px; border-top: 1px solid var(--line); padding-top: 16px; display: flex; justify-content: space-between; align-items: center;">
+          <span class="muted" style="font-size: 12.5px;">模擬工作 ID: {{ run_id }}</span>
+          <a class="button secondary" href="/web/research/runs/{{ run_id }}" target="_blank">📥 下載完整模擬 Report (CSV/JSON)</a>
+        </div>
+      {% else %}
+        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 350px; text-align: center; color: var(--muted); padding: 24px;">
+          <span style="font-size: 48px; margin-bottom: 12px;">📊</span>
+          <h3 style="margin: 0; color: var(--text); font-size: 16px;">等待啟動模擬</h3>
+          <p style="margin: 8px 0 0 0; font-size: 13.5px; max-width: 320px; line-height: 1.5;">請在左側面板設定時間常數與輸入波形，點擊「開始模擬運算」以繪製動態圖表。</p>
+        </div>
+      {% endif %}
+    </article>
+
+  </section>
+</div>
+
+<script>
+function toggleSignalConfig(sig, value) {
+  document.querySelectorAll('.sig-config-block-' + sig).forEach(b => b.style.display = 'none');
+  const target = document.getElementById('sig-config-' + value + '-' + sig);
+  if (target) target.style.display = 'block';
+}
+</script>
+
+{% if run_data and run_data.status == "completed" and run_data.result %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const ctx = document.getElementById('simulation-chart').getContext('2d');
+  const trace = {{ run_data.result.candidate.ode_trace | tojson }};
+
+  const datasets = [];
+  const time = trace.time;
+
+  Object.keys(trace).forEach(key => {
+    if (key !== 'time') {
+      const isOutput = key.toLowerCase().includes('output') || key === 'Y' || key === 'Q';
+      datasets.push({
+        label: key,
+        data: trace[key],
+        borderColor: isOutput ? '#12b76a' : '#2563eb',
+        borderWidth: isOutput ? 2.5 : 1.5,
+        tension: 0.1,
+        fill: false
+      });
+    }
+  });
+
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: time,
+      datasets: datasets
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: {
+          title: { display: true, text: '時間 (秒)' }
+        },
+        y: {
+          title: { display: true, text: '濃度 (nM)' }
+        }
+      }
+    }
+  });
+});
+</script>
+{% endif %}
+
+{% endblock %}

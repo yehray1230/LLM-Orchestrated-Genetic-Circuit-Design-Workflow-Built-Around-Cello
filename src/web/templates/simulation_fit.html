@@ -1,0 +1,231 @@
+{% extends "base.html" %}
+{% block title %}Parameter Fit Comparison - {{ design.name }}{% endblock %}
+{% block content %}
+<style>
+  .sub-tab-button.active {
+    background: var(--brand) !important;
+    color: white !important;
+    border-color: var(--brand) !important;
+  }
+</style>
+
+{% if is_historical %}
+<div class="warning-box" style="margin-bottom: 18px; background: #fff9e6; border: 1px solid #ffe199; color: #b54708; display: flex; justify-content: space-between; align-items: center; border-radius: 8px; padding: 12px 18px;">
+  <span style="font-size: 14.5px;">⚠️ 您目前正在查看版本 <strong>[Rev {{ viewed_rev }}]</strong> 的歷史快照。</span>
+  <a href="/web/designs/{{ view.design_id }}" class="button" style="padding: 4px 10px; font-size: 12px; height: auto;">回到最新版本</a>
+</div>
+{% endif %}
+
+<header class="page-header split-header">
+  <div>
+    <span class="eyebrow">模擬與分析中心</span>
+    <h1>{{ design.name }}</h1>
+    <p class="muted">{{ design.design_id }} · revision {{ design_v2.revision.revision_number }}</p>
+  </div>
+  <div style="display: flex; gap: 8px;">
+    <a class="button secondary" href="/web/designs/{{ view.design_id }}{% if is_historical %}?rev={{ viewed_rev }}{% endif %}">返回總覽</a>
+  </div>
+</header>
+
+<!-- Secondary Sub-Navigation -->
+<nav class="section-tabs" style="border-bottom: 2px solid var(--line); padding-bottom: 6px; display: flex; gap: 8px; overflow-x: auto; white-space: nowrap; margin-bottom: 20px;">
+  <a href="/web/designs/{{ view.design_id }}{% if is_historical %}?rev={{ viewed_rev }}{% endif %}" class="tab-button">總覽</a>
+  <a href="/web/designs/{{ view.design_id }}#source" class="tab-button">候選來源</a>
+  <a href="/web/designs/{{ view.design_id }}/simulation/ode{% if is_historical %}?rev={{ viewed_rev }}{% endif %}" class="tab-button active">模擬</a>
+  <a href="/web/designs/{{ view.design_id }}#optimization" class="tab-button">最佳化</a>
+  <a href="/web/designs/{{ view.design_id }}#assembly" class="tab-button">組裝</a>
+  <a href="/web/designs/{{ view.design_id }}#export" class="tab-button">匯出</a>
+  <a href="/web/designs/{{ view.design_id }}#history" class="tab-button">歷程</a>
+</nav>
+
+<!-- Simulation Sub-Navigation -->
+<div class="simulation-sub-tabs" style="display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid var(--line); padding-bottom: 8px; overflow-x: auto;">
+  <a href="/web/designs/{{ view.design_id }}/simulation/ode{% if is_historical %}?rev={{ viewed_rev }}{% endif %}" class="sub-tab-button" style="padding: 6px 12px; border: 1px solid var(--line); border-radius: 4px; background: white; cursor: pointer; font-size: 13px; text-decoration: none; color: var(--text);">動態 ODE 模擬</a>
+  <a href="/web/designs/{{ view.design_id }}/simulation/ssa{% if is_historical %}?rev={{ viewed_rev }}{% endif %}" class="sub-tab-button" style="padding: 6px 12px; border: 1px solid var(--line); border-radius: 4px; background: white; cursor: pointer; font-size: 13px; text-decoration: none; color: var(--text);">隨機 SSA 模擬</a>
+  <a href="/web/designs/{{ view.design_id }}/simulation/sweep{% if is_historical %}?rev={{ viewed_rev }}{% endif %}" class="sub-tab-button" style="padding: 6px 12px; border: 1px solid var(--line); border-radius: 4px; background: white; cursor: pointer; font-size: 13px; text-decoration: none; color: var(--text);">參數敏感度分析</a>
+  <a href="/web/designs/{{ view.design_id }}/simulation/bifurcation{% if is_historical %}?rev={{ viewed_rev }}{% endif %}" class="sub-tab-button" style="padding: 6px 12px; border: 1px solid var(--line); border-radius: 4px; background: white; cursor: pointer; font-size: 13px; text-decoration: none; color: var(--text);">分岔與轉移函數</a>
+  <a href="/web/designs/{{ view.design_id }}/simulation/fit{% if is_historical %}?rev={{ viewed_rev }}{% endif %}" class="sub-tab-button active" style="padding: 6px 12px; border: 1px solid var(--line); border-radius: 4px; background: white; cursor: pointer; font-size: 13px; text-decoration: none; color: var(--text);">參數配適對比</a>
+</div>
+
+<div class="grid grid-3" style="grid-template-columns: 1fr 2fr; gap: 24px; align-items: start;">
+
+  <!-- Left Column: Settings Form -->
+  <article class="card" style="padding: 20px;">
+    <h2 style="font-size: 16px; margin-top: 0; margin-bottom: 16px; border-bottom: 1px solid var(--line); padding-bottom: 8px;">🎛️ 配適快照對比設定</h2>
+
+    <form method="POST" action="/web/designs/{{ view.design_id }}/simulation/fit{% if is_historical %}?rev={{ viewed_rev }}{% endif %}" id="simulation-form">
+      <div style="display: grid; gap: 12px; margin-bottom: 20px;">
+        <div>
+          <label style="display: block; font-size: 12px; font-weight: bold; margin-bottom: 4px;">選擇實驗配適快照 (Snapshot)</label>
+          <select name="snapshot_id" required style="width: 100%; padding: 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 13px;">
+            {% for snap in snapshots %}
+              <option value="{{ snap.snapshot_id }}" {% if snap.snapshot_id == selected_snapshot_id %}selected{% endif %}>
+                {{ snap.snapshot_id }} ({{ snap.part_id }})
+              </option>
+            {% else %}
+              <option value="">沒有可用的快照</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div>
+          <label style="display: block; font-size: 12px; font-weight: bold; margin-bottom: 4px;">模擬時間 (秒)</label>
+          <input type="number" name="simulation_time" value="600" min="10" max="86400" required style="width: 100%; padding: 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 13px;">
+        </div>
+
+        <div>
+          <label style="display: block; font-size: 12px; font-weight: bold; margin-bottom: 4px;">取樣點數</label>
+          <input type="number" name="sample_count" value="80" min="5" max="2000" required style="width: 100%; padding: 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 13px;">
+        </div>
+      </div>
+
+      <button type="submit" class="button" style="width: 100%;">📊 進行快照動力學對比</button>
+    </form>
+  </article>
+
+  <!-- Right Column: Job Status & Result -->
+  <section class="grid grid-1" style="gap: 24px;">
+
+    <!-- 1. 問題說明 -->
+    <article class="card" style="background: #f8fafc; border-left: 4px solid var(--brand);">
+      <h3 style="margin: 0 0 6px 0;">配適快照對比回答的問題</h3>
+      <p style="margin: 0; font-size: 13.5px; line-height: 1.5; color: #475569;">
+        本分析解答：<strong>「在使用來自濕實驗（Wet-lab Plate Reader）實際配適出的動力學特徵，與文獻預設（Default）動力學模型對比時，電路行為會發生何種偏移？」</strong>
+      </p>
+    </article>
+
+    <!-- 2. 工作狀態 / 主要圖表 -->
+    <article class="card" style="min-height: 400px;">
+      {% if error %}
+        <div style="background: #fef3f2; color: #b42318; padding: 14px; border-radius: 8px; border: 1px solid #fee4e2; font-size: 13.5px; margin-bottom: 20px;">
+          ❌ <strong>執行對比時出錯</strong>: {{ error }}
+        </div>
+      {% endif %}
+
+      {% if comparison_result %}
+        <h2>📊 預設 vs. 實驗配適動態軌跡對比 (Fitting Trace Comparison)</h2>
+        <div style="position: relative; height: 320px; width: 100%; margin-bottom: 20px;">
+          <canvas id="simulation-chart" style="height: 100%; width: 100%;"></canvas>
+        </div>
+
+        <!-- Delta comparison table -->
+        <h3 style="font-size: 14px; margin-top: 20px; margin-bottom: 10px;">指標變動差異表 (Metrics Delta Table)</h3>
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; margin-bottom: 20px;">
+          <thead>
+            <tr style="border-bottom: 2px solid var(--line);">
+              <th style="padding: 8px;">性能指標 (Performance Metric)</th>
+              <th style="padding: 8px;">預設模型表現 (Default)</th>
+              <th style="padding: 8px;">配適快照表現 (Fitted)</th>
+              <th style="padding: 8px;">偏移幅度 (Delta)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in comparison_result.metric_deltas %}
+            <tr style="border-bottom: 1px solid var(--line);">
+              <td style="padding: 8px; font-weight: bold;">{{ row.label }}</td>
+              <td style="padding: 8px; font-family: monospace;">{{ "%.3f"|format(row.default) }}</td>
+              <td style="padding: 8px; font-family: monospace;">{{ "%.3f"|format(row.fitted) }}</td>
+              <td style="padding: 8px; font-family: monospace; color: {% if row.delta and row.delta < 0 %}#b42318{% else %}#027a48{% endif %};">
+                {% if row.delta is not none %}{{ "%+.3f"|format(row.delta) }}{% else %}-{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+
+        <!-- 3. 白話解釋 -->
+        <div style="background: #ecfdf3; border: 1px solid #abfdf1; border-radius: 8px; padding: 16px;">
+          <h4 style="margin: 0 0 6px 0; color: #027a48;">💡 參數偏移白話轉譯</h4>
+          <p style="margin: 0; font-size: 13.5px; line-height: 1.5; color: #027a48;">
+            此快照比對說明了<strong>「實測細胞參數帶來的行為偏移」</strong>。{{ comparison_result.interpretation or "配適後的模型軌跡呈現輕微延遲或衰退，說明實測元件的表達效率低於預期理論值。" }}
+          </p>
+        </div>
+
+        <!-- 4. 限制／證據 -->
+        <div style="background: #fffbeb; border: 1px solid #fee4cc; border-radius: 8px; padding: 16px; margin-top: 16px;">
+          <h4 style="margin: 0 0 6px 0; color: #b54708;">⚠️ 數據可信度限制</h4>
+          <p style="margin: 0; font-size: 13px; line-height: 1.5; color: #b54708;">
+            配適模型之動力學參數來自特定批次微量盤讀值（Plate Reader），當切換至不同的生長培養基、宿主型號或環境溫度時，此實測值可能產生波動。
+          </p>
+        </div>
+
+        <!-- 5. 原始資料下載 -->
+        <div style="margin-top: 24px; border-top: 1px solid var(--line); padding-top: 16px;">
+          <details>
+            <summary style="cursor: pointer; font-size: 12.5px; font-weight: bold; color: var(--brand);">檢視完整對比 JSON Report</summary>
+            <pre style="background: #1e293b; color: #f8fafc; padding: 14px; border-radius: 8px; font-family: monospace; font-size: 12px; overflow: auto; max-height: 250px; margin-top: 8px;">{{ comparison_result | tojson(indent=2) }}</pre>
+          </details>
+        </div>
+      {% else %}
+        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 350px; text-align: center; color: var(--muted); padding: 24px;">
+          <span style="font-size: 48px; margin-bottom: 12px;">📊</span>
+          <h3 style="margin: 0; color: var(--text); font-size: 16px;">等待選擇配適快照</h3>
+          <p style="margin: 8px 0 0 0; font-size: 13.5px; max-width: 320px; line-height: 1.5;">請在左側選擇已上傳的 Plate Reader 數據配適快照，並點擊「進行快照對比」以進行動態軌跡重疊比對。</p>
+        </div>
+      {% endif %}
+    </article>
+
+  </section>
+</div>
+
+{% if comparison_result %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const ctx = document.getElementById('simulation-chart').getContext('2d');
+  const comp = {{ comparison_result | tojson }};
+
+  const time = comp.default_run.ode_trace.time;
+  const datasets = [];
+
+  // Plot default output in red/blue
+  Object.keys(comp.default_run.ode_trace).forEach(key => {
+    if (key !== 'time' && (key === 'Y' || key === 'Q' || key.toLowerCase().includes('output'))) {
+      datasets.push({
+        label: `${key} (理論預設)`,
+        data: comp.default_run.ode_trace[key],
+        borderColor: '#2563eb',
+        borderWidth: 2,
+        borderDash: [5, 5],
+        tension: 0.1,
+        fill: false,
+        pointRadius: 0
+      });
+    }
+  });
+
+  // Plot fitted output in green
+  Object.keys(comp.fitted_run.ode_trace).forEach(key => {
+    if (key !== 'time' && (key === 'Y' || key === 'Q' || key.toLowerCase().includes('output'))) {
+      datasets.push({
+        label: `${key} (實測配適)`,
+        data: comp.fitted_run.ode_trace[key],
+        borderColor: '#12b76a',
+        borderWidth: 3,
+        tension: 0.1,
+        fill: false,
+        pointRadius: 0
+      });
+    }
+  });
+
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: time,
+      datasets: datasets
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: { title: { display: true, text: '時間 (秒)' } },
+        y: { title: { display: true, text: '濃度 (nM)' } }
+      }
+    }
+  });
+});
+</script>
+{% endif %}
+
+{% endblock %}

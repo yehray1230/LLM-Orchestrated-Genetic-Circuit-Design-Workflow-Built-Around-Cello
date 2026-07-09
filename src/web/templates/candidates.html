@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+{% block title %}Candidates - {{ view.run_id }}{% endblock %}
+{% block content %}
+<header class="page-header split-header">
+  <div>
+    <span class="eyebrow">Candidate Browsing Workbench</span>
+    <h1 style="display: inline-flex; align-items: center; gap: 12px; margin: 0 0 6px;">
+      執行候選設計列表
+      <span class="badge" style="font-family: monospace; font-size: 14px;">{{ view.run_id }}</span>
+    </h1>
+    <p class="muted">檢視、評估並比較本輪生成的所有基因電路設計拓樸候選方案。</p>
+  </div>
+  <div style="display: flex; gap: 8px; align-items: center;">
+    <button id="compare-btn" class="button" style="display: none; align-items: center; gap: 6px; background: var(--brand); color: white;" onclick="compareCandidates()">
+      📊 比較選中候選 (<span id="select-count">0</span>)
+    </button>
+    <a class="button secondary" href="/web/runs/{{ view.run_id }}">返回執行監控</a>
+  </div>
+</header>
+
+<!-- Run Specification & Metadata Summary Card -->
+<section class="card section-space" style="margin-bottom: 24px; border-left: 4px solid var(--brand);">
+  <h2 style="font-size: 18px; margin-bottom: 12px;">原始設計需求與運行狀態</h2>
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px;">
+    <div>
+      <span class="muted" style="font-size: 12px; display: block; margin-bottom: 4px;">使用者自然語言意圖</span>
+      <strong style="font-size: 15px; color: var(--text);">{{ view.user_intent or "未指定需求" }}</strong>
+    </div>
+    <div>
+      <span class="muted" style="font-size: 12px; display: block; margin-bottom: 4px;">宿主生物體 (Host Organism)</span>
+      <span class="badge" style="background: var(--brand-soft); color: var(--brand);">{{ view.host_organism }}</span>
+    </div>
+    <div>
+      <span class="muted" style="font-size: 12px; display: block; margin-bottom: 4px;">運行最終狀態</span>
+      {% if view.run_status == "completed" %}
+        <span class="status-badge status-ready" style="padding: 4px 10px; font-size: 13px;">{{ view.run_status | upper }}</span>
+      {% elif view.run_status in ["error", "failed", "cancelled"] %}
+        <span class="status-badge status-error" style="padding: 4px 10px; font-size: 13px;">{{ view.run_status | upper }}</span>
+      {% else %}
+        <span class="status-badge status-active" style="padding: 4px 10px; font-size: 13px;">{{ view.run_status | upper }}</span>
+      {% endif %}
+    </div>
+    <div>
+      <span class="muted" style="font-size: 12px; display: block; margin-bottom: 4px;">候選數量與最佳分數</span>
+      <span style="font-size: 15px; font-weight: 700;">
+        {{ view.total_candidates }} 個候選 | Best:
+        <span style="color: var(--success);">{{ "%.3f"|format(view.best_score) if view.best_score is not none else "-" }}</span>
+      </span>
+    </div>
+  </div>
+
+  {% if view.tool_versions %}
+  <div style="margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); display: flex; gap: 16px; flex-wrap: wrap;">
+    <span><strong>工具版本：</strong></span>
+    {% for tool, ver in view.tool_versions.items() %}
+    <span>{{ tool }}: <code style="background: #f1f5f9; padding: 2px 5px; border-radius: 4px; color: var(--text);">{{ ver }}</code></span>
+    {% endfor %}
+  </div>
+  {% endif %}
+</section>
+
+<!-- Empty States / Loading States -->
+{% if view.empty_state_type %}
+<section class="card" style="text-align: center; padding: 48px 24px; display: grid; gap: 16px; justify-items: center; border-radius: 14px;">
+
+  {% if view.empty_state_type == "not_completed" %}
+    <div style="font-size: 48px;">⏳</div>
+    <h2 style="margin: 0; color: var(--brand);">運行尚未完成</h2>
+    <p class="muted" style="max-width: 480px; margin: 0 auto;">此設計運行目前處於 <strong>{{ view.run_status }}</strong> 狀態。請在執行完成或暫停後，再返回本工作台瀏覽候選結果。</p>
+    <a class="button" href="/web/runs/{{ view.run_id }}">返回監控頁面觀看進度</a>
+
+  {% elif view.empty_state_type == "empty" %}
+    <div style="font-size: 48px;">📂</div>
+    <h2 style="margin: 0; color: var(--muted);">完成但沒有候選方案</h2>
+    <p class="muted" style="max-width: 480px; margin: 0 auto;">電路設計搜尋已結束，但未產生任何有效的候選拓樸方案。這可能是由於布林邏輯不可滿足，或未配置適當的評估參數。</p>
+    <a class="button secondary" href="/web/new-design">重新配置並建立新設計</a>
+
+  {% elif view.empty_state_type == "unparseable" %}
+    <div style="font-size: 48px;">⚠️</div>
+    <h2 style="margin: 0; color: #b42318;">執行結果無法解析</h2>
+    <p class="muted" style="max-width: 480px; margin: 0 auto;">系統無法載入或解析此執行的 <code>result.json</code> 資料。此運行可能因異常錯誤終止，或輸出檔案已損毀。</p>
+    <a class="button secondary" href="/web/runs/{{ view.run_id }}">檢視事件與錯誤日誌</a>
+
+  {% elif view.empty_state_type == "all_failed" %}
+    <div style="font-size: 48px;">❌</div>
+    <h2 style="margin: 0; color: #b42318;">候選方案全部 Mapping 失敗</h2>
+    <p class="muted" style="max-width: 480px; margin: 0 auto;">本輪生成的所有候選拓樸在進行 Cello 元件物理指派與映射時，均因約束條件不匹配（UCF 限制）或缺少可用邏輯閘而失敗。</p>
+    <div style="display: flex; gap: 8px; margin-top: 8px;">
+      <a class="button warning" href="/web/runs/{{ view.run_id }}">提供 PM 反饋進行邏輯修正</a>
+      <a class="button secondary" href="/web/new-design">調整元件庫並重新設計</a>
+    </div>
+  {% endif %}
+
+</section>
+{% else %}
+
+<!-- Candidates Grid List -->
+<div class="grid grid-3" style="align-items: start; gap: 20px;">
+  {% for candidate in view.candidates %}
+  <article class="card" style="display: flex; flex-direction: column; justify-content: space-between; min-height: 380px; transition: transform 0.2s, box-shadow 0.2s; position: relative; overflow: hidden; border: 1px solid {% if candidate.is_best %}#a6f4c5{% else %}var(--line){% endif %}; box-shadow: {% if candidate.is_best %}0 4px 12px rgba(18, 183, 106, 0.08){% else %}0 1px 2px rgba(16, 24, 40, .04){% endif %};">
+
+    <!-- Select for Compare Checkbox -->
+    <label style="position: absolute; top: 10px; left: 12px; display: flex; align-items: center; gap: 6px; font-size: 11.5px; z-index: 10; cursor: pointer; background: white; padding: 3px 8px; border-radius: 6px; border: 1px solid var(--line); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
+      <input type="checkbox" class="candidate-select" data-index="{{ candidate.index }}" style="margin: 0; width: 14px; height: 14px;"> 選擇對比
+    </label>
+
+    <!-- Best Candidate Ribbon/Badge -->
+    {% if candidate.is_best %}
+    <div style="position: absolute; top: 0; right: 0; background: #12b76a; color: white; font-size: 11px; font-weight: 800; padding: 4px 10px; border-bottom-left-radius: 8px; letter-spacing: 0.05em; text-transform: uppercase;">
+      ★ 目前最佳
+    </div>
+    {% endif %}
+
+    <div>
+      <!-- Name and Index -->
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; margin-top: 24px;">
+        <span class="step-number" style="font-size: 11px; font-weight: 850;">CANDIDATE #{{ candidate.index + 1 }}</span>
+        <h3 style="margin: 0; font-size: 18px;">{{ candidate.name }}</h3>
+      </div>
+
+      <!-- Score Section -->
+      <div style="margin-bottom: 16px; background: #f8fafc; padding: 10px; border-radius: 8px; border: 1px solid var(--line);">
+        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;">
+          <span class="muted" style="font-size: 12px;">整體評估分數 (Weighted Score)</span>
+          <span style="font-size: 20px; font-weight: 800; color: {% if candidate.score >= 0.85 %}var(--success){% elif candidate.score >= 0.70 %}var(--warning){% else %}#b42318{% endif %};">
+            {{ "%.3f"|format(candidate.score) }}
+          </span>
+        </div>
+        <div class="progress" style="height: 6px; background: #e2e8f0;">
+          <span style="width: {{ candidate.score * 100 }}%; background: {% if candidate.score >= 0.85 %}#12b76a{% elif candidate.score >= 0.70 %}#f79009{% else %}#f04438{% endif %};"></span>
+        </div>
+      </div>
+
+      <!-- Detail Specs List -->
+      <div style="display: flex; flex-direction: column; gap: 8px; font-size: 13px; margin-bottom: 18px;">
+
+        <div style="display: flex; justify-content: space-between; border-bottom: 1px dashed var(--line); padding-bottom: 6px;">
+          <span class="muted">Cello Mapping 狀態</span>
+          {% if candidate.mapping_status == "mapped" %}
+            <span class="badge" style="background: #ecfdf3; color: var(--success); font-size: 11px;">MAPPED</span>
+          {% elif candidate.mapping_status == "MAPPING_FAILED" %}
+            <span class="badge" style="background: #fef3f2; color: #b42318; font-size: 11px;">FAILED</span>
+          {% else %}
+            <span class="badge" style="background: #f2f4f7; color: var(--muted); font-size: 11px;">{{ candidate.mapping_status | upper }}</span>
+          {% endif %}
+        </div>
+
+        <div style="display: flex; justify-content: space-between; border-bottom: 1px dashed var(--line); padding-bottom: 6px;">
+          <span class="muted">宿主生物 (Host)</span>
+          <span style="font-weight: 550; font-style: italic;">{{ candidate.host_organism }}</span>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; border-bottom: 1px dashed var(--line); padding-bottom: 6px;">
+          <span class="muted">Verilog 摘要</span>
+          <span style="font-family: monospace; font-size: 12px; font-weight: 550;">{{ candidate.verilog_summary }}</span>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; border-bottom: 1px dashed var(--line); padding-bottom: 6px;">
+          <span class="muted">ODE 動態模擬</span>
+          {% if candidate.ode_status == "simulated" %}
+            <span class="badge" style="background: #eff8ff; color: #175cd3; font-size: 11px;">✓已完成</span>
+          {% elif candidate.ode_status == "disabled" %}
+            <span class="badge" style="background: #f2f4f7; color: var(--muted); font-size: 11px;">未啟用</span>
+          {% else %}
+            <span class="badge" style="background: #fff7ed; color: var(--warning); font-size: 11px;">未完成</span>
+          {% endif %}
+        </div>
+
+        <div style="margin-top: 4px;">
+          <span class="muted" style="display: block; margin-bottom: 2px;">主要限制因素</span>
+          <span style="font-weight: 550; color: {% if "較差" in candidate.limiting_factor or "失敗" in candidate.limiting_factor %}var(--warning){% else %}var(--muted){% endif %}; font-size: 12.5px;">
+            {{ candidate.limiting_factor }}
+          </span>
+        </div>
+      </div>
+
+      <!-- Warning Badges Row -->
+      {% if candidate.warnings %}
+      <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 18px;">
+        {% if candidate.is_provisional %}
+          <span class="badge" style="background: #fffaeb; color: #b54708; border: 1px solid #fedf89; font-size: 11px;" title="使用 Mock 輸出，非實體元件庫">Provisional</span>
+        {% endif %}
+        {% if candidate.is_fallback %}
+          <span class="badge" style="background: #fffaeb; color: #b54708; border: 1px solid #fedf89; font-size: 11px;" title="元件分派涉及備用替代方案">Fallback</span>
+        {% endif %}
+        {% if candidate.is_incomplete %}
+          <span class="badge" style="background: #fef3f2; color: #b42318; border: 1px solid #fee4e2; font-size: 11px;" title="模擬分析或映射不完整">Incomplete</span>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Action Button -->
+    <div style="margin-top: 14px;">
+      <a class="button secondary" href="/web/runs/{{ view.run_id }}/candidates/{{ candidate.index }}" style="width: 100%; text-align: center; font-weight: 650;">
+        查看候選詳情
+      </a>
+    </div>
+  </article>
+  {% endfor %}
+</div>
+{% endif %}
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const checkboxes = document.querySelectorAll(".candidate-select");
+    const compareBtn = document.getElementById("compare-btn");
+    const selectCount = document.getElementById("select-count");
+
+    function updateCompareButton() {
+        const selected = Array.from(checkboxes).filter(cb => cb.checked);
+        selectCount.textContent = selected.length;
+
+        if (selected.length >= 2 && selected.length <= 4) {
+            compareBtn.style.display = "inline-flex";
+            compareBtn.disabled = false;
+        } else if (selected.length > 4) {
+            alert("最多只能選擇 4 個候選方案進行比較！");
+            this.checked = false;
+            updateCompareButton();
+        } else {
+            compareBtn.style.display = "none";
+        }
+    }
+
+    checkboxes.forEach(cb => {
+        cb.addEventListener("change", updateCompareButton);
+    });
+
+    window.compareCandidates = function() {
+        const selectedIndexes = Array.from(checkboxes)
+            .filter(cb => cb.checked)
+            .map(cb => cb.dataset.index)
+            .join(",");
+        if (selectedIndexes) {
+            window.location.href = `/web/runs/{{ view.run_id }}/candidates/compare?indexes=${selectedIndexes}`;
+        }
+    };
+});
+</script>
+{% endblock %}

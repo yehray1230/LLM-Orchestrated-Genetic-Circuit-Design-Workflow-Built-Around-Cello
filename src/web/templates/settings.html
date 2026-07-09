@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}Settings - 金鑰與模型設定{% endblock %}
+{% block content %}
+<header class="page-header">
+  <h1>金鑰與模型設定 (BYOK)</h1>
+  <p class="muted">在此設定您個人的 LiteLLM / OpenAI 相容金鑰與模型。一般設定與 API Key 分開保存；儲存方式會依目前平台顯示於下方。</p>
+</header>
+
+{% if success_msg %}
+<div class="warning-box" style="margin-bottom: 18px; background: #ecfdf3; color: #027a48; border: 1px solid #d0f5e3;">
+  {{ success_msg }}
+</div>
+{% endif %}
+
+<article class="card">
+  <form id="settings-form" method="post" action="/web/settings">
+    <div class="grid grid-2">
+      <label>模型供應商 (Provider)
+        <select name="provider" id="setting-provider">
+          <option value="OpenAI" {% if settings.provider == 'OpenAI' %}selected{% endif %}>OpenAI</option>
+          <option value="Anthropic" {% if settings.provider == 'Anthropic' %}selected{% endif %}>Anthropic</option>
+          <option value="Gemini" {% if settings.provider == 'Gemini' %}selected{% endif %}>Gemini</option>
+          <option value="OpenRouter" {% if settings.provider == 'OpenRouter' %}selected{% endif %}>OpenRouter</option>
+          <option value="LiteLLM" {% if settings.provider == 'LiteLLM' %}selected{% endif %}>LiteLLM / Custom Endpoint</option>
+        </select>
+      </label>
+      <label>LiteLLM 模型名稱
+        <input name="model_name" id="setting-model-name" value="{{ settings.model_name }}" required placeholder="例如：gpt-5.4-mini">
+      </label>
+    </div>
+
+    <label>API Key (金鑰)
+      <input type="password" name="api_key" id="setting-api-key" value="{{ settings.api_key }}" placeholder="貼上此工作階段要使用的服務金鑰（已遮蔽）">
+    </label>
+
+    <div class="warning-box" style="margin: 10px 0 16px;">
+      {% if settings.credential_storage.persistent %}
+      API Key 由目前 Windows 使用者的 DPAPI 加密保存；其他 Windows 使用者無法解密。
+      {% else %}
+      此平台目前沒有已設定的持久化秘密儲存後端。API Key 只保留於目前伺服器程序，重新啟動後需要重新輸入。
+      {% endif %}
+    </div>
+
+    <label>API Base URL (端點網址)
+      <input name="api_base" id="setting-api-base" value="{{ settings.api_base }}" placeholder="選填，自架端點或特殊 Provider 專用，例如：https://api.openai.com/v1">
+    </label>
+
+    <div style="margin: 24px 0; border-top: 1px solid var(--line); padding-top: 24px;">
+      <h3 style="font-size: 16px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+        ⚙️ Cello 與物理映射配置 (Cello & Mapping Settings)
+      </h3>
+      <p class="muted" style="margin-bottom: 16px;">設定本機 Cello 執行指令與預設 UCF 配置，讓多步驟電路設計能順暢執行物理對應與評估。</p>
+
+      <div class="grid grid-2">
+        <label>Cello 可執行指令 (Cello Command)
+          <input name="cello_command" id="setting-cello-command" value="{{ settings.cello_command }}" placeholder="例如：cello 或 docker run --rm cello">
+        </label>
+        <label>預設 UCF 對應檔路徑 (UCF Path)
+          <input name="ucf_path" id="setting-ucf-path" value="{{ settings.ucf_path }}" placeholder="例如：C:\ucf\Eco1C1G1T1.UCF.json">
+        </label>
+      </div>
+
+      <div class="grid grid-2" style="margin-top: 12px;">
+        <label>預設宿主生物體 (Default Host Organism)
+          <select name="default_host" id="setting-default-host">
+            <option value="Escherichia coli" {% if settings.default_host == 'Escherichia coli' %}selected{% endif %}>Escherichia coli (大腸桿菌)</option>
+            <option value="Bacillus subtilis" {% if settings.default_host == 'Bacillus subtilis' %}selected{% endif %}>Bacillus subtilis (枯草芽孢桿菌)</option>
+            <option value="Saccharomyces cerevisiae" {% if settings.default_host == 'Saccharomyces cerevisiae' %}selected{% endif %}>Saccharomyces cerevisiae (釀酒酵母)</option>
+          </select>
+        </label>
+        <label>預設搜尋空間預算 (Default Search Budget)
+          <input type="number" name="default_compute_budget" id="setting-default-compute-budget" value="{{ settings.default_compute_budget }}" min="1" max="60" required>
+        </label>
+      </div>
+
+      <!-- Cello 健康檢測狀態區 -->
+      <div style="margin-top: 20px; background: #f8fafc; border: 1px solid var(--line); padding: 14px; border-radius: 10px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+          <strong style="font-size: 13px;">🔍 Cello 工具偵測狀態:</strong>
+          {% if cello_status.status == 'available' %}
+            <span class="badge" style="background: #ecfdf3; color: var(--success); font-weight: bold; font-size: 11px; padding: 4px 8px; border-radius: 6px;">🟢 正常可用 (Available)</span>
+          {% elif cello_status.status == 'fallback' or cello_status.fallback_used %}
+            <span class="badge" style="background: #fff9db; color: #f08c00; font-weight: bold; font-size: 11px; padding: 4px 8px; border-radius: 6px;">🟡 使用模擬備援 (Fallback Mode)</span>
+          {% else %}
+            <span class="badge" style="background: #fff5f5; color: var(--error); font-weight: bold; font-size: 11px; padding: 4px 8px; border-radius: 6px;">🔴 偵測失敗 (Unavailable)</span>
+          {% endif %}
+        </div>
+
+        <div style="font-size: 12px; color: #475569;">
+          {% if cello_status.version %}
+            <div><strong>Cello 版本:</strong> <code>{{ cello_status.version }}</code></div>
+          {% endif %}
+          <div><strong>適配器名稱:</strong> <code>{{ cello_status.adapter_name or "cello_wrapper" }}</code></div>
+          {% if cello_status.warnings %}
+            <div style="margin-top: 8px; border-top: 1px dashed var(--line); padding-top: 8px; color: #c92a2a;">
+              <strong>健康檢查警告:</strong>
+              <ul style="margin: 4px 0 0 0; padding-left: 18px;">
+                {% for w in cello_status.warnings %}
+                  <li><code>[{{ w.category }}]</code> {{ w.message }}</li>
+                {% endfor %}
+              </ul>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="inline" style="margin-top: 10px;">
+      <button class="button" type="submit">儲存設定</button>
+      <button class="button secondary" type="button" id="test-connection-btn">測試連線</button>
+    </div>
+  </form>
+
+  {% if settings.api_key_configured %}
+  <form method="post" action="/web/settings/api-key/delete" style="margin-top: 12px;" onsubmit="return confirm('確定要清除目前儲存的 API Key 嗎？');">
+    <button class="button secondary" type="submit">清除 API Key</button>
+  </form>
+  {% endif %}
+
+  <div id="test-result" style="margin-top: 18px; display: none;"></div>
+</article>
+{% endblock %}

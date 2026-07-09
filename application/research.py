@@ -68,6 +68,169 @@ class ResearchService:
 
         return self.run_store.start(task, selected, run_id=run_id)
 
+    def start_ssa_simulation(self, request: dict[str, Any]) -> dict[str, Any]:
+        selected = dict(request)
+        topology = self._topology(selected)
+        run_id = f"research_{uuid4().hex[:12]}"
+
+        def task() -> dict[str, Any]:
+            from tools.ode_simulator import BatchODESimulator
+            simulator = BatchODESimulator(
+                simulation_time=float(selected.get("simulation_time", 600.0)),
+                sample_count=int(selected.get("sample_count", 80)),
+                random_seed=selected.get("random_seed"),
+            )
+            ssa_res = simulator.simulate_stochastic(
+                topology,
+                runs=int(selected.get("runs", 50)),
+                scale_factor=float(selected.get("scale_factor", 10.0)),
+                max_steps=int(selected.get("max_steps", 15000)),
+            )
+            evaluation = {
+                "weighted_total_score": ssa_res.get("memory_stability", 1.0),
+                "grade": "SSA",
+                "scoring_profile": "stochastic-ssa-v1",
+                "scoring_version": "1.0",
+                "dimension_scores": {"stochastic_stability": ssa_res.get("memory_stability", 1.0)},
+                "dimension_applicability": {"stochastic_stability": True},
+            }
+            result = {
+                "status": "completed",
+                "research_run_id": run_id,
+                "design_id": selected.get("design_id"),
+                "simulation_spec": {
+                    "model_id": "Gillespie-SSA",
+                    "model_version": "1.0",
+                    "status": ssa_res.get("simulation_status", "completed"),
+                },
+                "simulation_result": {
+                    "status": ssa_res.get("simulation_status", "completed"),
+                    "model_id": "Gillespie-SSA",
+                    "model_version": "1.0",
+                    "configuration_hash": ssa_res.get("random_seed"),
+                },
+                "evaluation": evaluation,
+                "ssa_result": ssa_res,
+                "summary": {
+                    "score": ssa_res.get("memory_stability", 1.0),
+                    "grade": "SSA",
+                    "simulation_status": ssa_res.get("simulation_status", "completed"),
+                    "model_version": "1.0",
+                    "scoring_version": "1.0",
+                },
+            }
+            result["research_result_hash"] = canonical_payload_hash(result)
+            result["artifacts"] = write_research_report(result, self.report_dir)
+            return result
+
+        return self.run_store.start(task, selected, run_id=run_id)
+
+    def start_parameter_sweep(self, request: dict[str, Any]) -> dict[str, Any]:
+        selected = dict(request)
+        topology = self._topology(selected)
+        run_id = f"research_{uuid4().hex[:12]}"
+
+        def task() -> dict[str, Any]:
+            from tools.sensitivity_analysis import run_parameter_sweep
+            sweep_res = run_parameter_sweep(
+                topology,
+                parameter_name=str(selected.get("parameter_name")),
+                sweep_values=list(selected.get("sweep_values")),
+                host_profile_id=selected.get("host_profile_id"),
+                host_profiles=self.simulations.host_profiles,
+            )
+            evaluation = {
+                "weighted_total_score": 1.0,
+                "grade": "SWEEP",
+                "scoring_profile": "parameter-sweep-v1",
+                "scoring_version": "1.0",
+                "dimension_scores": {"sensitivity": 1.0},
+                "dimension_applicability": {"sensitivity": True},
+            }
+            result = {
+                "status": "completed",
+                "research_run_id": run_id,
+                "design_id": selected.get("design_id"),
+                "simulation_spec": {
+                    "model_id": "Parameter-Sweep",
+                    "model_version": "1.0",
+                    "status": "completed",
+                },
+                "simulation_result": {
+                    "status": "completed",
+                    "model_id": "Parameter-Sweep",
+                    "model_version": "1.0",
+                    "configuration_hash": len(selected.get("sweep_values", [])),
+                },
+                "evaluation": evaluation,
+                "sweep_result": sweep_res,
+                "summary": {
+                    "score": 1.0,
+                    "grade": "SWEEP",
+                    "simulation_status": "completed",
+                    "model_version": "1.0",
+                    "scoring_version": "1.0",
+                },
+            }
+            result["research_result_hash"] = canonical_payload_hash(result)
+            result["artifacts"] = write_research_report(result, self.report_dir)
+            return result
+
+        return self.run_store.start(task, selected, run_id=run_id)
+
+    def start_bifurcation_sweep(self, request: dict[str, Any]) -> dict[str, Any]:
+        selected = dict(request)
+        topology = self._topology(selected)
+        run_id = f"research_{uuid4().hex[:12]}"
+
+        def task() -> dict[str, Any]:
+            from tools.sensitivity_analysis import run_bifurcation_sweep
+            bif_res = run_bifurcation_sweep(
+                topology,
+                input_name=str(selected.get("input_name")),
+                input_values=list(selected.get("input_values")),
+                host_profile_id=selected.get("host_profile_id"),
+                host_profiles=self.simulations.host_profiles,
+            )
+            evaluation = {
+                "weighted_total_score": 1.0,
+                "grade": "BIFURCATION",
+                "scoring_profile": "bifurcation-v1",
+                "scoring_version": "1.0",
+                "dimension_scores": {"bistability": 1.0},
+                "dimension_applicability": {"bistability": True},
+            }
+            result = {
+                "status": "completed",
+                "research_run_id": run_id,
+                "design_id": selected.get("design_id"),
+                "simulation_spec": {
+                    "model_id": "Bifurcation-Sweep",
+                    "model_version": "1.0",
+                    "status": "completed",
+                },
+                "simulation_result": {
+                    "status": "completed",
+                    "model_id": "Bifurcation-Sweep",
+                    "model_version": "1.0",
+                    "configuration_hash": len(selected.get("input_values", [])),
+                },
+                "evaluation": evaluation,
+                "bif_result": bif_res,
+                "summary": {
+                    "score": 1.0,
+                    "grade": "BIFURCATION",
+                    "simulation_status": "completed",
+                    "model_version": "1.0",
+                    "scoring_version": "1.0",
+                },
+            }
+            result["research_result_hash"] = canonical_payload_hash(result)
+            result["artifacts"] = write_research_report(result, self.report_dir)
+            return result
+
+        return self.run_store.start(task, selected, run_id=run_id)
+
     def status(self, run_id: str) -> dict[str, Any]:
         return self.run_store.status(run_id)
 

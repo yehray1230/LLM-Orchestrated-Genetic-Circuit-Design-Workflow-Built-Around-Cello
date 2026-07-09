@@ -1,0 +1,37 @@
+# LLM-Orchestrated Genetic Circuit Design Workflow
+
+This repository is a research prototype for translating natural-language regulatory-logic intent into computational genetic-circuit design candidates. It integrates LLM-based agents, Cello-compatible gate assignment, resource-aware ODE simulation, benchmark scoring, and multi-agent Reflexion loop repair.
+
+> [!TIP]
+> **For AI Agents**: A single-file aggregation of all core documentation in this repository is available at [llms-full.txt](llms-full.txt) to ingest full context in a single request.
+
+## Core Documentation
+
+- [About & Motivation](docs/about.md): Project background, 成大生科 (NCKU Life Sciences) undergraduate student motivation, strategic profile, and future research collaboration plans.
+- [Limitations](docs/limitations.md): Explicit biological boundaries and safety claims. Crucial reading to understand what this computational CAD tool can and cannot claim.
+- [Architecture](docs/architecture.md): System components, agent roles (PM, Builder, Translator, Critic, Consolidator), database schemas, and data models.
+- [Workflow](docs/workflow.md): Reflexion loop execution flow, search tree exploration, and self-healing details.
+- [Model Assumptions](docs/model_assumptions.md): Resource-aware ODE models, parameter mappings, first-order mature delay, and missing biophysical mechanisms.
+- [Evaluation Metrics](docs/evaluation_metrics.md): Heuristic scoring profiles (`research-v1.8@1.8.0`), readiness dimensions, and Monte Carlo copy number perturbations.
+- [AI Reviewer Guide](docs/ai_reviewer_guide.md): Guide for external AI agents reviewing the codebase. Details how to calibrate biological validation claims.
+- [Future Roadmap](docs/future_roadmap.md): Multi-stage upgrade goals including parameter fitting, layout critic, Tellurium bifurcation, and CRISPR i/a systems.
+
+## Entry Points & Workspace
+
+- [Quickstart](QUICKSTART.md): Step-by-step setup, dependency installation, running tests, and local interface launches.
+- [Demo Checklist](docs/developer/demo_checklist.md): Stable reproducible baseline verification instructions for the default two-input gate.
+- [mcp_agent_guide](docs/developer/mcp_agent_guide.md): Setup guide for the local MCP (Model Context Protocol) server to expose runs to IDE agents.
+- [logic_design_skill](docs/developer/logic_design_skill.md): Maintenance guide for the canonical logic design skill catalog.
+
+## Repository Folders
+
+- **src/**: Core source code directory.
+  - **agents/**: LLM agent implementations (PM, Builder, Translator, Critic, Consolidator, SkillExtractor).
+  - **workflows/**: Main Reflexion search loop controller.
+  - **tools/**: Computational screening tools (ODE simulator, Cello Wrapper, sequence QC, host ranking, Gibson overlap calculator, codon optimizer).
+  - **schemas/**: Structured models and contracts (DesignIR, host profiles, simulation configurations).
+  - **api/**: FastAPI routes and endpoint schema configurations.
+  - **web/**: FastAPI server-rendered HTML research workspace.
+- **tests/**: Automated verification suite containing 50+ unit/integration regression tests.
+- **demo_cases/**: Benchmark tasks and fixed demo intent configs.
+- **outputs/**: Storage for temporary evaluation runs and generated biological records (BOM, GenBank, SBOL3).

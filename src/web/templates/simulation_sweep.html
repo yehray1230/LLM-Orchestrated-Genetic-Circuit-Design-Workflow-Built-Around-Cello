@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+{% block title %}Parameter Sweep - {{ design.name }}{% endblock %}
+{% block content %}
+<style>
+  .sub-tab-button.active {
+    background: var(--brand) !important;
+    color: white !important;
+    border-color: var(--brand) !important;
+  }
+</style>
+
+{% if is_historical %}
+<div class="warning-box" style="margin-bottom: 18px; background: #fff9e6; border: 1px solid #ffe199; color: #b54708; display: flex; justify-content: space-between; align-items: center; border-radius: 8px; padding: 12px 18px;">
+  <span style="font-size: 14.5px;">⚠️ 您目前正在查看版本 <strong>[Rev {{ viewed_rev }}]</strong> 的歷史快照。</span>
+  <a href="/web/designs/{{ view.design_id }}" class="button" style="padding: 4px 10px; font-size: 12px; height: auto;">回到最新版本</a>
+</div>
+{% endif %}
+
+<header class="page-header split-header">
+  <div>
+    <span class="eyebrow">模擬與分析中心</span>
+    <h1>{{ design.name }}</h1>
+    <p class="muted">{{ design.design_id }} · revision {{ design_v2.revision.revision_number }}</p>
+  </div>
+  <div style="display: flex; gap: 8px;">
+    <a class="button secondary" href="/web/designs/{{ view.design_id }}{% if is_historical %}?rev={{ viewed_rev }}{% endif %}">返回總覽</a>
+  </div>
+</header>
+
+<!-- Secondary Sub-Navigation -->
+<nav class="section-tabs" style="border-bottom: 2px solid var(--line); padding-bottom: 6px; display: flex; gap: 8px; overflow-x: auto; white-space: nowrap; margin-bottom: 20px;">
+  <a href="/web/designs/{{ view.design_id }}{% if is_historical %}?rev={{ viewed_rev }}{% endif %}" class="tab-button">總覽</a>
+  <a href="/web/designs/{{ view.design_id }}#source" class="tab-button">候選來源</a>
+  <a href="/web/designs/{{ view.design_id }}/simulation/ode{% if is_historical %}?rev={{ viewed_rev }}{% endif %}" class="tab-button active">模擬</a>
+  <a href="/web/designs/{{ view.design_id }}#optimization" class="tab-button">最佳化</a>
+  <a href="/web/designs/{{ view.design_id }}#assembly" class="tab-button">組裝</a>
+  <a href="/web/designs/{{ view.design_id }}#export" class="tab-button">匯出</a>
+  <a href="/web/designs/{{ view.design_id }}#history" class="tab-button">歷程</a>
+</nav>
+
+<!-- Simulation Sub-Navigation -->
+<div class="simulation-sub-tabs" style="display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid var(--line); padding-bottom: 8px; overflow-x: auto;">
+  <a href="/web/designs/{{ view.design_id }}/simulation/ode{% if is_historical %}?rev={{ viewed_rev }}{% endif %}" class="sub-tab-button" style="padding: 6px 12px; border: 1px solid var(--line); border-radius: 4px; background: white; cursor: pointer; font-size: 13px; text-decoration: none; color: var(--text);">動態 ODE 模擬</a>
+  <a href="/web/designs/{{ view.design_id }}/simulation/ssa{% if is_historical %}?rev={{ viewed_rev }}{% endif %}" class="sub-tab-button" style="padding: 6px 12px; border: 1px solid var(--line); border-radius: 4px; background: white; cursor: pointer; font-size: 13px; text-decoration: none; color: var(--text);">隨機 SSA 模擬</a>
+  <a href="/web/designs/{{ view.design_id }}/simulation/sweep{% if is_historical %}?rev={{ viewed_rev }}{% endif %}" class="sub-tab-button active" style="padding: 6px 12px; border: 1px solid var(--line); border-radius: 4px; background: white; cursor: pointer; font-size: 13px; text-decoration: none; color: var(--text);">參數敏感度分析</a>
+  <a href="/web/designs/{{ view.design_id }}/simulation/bifurcation{% if is_historical %}?rev={{ viewed_rev }}{% endif %}" class="sub-tab-button" style="padding: 6px 12px; border: 1px solid var(--line); border-radius: 4px; background: white; cursor: pointer; font-size: 13px; text-decoration: none; color: var(--text);">分岔與轉移函數</a>
+  <a href="/web/designs/{{ view.design_id }}/simulation/fit{% if is_historical %}?rev={{ viewed_rev }}{% endif %}" class="sub-tab-button" style="padding: 6px 12px; border: 1px solid var(--line); border-radius: 4px; background: white; cursor: pointer; font-size: 13px; text-decoration: none; color: var(--text);">參數配適對比</a>
+</div>
+
+<div class="grid grid-3" style="grid-template-columns: 1fr 2fr; gap: 24px; align-items: start;">
+
+  <!-- Left Column: Settings Form -->
+  <article class="card" style="padding: 20px;">
+    <h2 style="font-size: 16px; margin-top: 0; margin-bottom: 16px; border-bottom: 1px solid var(--line); padding-bottom: 8px;">🎛️ 參數敏感度掃描</h2>
+
+    <form method="POST" action="/web/designs/{{ view.design_id }}/simulation/sweep{% if is_historical %}?rev={{ viewed_rev }}{% endif %}" id="simulation-form">
+      <div style="display: grid; gap: 12px; margin-bottom: 20px;">
+        <div>
+          <label style="display: block; font-size: 12px; font-weight: bold; margin-bottom: 4px;">調控參數 (Parameter)</label>
+          <select name="parameter_name" style="width: 100%; padding: 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 13px;">
+            <option value="transcription_rate">轉錄速率 (transcription_rate)</option>
+            <option value="kd">解離常數 (kd)</option>
+            <option value="translation_rate">轉譯速率 (translation_rate)</option>
+            <option value="copy_number">質體拷貝數 (copy_number)</option>
+            <option value="growth_dilution">細胞生長稀釋速率 (growth_rate_dilution)</option>
+          </select>
+        </div>
+
+        <div>
+          <label style="display: block; font-size: 12px; font-weight: bold; margin-bottom: 4px;">掃描數值區間 (CSV 格式)</label>
+          <input type="text" name="sweep_values" value="0.1, 0.5, 1.0, 2.0, 5.0, 10.0" required style="width: 100%; padding: 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 13px;">
+          <small class="muted">以逗號分隔，代表掃描的參數取值列表。</small>
+        </div>
+
+        <div>
+          <label style="display: block; font-size: 12px; font-weight: bold; margin-bottom: 4px;">宿主生物設定 (Host Profile)</label>
+          <select name="host_profile_id" style="width: 100%; padding: 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 13px;">
+            <option value="">預設宿主 (E. coli)</option>
+            <option value="ecoli_k12_default">E. coli K-12</option>
+            <option value="yeast_sc_default">S. cerevisiae (Yeast)</option>
+            <option value="mammalian_cho_default">CHO (Mammalian)</option>
+          </select>
+        </div>
+      </div>
+
+      <button type="submit" class="button" style="width: 100%;">🚀 啟動敏感度分析</button>
+    </form>
+  </article>
+
+  <!-- Right Column: Job Status & Result -->
+  <section class="grid grid-1" style="gap: 24px;">
+
+    <!-- 1. 問題說明 -->
+    <article class="card" style="background: #f8fafc; border-left: 4px solid var(--brand);">
+      <h3 style="margin: 0 0 6px 0;">參數敏感度掃描回答的問題</h3>
+      <p style="margin: 0; font-size: 13.5px; line-height: 1.5; color: #475569;">
+        本分析解答：<strong>「在基因電路的動力學參數（例如啟動子解離常數 Kd、質體拷貝數）改變時，電路輸出的穩態動態區間（Dynamic Margin）與信雜比（SNR）如何變化？」</strong>
+      </p>
+    </article>
+
+    <!-- 2. 工作狀態 / 主要圖表 -->
+    <article class="card" style="min-height: 400px;">
+      {% if run_id and run_data and run_data.status not in ["completed", "failed", "cancelled", "error"] %}
+        <div style="text-align: center; padding: 80px 24px;">
+          <div style="animation: spin 1s linear infinite; width: 40px; height: 40px; border: 4px solid var(--line); border-top-color: var(--brand); border-radius: 50%; margin: 0 auto 16px auto;"></div>
+          <h3 style="margin: 0 0 8px 0;">參數掃描分析中...</h3>
+          <p class="muted" style="margin: 0 0 16px 0;">正在對選定參數執行多批次穩態模擬掃描。本頁面將在完成後自動重整。</p>
+          <script>
+            setTimeout(() => { window.location.reload(); }, 2000);
+          </script>
+        </div>
+      {% elif run_data and run_data.status == "completed" and run_data.result %}
+        <h2>📊 參數變動與性能指標趨勢 (Parameter Sweep)</h2>
+        <div style="position: relative; height: 320px; width: 100%; margin-bottom: 20px;">
+          <canvas id="simulation-chart" style="height: 100%; width: 100%;"></canvas>
+        </div>
+
+        <!-- Sweep Results Table fallback -->
+        <h3 style="font-size: 14px; margin-top: 20px; margin-bottom: 10px;">敏感度掃描數據表 (Data Table)</h3>
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; margin-bottom: 20px;">
+          <thead>
+            <tr style="border-bottom: 2px solid var(--line);">
+              <th style="padding: 8px;">參數值 ({{ run_data.result.sweep_result.parameter_name }})</th>
+              <th style="padding: 8px;">動態區間 (Dynamic Margin, nM)</th>
+              <th style="padding: 8px;">信雜比 (SNR)</th>
+              <th style="padding: 8px;">最大代謝負擔 (nM)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in run_data.result.sweep_result.results %}
+            <tr style="border-bottom: 1px solid var(--line);">
+              <td style="padding: 8px; font-weight: bold; font-family: monospace;">{{ row.value }}</td>
+              <td style="padding: 8px; font-family: monospace;">{{ "%.3f"|format(row.dynamic_margin) }}</td>
+              <td style="padding: 8px; font-family: monospace;">{{ "%.3f"|format(row.signal_to_noise_ratio) }}</td>
+              <td style="padding: 8px; font-family: monospace;">{{ "%.1f"|format(row.max_burden_nM) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+
+        <!-- 3. 白話解釋 -->
+        <div style="background: #ecfdf3; border: 1px solid #abfdf1; border-radius: 8px; padding: 16px;">
+          <h4 style="margin: 0 0 6px 0; color: #027a48;">💡 掃描趨勢白話轉譯</h4>
+          <p style="margin: 0; font-size: 13.5px; line-height: 1.5; color: #027a48;">
+            此曲線圖展現了在微調 <strong>{{ run_data.result.sweep_result.parameter_name }}</strong> 時，電路信雜比 (SNR) 和輸出邊界 (Dynamic Margin) 的演變趨勢。您可以據此找出能讓系統性能維持最穩健 (Robust) 的「最佳參數甜區」。
+          </p>
+        </div>
+
+        <!-- 4. 限制／證據 -->
+        <div style="background: #fffbeb; border: 1px solid #fee4cc; border-radius: 8px; padding: 16px; margin-top: 16px;">
+          <h4 style="margin: 0 0 6px 0; color: #b54708;">⚠️ 可信度限制</h4>
+          <p style="margin: 0; font-size: 13px; line-height: 1.5; color: #b54708;">
+            單維度參數掃描忽略了基因交互作用間的協同效應與雙因子交互作用。若需全面性調研請進行多重敏感度評估。
+          </p>
+        </div>
+
+        <!-- 5. 原始資料下載 -->
+        <div style="margin-top: 24px; border-top: 1px solid var(--line); padding-top: 16px; display: flex; justify-content: space-between; align-items: center;">
+          <span class="muted" style="font-size: 12.5px;">模擬工作 ID: {{ run_id }}</span>
+          <a class="button secondary" href="/web/research/runs/{{ run_id }}" target="_blank">📥 下載 CSV 敏感度報告</a>
+        </div>
+      {% else %}
+        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 350px; text-align: center; color: var(--muted); padding: 24px;">
+          <span style="font-size: 48px; margin-bottom: 12px;">📈</span>
+          <h3 style="margin: 0; color: var(--text); font-size: 16px;">等待啟動掃描</h3>
+          <p style="margin: 8px 0 0 0; font-size: 13.5px; max-width: 320px; line-height: 1.5;">請在左側設定想要掃描的基因或生理常數，點擊「啟動敏感度分析」繪製系統穩定邊界圖。</p>
+        </div>
+      {% endif %}
+    </article>
+
+  </section>
+</div>
+
+{% if run_data and run_data.status == "completed" and run_data.result %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const ctx = document.getElementById('simulation-chart').getContext('2d');
+  const sweepRes = {{ run_data.result.sweep_result | tojson }};
+
+  const values = sweepRes.results.map(r => r.value);
+  const snr = sweepRes.results.map(r => r.signal_to_noise_ratio);
+  const margin = sweepRes.results.map(r => r.dynamic_margin);
+
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: values,
+      datasets: [
+        {
+          label: '信雜比 (SNR)',
+          data: snr,
+          borderColor: '#2563eb',
+          borderWidth: 2,
+          yAxisID: 'y_snr',
+          tension: 0.1,
+          fill: false
+        },
+        {
+          label: '動態區間 (Dynamic Margin, nM)',
+          data: margin,
+          borderColor: '#12b76a',
+          borderWidth: 2,
+          yAxisID: 'y_margin',
+          tension: 0.1,
+          fill: false
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: {
+          title: { display: true, text: `參數值 (${sweepRes.parameter_name})` }
+        },
+        y_snr: {
+          type: 'linear',
+          position: 'left',
+          title: { display: true, text: 'SNR' }
+        },
+        y_margin: {
+          type: 'linear',
+          position: 'right',
+          title: { display: true, text: 'Dynamic Margin (nM)' },
+          grid: { drawOnChartArea: false }
+        }
+      }
+    }
+  });
+});
+</script>
+{% endif %}
+
+{% endblock %}

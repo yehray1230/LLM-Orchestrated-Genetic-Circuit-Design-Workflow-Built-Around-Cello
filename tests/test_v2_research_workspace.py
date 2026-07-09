@@ -140,6 +140,42 @@ def test_v2_api_runs_and_downloads_research_artifact(tmp_path: Path) -> None:
     assert "Research Simulation Report" in artifact.text
 
 
+def test_v2_research_api_hides_internal_artifact_paths(tmp_path: Path) -> None:
+    services = create_application_services(tmp_path / "api_data")
+    app.dependency_overrides[get_services] = lambda: services
+    try:
+        with TestClient(app) as client:
+            started = client.post("/api/v2/research/runs", json=_request())
+            run_id = started.json()["data"]["run_id"]
+            _wait(services, run_id)
+            status = client.get(f"/api/v2/research/runs/{run_id}")
+            result = client.get(f"/api/v2/research/runs/{run_id}/result")
+            listed = client.get("/api/v2/research/runs")
+            artifact = client.get(
+                f"/api/v2/research/runs/{run_id}/artifacts/summary_markdown"
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    for response in (started, status, result, listed):
+        assert response.status_code in {200, 202}
+        body = json.dumps(response.json(), sort_keys=True)
+        assert "C:\\\\" not in body
+        assert "run_dir" not in body
+        assert "result_path" not in body
+        assert "run_manifest_path" not in body
+        assert "async_run_dir" not in body
+
+    result_data = result.json()["data"]
+    assert "artifact_links" in result_data
+    assert "summary_markdown" in result_data["artifact_links"]
+    assert result_data["artifact_links"]["summary_markdown"].endswith(
+        "/artifacts/summary_markdown"
+    )
+    assert artifact.status_code == 200
+    assert "Research Simulation Report" in artifact.text
+
+
 def test_research_workspace_pages_and_form(tmp_path: Path) -> None:
     services = create_application_services(tmp_path / "api_data")
     app.dependency_overrides[get_services] = lambda: services

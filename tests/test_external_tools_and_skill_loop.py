@@ -120,12 +120,13 @@ def test_skill_retriever_default_path_is_repo_relative(monkeypatch, tmp_path: Pa
 
 
 def test_core_text_files_are_valid_utf8_without_replacement_characters() -> None:
+    root = Path(__file__).resolve().parent.parent
     for path in [
-        Path("README.md"),
-        Path("app.py"),
-        Path("agents/translator_agent.py"),
-        Path("agents/critic_agent.py"),
-        Path("tools/skill_retriever.py"),
+        root / "README.md",
+        root / "app.py",
+        root / "src" / "agents" / "translator_agent.py",
+        root / "src" / "agents" / "critic_agent.py",
+        root / "src" / "tools" / "skill_retriever.py",
     ]:
         text = path.read_text(encoding="utf-8")
         assert "\ufffd" not in text

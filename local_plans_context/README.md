@@ -2,6 +2,12 @@
 
 This folder is the `@`-able context entry point for the local planning work.
 
+## Frontend Design Specification
+
+- [`html_frontend_design_spec.md`](html_frontend_design_spec.md) is the stable design baseline for migrating the full user experience to the FastAPI/Jinja HTML frontend. It records the agreed general-user-first information architecture, advanced/research mode, BYOK placement, page responsibilities, cross-cutting UX requirements, and suggested implementation phases.
+- [`html_frontend_implementation_roadmap.md`](html_frontend_implementation_roadmap.md) preserves the implementation audit, gap matrix, risks, and historical phase decisions. Its original phase ordering has been superseded by the active execution plan.
+- [`html_frontend_active_execution_plan.md`](html_frontend_active_execution_plan.md) is the current source of truth for implementation order. It re-baselines the plan against the 2026-07-04 code state and provides step-by-step execution, tests, exit criteria, and explicit non-goals for Stages A-H.
+
 The detailed execution notes live in `local_plans_private/`, which remains ignored by Git so private implementation details, tentative decisions, experiment notes, and unpublished data boundaries do not get uploaded accidentally.
 
 Use this folder when you want to mention the planning context inside Codex. It contains stable, non-sensitive summaries of the private plan structure.

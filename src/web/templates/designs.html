@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% block title %}{{ _t('設計資料庫') }}{% endblock %}
+{% block content %}
+<header class="page-header split-header">
+  <div>
+    <h1>{{ _t('設計資料庫') }}</h1>
+    <p class="muted">{{ _t('已確認並持久化的外部或計算設計。') }}</p>
+  </div>
+  <div>
+    <a href="/web/new-design" class="button">＋ {{ _t('新增設計') }}</a>
+  </div>
+</header>
+
+<!-- 最近瀏覽 (Recently Viewed) -->
+<section id="recently-viewed-section" class="card" style="display: none; margin-bottom: 24px; background: var(--brand-soft); border-color: var(--brand);">
+  <h3 style="margin: 0 0 10px; color: var(--brand);">🕒 {{ _t('最近瀏覽') }}</h3>
+  <div id="recently-viewed-list" class="inline" style="gap: 12px;">
+    <!-- Rendered dynamically by JS -->
+  </div>
+</section>
+
+<!-- 搜尋與篩選 (Search & Filters) -->
+<article class="card" style="margin-bottom: 24px;">
+  <form method="get" action="/web/designs" class="inline" style="display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end;">
+    <div style="flex: 1; min-width: 200px;">
+      <label for="q" style="font-size: 13px;">{{ _t('搜尋名稱、ID') }}</label>
+      <input type="text" id="q" name="q" value="{{ q }}" placeholder="e.g. GFP, stage_f">
+    </div>
+    <div style="width: 180px;">
+      <label for="host" style="font-size: 13px;">{{ _t('宿主生物') }}</label>
+      <select id="host" name="host">
+        <option value="">-- {{ _t('所有宿主') }} --</option>
+        {% for h in all_hosts %}
+          <option value="{{ h }}" {% if selected_host == h %}selected{% endif %}>{{ h }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div style="width: 180px;">
+      <label for="status" style="font-size: 13px;">{{ _t('狀態') }}</label>
+      <select id="status" name="status">
+        <option value="">-- {{ _t('所有狀態') }} --</option>
+        {% for s in all_statuses %}
+          <option value="{{ s }}" {% if selected_status == s %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div style="display: flex; gap: 16px; align-items: center; padding-bottom: 10px;">
+      <label style="display: flex; align-items: center; gap: 6px; font-weight: normal; font-size: 13px; margin: 0; cursor: pointer;">
+        <input type="checkbox" name="show_archived" value="true" {% if show_archived %}checked{% endif %} style="width: auto;">
+        <span>{{ _t('顯示封存') }}</span>
+      </label>
+      <label style="display: flex; align-items: center; gap: 6px; font-weight: normal; font-size: 13px; margin: 0; cursor: pointer;">
+        <input type="checkbox" name="show_deleted" value="true" {% if show_deleted %}checked{% endif %} style="width: auto;">
+        <span>{{ _t('資源回收桶') }}</span>
+      </label>
+    </div>
+    <div style="display: flex; gap: 10px;">
+      <button type="submit" class="button">{{ _t('搜尋') }}</button>
+      <a href="/web/designs" class="button secondary">{{ _t('清除') }}</a>
+    </div>
+  </form>
+</article>
+
+<!-- 設計列表 -->
+<article class="card">
+  {% if designs %}
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 50px;">{{ _t('釘選') }}</th>
+          <th>{{ _t('名稱') }} / ID</th>
+          <th>{{ _t('輸入') }}</th>
+          <th>{{ _t('輸出') }}</th>
+          <th>{{ _t('零件') }}</th>
+          <th>{{ _t('宿主生物') }}</th>
+          <th>{{ _t('成熟度') }}</th>
+          <th style="width: 200px; text-align: right;">{{ _t('操作') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for design in designs %}
+        <tr style="{% if design.is_pinned %}background: #f8fafc; font-weight: 550;{% endif %}">
+          <!-- Pin/Unpin Column -->
+          <td>
+            <form action="/web/designs/{{ design.design_id }}/{% if design.is_pinned %}unpin{% else %}pin{% endif %}" method="post" style="margin: 0; display: inline;">
+              <button type="submit" style="background: none; border: none; cursor: pointer; font-size: 18px; padding: 0;" title="{% if design.is_pinned %}{{ _t('取消釘選') }}{% else %}{{ _t('釘選') }}{% endif %}">
+                {% if design.is_pinned %}⭐{% else %}☆{% endif %}
+              </button>
+            </form>
+          </td>
+          <!-- Name / ID -->
+          <td>
+            <a href="/web/designs/{{ design.design_id }}" style="text-decoration: none; color: var(--brand); font-weight: bold;">
+              {{ design.name }}
+            </a>
+            <br>
+            <span class="muted" style="font-size: 11px;">{{ design.design_id }}</span>
+          </td>
+          <!-- Inputs -->
+          <td>{{ design.inputs|join(", ") }}</td>
+          <!-- Outputs -->
+          <td>{{ design.outputs|join(", ") }}</td>
+          <!-- Parts count -->
+          <td><span class="badge" style="background: #eaecf0; color: var(--text);">{{ design.parts_count }}</span></td>
+          <!-- Host -->
+          <td>{{ design.host_organism }}</td>
+          <!-- Maturity / Status -->
+          <td>
+            <span class="stage-chip {% if design.readiness_status == 'blocked' %}stage-neutral{% elif design.readiness_status == 'host_optimized' %}stage-complete{% else %}stage-build{% endif %}">
+              {{ design.readiness_status }}
+            </span>
+          </td>
+          <!-- Actions -->
+          <td style="text-align: right; vertical-align: middle;">
+            <div style="display: inline-flex; gap: 8px; justify-content: flex-end;">
+              <!-- Archive toggle -->
+              <form action="/web/designs/{{ design.design_id }}/{% if design.is_archived %}unarchive{% else %}archive{% endif %}" method="post" style="margin: 0;">
+                <button type="submit" class="button secondary" style="padding: 4px 8px; font-size: 12px;">
+                  {% if design.is_archived %}📂 {{ _t('取消封存') }}{% else %}📁 {{ _t('封存') }}{% endif %}
+                </button>
+              </form>
+
+              <!-- Soft Delete or Restore -->
+              {% if design.is_deleted %}
+                <form action="/web/designs/{{ design.design_id }}/restore" method="post" style="margin: 0;">
+                  <button type="submit" class="button" style="padding: 4px 8px; font-size: 12px; background: var(--success);">
+                    🔄 {{ _t('還原') }}
+                  </button>
+                </form>
+                <a href="/web/designs/{{ design.design_id }}/delete_preview" class="button" style="padding: 4px 8px; font-size: 12px; background: #d92d20;">
+                  🗑️ {{ _t('永久刪除') }}
+                </a>
+              {% else %}
+                <form action="/web/designs/{{ design.design_id }}/delete" method="post" style="margin: 0;">
+                  <button type="submit" class="button warning" style="padding: 4px 8px; font-size: 12px;">
+                    🗑️ {{ _t('刪除') }}
+                  </button>
+                </form>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination -->
+  {% if total_pages > 1 %}
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line);">
+    <span class="muted" style="font-size: 13px;">
+      {{ _t('顯示第') }} {{ page }} / {{ total_pages }} {{ _t('頁') }}（{{ _t('共') }} {{ total_count }} {{ _t('筆資料') }}）
+    </span>
+    <div style="display: flex; gap: 8px;">
+      <a href="/web/designs?page={{ page - 1 }}&q={{ q }}&host={{ selected_host }}&status={{ selected_status }}&show_archived={{ show_archived }}&show_deleted={{ show_deleted }}"
+         class="button secondary {% if page == 1 %}disabled{% endif %}"
+         style="padding: 6px 12px; font-size: 13px; pointer-events: {% if page == 1 %}none{% else %}auto{% endif %}; opacity: {% if page == 1 %}0.5{% else %}1{% endif %};">
+        &larr; {{ _t('上一頁') }}
+      </a>
+      <a href="/web/designs?page={{ page + 1 }}&q={{ q }}&host={{ selected_host }}&status={{ selected_status }}&show_archived={{ show_archived }}&show_deleted={{ show_deleted }}"
+         class="button secondary {% if page == total_pages %}disabled{% endif %}"
+         style="padding: 6px 12px; font-size: 13px; pointer-events: {% if page == total_pages %}none{% else %}auto{% endif %}; opacity: {% if page == total_pages %}0.5{% else %}1{% endif %};">
+        {{ _t('下一頁') }} &rarr;
+      </a>
+    </div>
+  </div>
+  {% endif %}
+
+  {% else %}
+  <p class="muted" style="text-align: center; padding: 24px 0;">
+    {{ _t('無資料') }}。{{ _t('尚無符合條件的設計。') }}
+  </p>
+  {% endif %}
+</article>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function() {
+    // Render Recently Viewed designs
+    try {
+      var recentlyViewed = JSON.parse(localStorage.getItem("recently_viewed_designs") || "[]");
+      if (recentlyViewed && recentlyViewed.length > 0) {
+        var container = document.getElementById("recently-viewed-section");
+        var listContainer = document.getElementById("recently-viewed-list");
+        listContainer.innerHTML = "";
+        recentlyViewed.forEach(function(item) {
+          var link = document.createElement("a");
+          link.href = "/web/designs/" + item.id;
+          link.className = "badge";
+          link.style.padding = "6px 12px";
+          link.style.background = "white";
+          link.style.border = "1px solid var(--line)";
+          link.style.textDecoration = "none";
+          link.innerText = "📄 " + item.name;
+          listContainer.appendChild(link);
+        });
+        container.style.display = "block";
+      }
+    } catch(e) {
+      console.error(e);
+    }
+  });
+</script>
+{% endblock %}

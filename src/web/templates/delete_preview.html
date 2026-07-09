@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}{{ _t('刪除影響預覽') }}{% endblock %}
+{% block content %}
+<header class="page-header">
+  <span class="eyebrow">{{ _t('刪除影響預覽') }}</span>
+  <h1>{{ _t('確認要永久刪除設計嗎？') }}</h1>
+  <p class="muted">{{ design.name }} ({{ design.design_id }})</p>
+</header>
+
+<section class="grid grid-2 section-space">
+  <article class="card">
+    <h2>⚠️ {{ _t('影響範圍摘要') }}</h2>
+    <p>{{ _t('刪除此設計將會連帶清理以下相關資料與產物：') }}</p>
+    <table class="table-scroll">
+      <thead>
+        <tr>
+          <th>{{ _t('受影響資料類別') }}</th>
+          <th>{{ _t('數量 / 描述') }}</th>
+          <th>{{ _t('處理策略') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>{{ _t('版本歷程') }}</strong></td>
+          <td>{{ revisions_count }} 個歷史修訂版本</td>
+          <td><span style="color: #b42318; font-weight: bold;">{{ _t('永久刪除') }}</span></td>
+        </tr>
+        <tr>
+          <td><strong>{{ _t('模擬工作區紀錄') }}</strong></td>
+          <td>{{ runs_count }} 個執行過的模擬或分析</td>
+          <td>{{ _t('保留執行記錄 (不含設計實體)') }}</td>
+        </tr>
+        <tr>
+          <td><strong>{{ _t('裝配與交付下載') }}</strong></td>
+          <td>{{ deliverables_count }} 個已生成的裝配檔案包</td>
+          <td><span style="color: #b42318; font-weight: bold;">{{ _t('永久刪除') }}</span> (磁碟產物同步清理)</td>
+        </tr>
+      </tbody>
+    </table>
+  </article>
+
+  <article class="card" style="border-color: #f04438; background: #fffbfa;">
+    <h2>🛑 {{ _t('警告與安全確認') }}</h2>
+    <p style="color: #7a2e0e;">
+      {{ _t('此操作為不可逆之毀滅性變更。一旦確認執行，所有與此設計相關的修訂版歷史、產物 ZIP 包以及 Primer 數據都將從系統中永久刪除，且無法還原。') }}
+    </p>
+    <form action="/web/designs/{{ design.design_id }}/purge" method="post" onsubmit="return validateConfirm(this);">
+      <label class="inline" style="margin: 14px 0; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+        <input type="checkbox" id="understand-chk" name="understand" required style="width: auto;">
+        <span>{{ _t('我已了解此操作無法復原，並同意清除所有相關資料與檔案') }}</span>
+      </label>
+      <label for="confirm-design-id" style="font-weight: bold;">
+        {{ _t('輸入設計 ID 以確認') }}：<code>{{ design.design_id }}</code>
+        <input id="confirm-design-id" name="confirm_design_id" required autocomplete="off" pattern="{{ design.design_id }}">
+      </label>
+
+      <div style="display: flex; gap: 12px; margin-top: 14px;">
+        <button type="submit" class="button" style="background: #d92d20;">
+          🗑️ {{ _t('確定永久刪除') }}
+        </button>
+        <a href="/web/designs/{{ design.design_id }}" class="button secondary">
+          {{ _t('取消') }}
+        </a>
+      </div>
+    </form>
+  </article>
+</section>
+
+<script>
+  function validateConfirm(form) {
+    var chk = document.getElementById('understand-chk');
+    if (!chk.checked) {
+      alert("{{ _t('請先勾選安全確認核取方塊以繼續') }}");
+      return false;
+    }
+    return true;
+  }
+</script>
+{% endblock %}
