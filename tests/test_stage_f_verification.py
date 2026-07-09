@@ -143,6 +143,8 @@ def test_export_bom_csv(client, test_services):
     response = client.get(f"/api/v1/designs/{design_id}/exports/bom")
     assert response.status_code == 200
     assert "text/csv" in response.headers.get("content-type", "")
+    assert response.headers["x-claim-boundary"] == "computational-exchange-artifact-only"
+    assert response.headers["x-not-wet-lab-validation"] == "true"
 
 
 def test_export_genbank(client, test_services):
@@ -153,6 +155,8 @@ def test_export_genbank(client, test_services):
 
     response = client.get(f"/api/v1/designs/{design_id}/exports/genbank")
     assert response.status_code == 200
+    assert response.headers["x-claim-boundary"] == "computational-exchange-artifact-only"
+    assert response.headers["x-not-experimental-protocol"] == "true"
 
 
 def test_export_sbol3(client, test_services):
@@ -163,6 +167,8 @@ def test_export_sbol3(client, test_services):
 
     response = client.get(f"/api/v1/designs/{design_id}/exports/sbol3")
     assert response.status_code == 200
+    assert response.headers["x-claim-boundary"] == "computational-exchange-artifact-only"
+    assert response.headers["x-biophysical-uncertainty"] == "requires-review"
 
 
 def test_export_verilog(client, test_services):
@@ -249,10 +255,18 @@ def test_project_package_returns_zip(client, test_services):
 
         # Should contain manifest.json
         assert "manifest.json" in names
+        assert "CLAIM_BOUNDARY.md" in names
+        assert "CLAIM_BOUNDARY.json" in names
         manifest = json.loads(zf.read("manifest.json"))
         assert "design_id" in manifest or "files" in manifest
         assert manifest["revision_id"].endswith("revision_1")
         assert manifest["revision_number"] == 1
+        file_names = {item["filename"] for item in manifest["files"]}
+        assert {"CLAIM_BOUNDARY.md", "CLAIM_BOUNDARY.json"}.issubset(file_names)
+        claim_boundary = zf.read("CLAIM_BOUNDARY.md").decode("utf-8")
+        assert "Computational exchange artifact only" in claim_boundary
+        assert "not wet-lab validation" in claim_boundary
+        assert "not an experimental protocol" in claim_boundary
 
 
 def test_project_package_contains_design_json(client, test_services):

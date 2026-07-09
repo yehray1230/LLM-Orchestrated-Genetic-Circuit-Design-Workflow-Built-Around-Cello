@@ -59,7 +59,7 @@
         "Create a low-burden GFP logic gate for A AND NOT B with medium copy number."
       ],
       "schema_version": "workflow-kit-v1",
-      "source_path": "catalog/workflow-kits/logic-design-basic/kit.json",
+      "source_path": "src/catalog/workflow-kits/logic-design-basic/kit.json",
       "stages": [
         {
           "agent": "pm-agent",

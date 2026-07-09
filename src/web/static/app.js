@@ -570,7 +570,7 @@
               <span>💡</span> AI 推薦設定：${escapeHtml(proposal.missing_field)}
             </div>
             <div style="font-size: 13px; color: var(--text-light); line-height: 1.4;">
-              ${escapeHtml(proposal.description || "")}
+              ${escapeHtml(proposal.proposal_reason || proposal.description || proposal.ui_message || "")}
             </div>
             <div style="background: #f8fafc; border: 1px solid var(--line); border-radius: 6px; padding: 10px; font-size: 12.5px; font-family: monospace; word-break: break-all;">
               <strong>推薦值：</strong> ${escapeHtml(JSON.stringify(proposal.proposed_value))}
@@ -610,16 +610,30 @@
       let specHtml = '<div style="display: flex; flex-direction: column; gap: 8px;">';
       specHtml += `<div><strong>宿主生物 (Chassis):</strong> <span class="badge" style="background:#ecfdf3; color:#027a48; font-weight:bold; font-size:11.5px; padding:2px 6px; border-radius:4px;">${escapeHtml(spec.chassis || '未填寫')}</span></div>`;
 
-      if (spec.inputs && spec.inputs.length > 0) {
-        const inputNames = spec.inputs.map(ip => `${ip.name}${ip.sensor_promoter ? ` (${ip.sensor_promoter})` : ''}`).join(', ');
+      if (Array.isArray(spec.inputs) && spec.inputs.length > 0) {
+        const inputNames = spec.inputs.map(ip => {
+          if (ip && typeof ip === 'object') {
+            return `${ip.name}${ip.sensor_promoter ? ` (${ip.sensor_promoter})` : ''}`;
+          }
+          return String(ip);
+        }).join(', ');
         specHtml += `<div><strong>輸入信號 (Inputs):</strong> <span class="badge" style="background:#eff8ff; color:#175cd3; font-size:11.5px; padding:2px 6px; border-radius:4px;">${escapeHtml(inputNames)}</span></div>`;
+      } else if (spec.inputs) {
+        specHtml += `<div><strong>輸入信號 (Inputs):</strong> <span class="badge" style="background:#eff8ff; color:#175cd3; font-size:11.5px; padding:2px 6px; border-radius:4px;">${escapeHtml(String(spec.inputs))}</span></div>`;
       } else {
         specHtml += `<div><strong>輸入信號 (Inputs):</strong> <span class="muted">未填寫</span></div>`;
       }
 
-      if (spec.outputs && spec.outputs.length > 0) {
-        const outputNames = spec.outputs.map(op => op.name).join(', ');
+      if (Array.isArray(spec.outputs) && spec.outputs.length > 0) {
+        const outputNames = spec.outputs.map(op => {
+          if (op && typeof op === 'object') {
+            return op.name;
+          }
+          return String(op);
+        }).join(', ');
         specHtml += `<div><strong>輸出基因 (Outputs):</strong> <span class="badge" style="background:#fffaf0; color:#b54708; font-size:11.5px; padding:2px 6px; border-radius:4px;">${escapeHtml(outputNames)}</span></div>`;
+      } else if (spec.outputs) {
+        specHtml += `<div><strong>輸出基因 (Outputs):</strong> <span class="badge" style="background:#fffaf0; color:#b54708; font-size:11.5px; padding:2px 6px; border-radius:4px;">${escapeHtml(String(spec.outputs))}</span></div>`;
       } else {
         specHtml += `<div><strong>輸出基因 (Outputs):</strong> <span class="muted">未填寫</span></div>`;
       }

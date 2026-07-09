@@ -37,6 +37,41 @@ def envelope(data: Any, warnings: list[str] | None = None) -> dict[str, Any]:
     }
 
 
+_INTERNAL_PATH_FIELDS = {
+    "run_dir",
+    "workflow_run_dir",
+    "result_path",
+    "run_manifest_path",
+    "async_run_dir",
+}
+
+
+def _sanitize_research_payload(data: Any, run_id: str | None = None) -> Any:
+    if isinstance(data, list):
+        return [_sanitize_research_payload(item, run_id=run_id) for item in data]
+    if not isinstance(data, dict):
+        return data
+
+    selected_run_id = str(data.get("run_id") or data.get("research_run_id") or run_id or "")
+    sanitized: dict[str, Any] = {}
+    for key, value in data.items():
+        if key in _INTERNAL_PATH_FIELDS:
+            continue
+        if key == "artifacts" and isinstance(value, dict):
+            sanitized["artifact_keys"] = sorted(str(item) for item in value)
+            if selected_run_id:
+                sanitized["artifact_links"] = {
+                    str(item): f"/api/v2/research/runs/{selected_run_id}/artifacts/{item}"
+                    for item in sorted(value)
+                }
+            continue
+        if key == "runs" and isinstance(value, list):
+            sanitized[key] = [_sanitize_research_payload(item) for item in value]
+            continue
+        sanitized[key] = _sanitize_research_payload(value, run_id=selected_run_id or run_id)
+    return sanitized
+
+
 @router.get("/health")
 def health(
     services: ApplicationServices = Depends(get_services),
@@ -359,7 +394,7 @@ def start_research_run(
         raise HTTPException(status_code=404, detail="Design not found.") from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return envelope(result)
+    return envelope(_sanitize_research_payload(result))
 
 
 @router.get("/research/runs")
@@ -367,7 +402,7 @@ def list_research_runs(
     limit: int = 50,
     services: ApplicationServices = Depends(get_services),
 ) -> dict[str, Any]:
-    return envelope(services.research.list(limit=limit))
+    return envelope(_sanitize_research_payload(services.research.list(limit=limit)))
 
 
 @router.get("/research/runs/{run_id}")
@@ -378,7 +413,7 @@ def get_research_run(
     result = services.research.status(run_id)
     if result.get("status") == "not_found":
         raise HTTPException(status_code=404, detail="Research run not found.")
-    return envelope(result)
+    return envelope(_sanitize_research_payload(result, run_id=run_id))
 
 
 @router.get("/research/runs/{run_id}/result")
@@ -389,7 +424,7 @@ def get_research_result(
     result = services.research.result(run_id)
     if result.get("status") == "not_found":
         raise HTTPException(status_code=404, detail="Research run not found.")
-    return envelope(result)
+    return envelope(_sanitize_research_payload(result, run_id=run_id))
 
 
 @router.get("/research/runs/{run_id}/artifacts/{artifact_key}")
@@ -419,7 +454,7 @@ def cancel_research_run(
     result = services.research.cancel(run_id)
     if result.get("status") == "not_found":
         raise HTTPException(status_code=404, detail="Research run not found.")
-    return envelope(result)
+    return envelope(_sanitize_research_payload(result, run_id=run_id))
 
 
 @router.post("/research/comparisons")

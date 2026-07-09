@@ -458,6 +458,8 @@ def _compact_summary(summary: Any) -> dict[str, Any]:
         "used_budget": summary.get("used_budget"),
         "compute_budget": summary.get("compute_budget"),
         "latest_critic_feedback": summary.get("latest_critic_feedback"),
+        "last_error": summary.get("last_error"),
+        "error_type": summary.get("error_type"),
         "score": best_topology.get("score"),
         "mapping_status": best_topology.get("mapping_status"),
         "cello_mode": best_topology.get("cello_mode"),

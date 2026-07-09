@@ -2,6 +2,9 @@
 
 This repository is a research prototype for translating natural-language regulatory-logic intent into computational genetic-circuit design candidates. It integrates LLM-based agents, Cello-compatible gate assignment, resource-aware ODE simulation, benchmark scoring, and multi-agent Reflexion loop repair.
 
+> [!TIP]
+> **For AI Agents**: A single-file aggregation of all core documentation in this repository is available at [llms-full.txt](llms-full.txt) to ingest full context in a single request.
+
 ## Core Documentation
 
 - [About & Motivation](docs/about.md): Project background, 成大生科 (NCKU Life Sciences) undergraduate student motivation, strategic profile, and future research collaboration plans.

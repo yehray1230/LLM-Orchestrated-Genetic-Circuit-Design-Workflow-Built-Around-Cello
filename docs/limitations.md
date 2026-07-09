@@ -92,6 +92,14 @@ The current prototype cannot:
   在密碼子優化過程中優化啟動子/RBS 強度、RNA 折疊、密碼子對偏好、染色體環境或真實的表達平衡。
 - Fit a dynamic host-cell model or automatically recalibrate the ODE simulator using experimental measurements.
   利用實驗測量值擬合動態宿主細胞模型，或自動重新校準 ODE 模擬器。
+- Account for context-dependency of Cello-derived parameters. Hill equations parsed from Cello UCFs are characterized in specific biological contexts (host, media, plasmid backbone). Directly mapping them to a general ODE model assumes context-independence, which is a major simplification.
+  考慮從 Cello 衍生的元件參數之「上下文相依性（Context-Dependency）」。從 Cello UCF 解析出的希爾（Hill）方程式參數是在特定的生物上下文（如特定宿主、培養基、質體骨架）中測量得到的。直接將其映射至一般的 ODE 模擬器，是建立在「元件完全獨立」的簡化假設之上。
+- Replace rigorous RNA secondary structure thermodynamic modeling. The RBS folding accessibility warning is a heuristic proxy based on sequence windows, not a substitute for complete thermodynamic folding packages like NUPACK or MFE calculations.
+  取代嚴格的 RNA 二級結構熱力學建模。系統提供的 RBS 折疊可及性警告僅為基於序列窗口的啟發式指標，無法替代 NUPACK 或 MFE 計算等完整的熱力學折疊軟體。
+- Replicate full Chemical Master Equation stochastic regimes. While bounded Gillespie stochastic audits are provided, they only detect extreme stochastic extinction or instability under low-molecule limits; they do not solve the full Chemical Master Equation (CME) or capture cell-to-cell heterogeneity comprehensively.
+  複製完整的化學主方程式隨機動力學。雖然系統提供有限步數的 Gillespie 隨機稽核，但它僅用於檢測低分子量極限下的隨機絕滅或不穩定性，無法替代對化學主方程（CME）的完整求解，亦無法全面捕捉細胞間的異質性。
+- Model dynamic host metabolic interactions. The metabolic burden calculation is a coarse aggregate proxy representing relative synthetic species concentration, rather than a dynamic coupling to endogenous host pathways, amino acid/tRNA pools, or cell growth feedback.
+  模擬動態宿主代謝交互作用。系統的代謝負載計算僅為基於合成物種濃度的粗粒度代指標（Burden Proxy），而非動態耦合宿主內源代謝途徑、氨基酸/tRNA 庫或細胞生長反饋的精確模型。
 
 These limitations are expected for the current stage of the project. The system should be treated as a computational design-assistance prototype, not as an automated biological-design platform.
 

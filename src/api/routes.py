@@ -29,6 +29,7 @@ from api.schemas import (
     temporal_inputs_to_dict,
 )
 from application.services import ApplicationServices
+from exporters.claim_boundary import claim_boundary_headers, is_exchange_export_format
 from mcp_server.service import list_tool_capabilities
 from repositories.json_repository import RepositoryError
 from schemas.import_draft import import_draft_from_json
@@ -652,6 +653,8 @@ def export_design(
         "X-Export-Status": result.status,
         "X-Export-Warning-Count": str(len(result.warnings)),
     }
+    if is_exchange_export_format(export_format):
+        headers.update(claim_boundary_headers())
     source = (
         services.designs.get_revision(design_id, rev)
         if rev is not None
@@ -905,9 +908,6 @@ def skip_elicitation(
 
     fallbacks = {
         "chassis": "Escherichia coli",
-        "inputs": [{"name": "IPTG", "sensor_promoter": "pLac", "type": "input_sensor"}],
-        "outputs": [{"name": "sfGFP", "type": "reporter_gene"}],
-        "logic_relation": "sfGFP = IPTG",
         "copy_number": 15,
     }
     structured_spec = draft.get("structured_spec") or {}

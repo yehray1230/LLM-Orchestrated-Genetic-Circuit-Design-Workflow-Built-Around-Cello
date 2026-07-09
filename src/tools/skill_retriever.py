@@ -34,7 +34,7 @@ class SkillRetriever:
     ) -> "SkillRetriever":
         skill_path = Path(path)
         if not skill_path.exists() and not skill_path.is_absolute():
-            repo_relative_path = Path(__file__).resolve().parents[1] / skill_path
+            repo_relative_path = Path(__file__).resolve().parents[2] / skill_path
             if repo_relative_path.exists():
                 skill_path = repo_relative_path
         data = json.loads(skill_path.read_text(encoding="utf-8"))
@@ -293,7 +293,7 @@ def _is_negative_memory(skill: dict[str, Any]) -> bool:
 def _load_extracted_skills(path: str | Path) -> list[dict[str, Any]]:
     memory_path = Path(path)
     if not memory_path.exists() and not memory_path.is_absolute():
-        repo_relative_path = Path(__file__).resolve().parents[1] / memory_path
+        repo_relative_path = Path(__file__).resolve().parents[2] / memory_path
         if repo_relative_path.exists():
             memory_path = repo_relative_path
     if not memory_path.exists():

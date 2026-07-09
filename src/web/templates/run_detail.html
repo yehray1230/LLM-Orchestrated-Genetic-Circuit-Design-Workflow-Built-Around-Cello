@@ -53,7 +53,7 @@
     <div class="error-box section-space" style="background: #fef3f2; border: 1px solid #fee4e2; color: #b42318; padding: 18px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
       <div>
         <h3 style="margin: 0; color: #912018;">⚠️ 設計搜尋失敗</h3>
-        <p style="margin: 6px 0 0 0; font-size: 13.5px;">{{ run.error or "執行期間遭遇不可恢復的錯誤，請檢查您的模型設定或 API 金鑰。" }}</p>
+        <p style="margin: 6px 0 0 0; font-size: 13.5px; white-space: pre-wrap; font-family: monospace; background: #fff5f5; padding: 10px; border-radius: 4px; border: 1px solid #fecdca;">{{ run.error or (run.summary and run.summary.get('last_error')) or "執行期間遭遇不可恢復的錯誤，請檢查您的模型設定或 API 金鑰。" }}</p>
       </div>
       <a class="button" href="/web/new-design" style="background: #b42318; border-color: #b42318; color: white;">重試新設計</a>
     </div>

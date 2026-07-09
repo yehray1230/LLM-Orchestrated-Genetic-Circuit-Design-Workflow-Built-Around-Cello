@@ -23,6 +23,11 @@ from fastapi.templating import Jinja2Templates
 
 from api.dependencies import get_services
 from application.services import ApplicationServices
+from exporters.claim_boundary import (
+    claim_boundary_json,
+    claim_boundary_markdown,
+    claim_boundary_payload,
+)
 from schemas.import_draft import FieldEvidence, ImportDraft
 
 
@@ -1681,6 +1686,17 @@ def download_project_package(
         if sbol_result.ok:
             zip_file.writestr("design_sbol3.ttl", sbol_result.content)
 
+        claim_payload = claim_boundary_payload(
+            design_id=design.design_id,
+            revision_id=design_v2.revision.revision_id,
+            revision_number=design_v2.revision.revision_number,
+            formats=["parts_bom.csv", "sequences.gb", "design_sbol3.ttl"],
+        )
+        claim_markdown = claim_boundary_markdown(claim_payload)
+        claim_json = claim_boundary_json(claim_payload)
+        zip_file.writestr("CLAIM_BOUNDARY.md", claim_markdown)
+        zip_file.writestr("CLAIM_BOUNDARY.json", claim_json)
+
         # File 6: manifest.json
         manifest = {
             "project_id": design.design_id,
@@ -1711,6 +1727,8 @@ def download_project_package(
             manifest["files"].append({"filename": "sequences.gb", "sha256": hashlib.sha256(gb_result.content.encode('utf-8')).hexdigest()})
         if sbol_result.ok:
             manifest["files"].append({"filename": "design_sbol3.ttl", "sha256": hashlib.sha256(sbol_result.content.encode('utf-8')).hexdigest()})
+        manifest["files"].append({"filename": "CLAIM_BOUNDARY.md", "sha256": hashlib.sha256(claim_markdown.encode('utf-8')).hexdigest()})
+        manifest["files"].append({"filename": "CLAIM_BOUNDARY.json", "sha256": hashlib.sha256(claim_json.encode('utf-8')).hexdigest()})
 
         zip_file.writestr("manifest.json", json.dumps(manifest, indent=2, ensure_ascii=False))
 

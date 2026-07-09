@@ -9,3 +9,6 @@ description = "An LLM-orchestrated genetic-circuit design workflow built around 
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = []
+
+[tool.ruff]
+exclude = ["pytest_temp*", ".pytest_cache", ".ruff_cache", "venv", ".venv"]

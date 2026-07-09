@@ -230,6 +230,9 @@ def test_comparison_evaluation_and_bom_export(client: TestClient) -> None:
     assert "weighted_total_score" in evaluation.json()["data"]
     assert export.status_code == 200
     assert export.headers["content-type"].startswith("text/csv")
+    assert export.headers["x-claim-boundary"] == "computational-exchange-artifact-only"
+    assert export.headers["x-not-wet-lab-validation"] == "true"
+    assert export.headers["x-not-experimental-protocol"] == "true"
     assert "design_id" in export.text
 
 
@@ -566,7 +569,7 @@ def test_web_interaction_enhancements_are_available(client: TestClient) -> None:
     assembly = client.get("/web/assembly")
     assembly_backbones = client.get("/web/assembly/backbones")
     assembly_new = client.get("/web/assembly/new")
-    app_js = Path("web/static/app.js").read_text(encoding="utf-8")
+    app_js = (Path(__file__).resolve().parent.parent / "src" / "web" / "static" / "app.js").read_text(encoding="utf-8")
 
     assert research.status_code == 200
     assert assembly.status_code == 200
@@ -612,5 +615,5 @@ def test_web_design_detail_tabs_and_clipboard(client: TestClient) -> None:
     assert "BOM 材料 CSV 明細" in response.text
     assert "GenBank 完整圖譜" in response.text
 
-    app_js = Path("web/static/app.js").read_text(encoding="utf-8")
+    app_js = (Path(__file__).resolve().parent.parent / "src" / "web" / "static" / "app.js").read_text(encoding="utf-8")
     assert "setupClipboardCopy" in app_js

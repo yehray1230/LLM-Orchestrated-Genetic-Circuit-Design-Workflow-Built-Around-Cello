@@ -68,8 +68,9 @@
               </span>
               <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                 {% for job in running_jobs %}
-                  <a href="/web/{% if job.kind == 'research' %}research/runs{% else %}runs{% endif %}/{{ job.id }}" class="badge" style="background: white; border: 1px solid var(--line); padding: 2px 8px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;" title="{{ job.stage }}">
-                    <code>{{ job.id[:8] }}...</code>
+                  {% set job_id = job.id|default(job.run_id, true) %}
+                  <a href="/web/{% if job.kind == 'research' %}research/runs{% else %}runs{% endif %}/{{ job_id }}" class="badge" style="background: white; border: 1px solid var(--line); padding: 2px 8px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;" title="{{ job.stage }}">
+                    <code>{{ job_id[:8] }}...</code>
                     <span class="muted">({{ (job.progress * 100)|int }}%)</span>
                     {% if job.status == 'needs_human_input' %}
                       <span style="color: #b54708; font-weight: bold;">💬 待回覆</span>

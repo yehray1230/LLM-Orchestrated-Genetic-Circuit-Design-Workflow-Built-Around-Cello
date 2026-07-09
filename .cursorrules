@@ -5,4 +5,4 @@ Please read and follow the developer and safety rules for this codebase:
 1. Always refer to `.agents/AGENTS.md` for AI coding guidelines, biophysical safety limits, and testing instructions.
 2. Under no circumstances should you claim generated genetic circuits are experimentally validated or guaranteed to build unless wet-lab data is explicitly provided.
 3. This project uses the `src/` layout. Core directories are nested inside `src/`. Entry points (`app.py`, `src/api/main.py`, `tests/conftest.py`) use `sys.path` patches to enable direct import resolving.
-4. When documentation changes, run `python src/scripts/generate_llms_txt.py` to regenerate the full aggregated documentation `docs/llms-full.txt`.
+4. When documentation changes, run `python src/scripts/generate_llms_txt.py` to regenerate the full aggregated documentation `llms-full.txt`.

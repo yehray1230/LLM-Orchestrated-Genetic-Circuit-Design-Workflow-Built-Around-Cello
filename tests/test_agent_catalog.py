@@ -36,9 +36,10 @@ def test_agent_registry_is_ui_ready() -> None:
 
 
 def test_every_runtime_agent_has_catalog_metadata() -> None:
+    agents_dir = Path(__file__).resolve().parent.parent / "src" / "agents"
     runtime_agent_files = {
         path.stem.replace("_", "-")
-        for path in Path("agents").glob("*_agent.py")
+        for path in agents_dir.glob("*_agent.py")
     }
     registered_modules = {
         entry.module.rsplit(".", 1)[-1].replace("_", "-")

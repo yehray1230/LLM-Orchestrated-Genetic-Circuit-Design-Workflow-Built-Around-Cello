@@ -642,7 +642,14 @@ def make_reproducible_packet(packet: dict[str, Any]) -> dict[str, Any]:
         if k in transient_keys:
             return f"<masked_{k}>"
         if isinstance(v, dict):
-            return {nk: _normalize(nk, nv) for nk, nv in v.items()}
+            return {
+                nk: (
+                    "<masked_result_hash>"
+                    if k == "benchmark_run" and nk == "result_hash"
+                    else _normalize(nk, nv)
+                )
+                for nk, nv in v.items()
+            }
         if isinstance(v, list):
             return [_normalize(k, item) for item in v]
         if isinstance(v, str):

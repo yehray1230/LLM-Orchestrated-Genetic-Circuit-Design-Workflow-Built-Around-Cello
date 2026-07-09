@@ -42,7 +42,7 @@ This document defines style guidelines, behavioral constraints, and safety limit
 
 ## 4. Keeping Documentation Current
 
-- If you modify any core biological assumptions, limitations, or architecture models, make sure to rerun the documentation generator to rebuild `docs/llms-full.txt`:
+- If you modify any core biological assumptions, limitations, or architecture models, make sure to rerun the documentation generator to rebuild `llms-full.txt`:
   ```bash
   python src/scripts/generate_llms_txt.py
   ```

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 # Ordered list of documents to concatenate for the full context file
@@ -20,7 +19,7 @@ def main() -> None:
     script_dir = Path(__file__).resolve().parent
     workspace_root = script_dir.parent.parent
     docs_dir = workspace_root / "docs"
-    output_file = docs_dir / "llms-full.txt"
+    output_file = workspace_root / "llms-full.txt"
     
     print(f"Generating aggregated context file at: {output_file.relative_to(workspace_root)}")
     
