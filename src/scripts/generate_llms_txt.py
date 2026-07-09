@@ -14,6 +14,15 @@ DOCUMENTS = [
     "ai_reviewer_guide.md",
 ]
 
+
+def _normalize_generated_text(text: str) -> str:
+    """Keep the generated aggregate stable for CI diff and whitespace checks."""
+    lines = text.splitlines()
+    while lines and not lines[-1].strip():
+        lines.pop()
+    return "\n".join(line.rstrip() for line in lines) + "\n"
+
+
 def main() -> None:
     # Resolve paths relative to the script location
     script_dir = Path(__file__).resolve().parent
@@ -45,7 +54,10 @@ def main() -> None:
         combined_content.append(file_content)
         combined_content.append("\n")
 
-    output_file.write_text("".join(combined_content), encoding="utf-8")
+    output_file.write_text(
+        _normalize_generated_text("".join(combined_content)),
+        encoding="utf-8",
+    )
     print("Generation complete!")
 
 if __name__ == "__main__":
