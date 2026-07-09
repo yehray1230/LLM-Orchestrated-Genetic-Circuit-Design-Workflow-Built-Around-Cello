@@ -190,4 +190,3 @@ Activate GFP only when input A is present and input B is absent.
 - 收件人與寄送日期均已記錄；
 - 已完成一次 follow-up；
 - 已根據觀察寫下第二批信件的簡短決定。
-

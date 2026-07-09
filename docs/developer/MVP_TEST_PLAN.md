@@ -1,8 +1,8 @@
 # MVP 發表前測試計畫
 
-> 狀態：Draft for execution  
-> 適用範圍：目前 FastAPI / HTML Web Workspace、API、MCP 與計算工作流  
-> 主要介面：FastAPI / Web Workspace  
+> 狀態：Draft for execution
+> 適用範圍：目前 FastAPI / HTML Web Workspace、API、MCP 與計算工作流
+> 主要介面：FastAPI / Web Workspace
 > Legacy 介面：Streamlit（maintenance-only，不作為新功能發布門檻）
 
 ## 1. 目的
@@ -803,7 +803,7 @@ CLM-06 is closed and marked as PASS.
 
 - **Validation date**: 2026-07-09
 - **Scope**: End-to-end integration and manual UI verification for core workflows. This validates design intake (`CLM-01`), design run monitor (`CLM-03`), candidate workbench comparison (`CLM-04`), and temporal ODE simulation workbench (`CLM-05`).
-- **Implementation/evidence**: 
+- **Implementation/evidence**:
   - Automated script: `tests/test_web_e2e_circuit_simulation_workbench.py` (passed)
   - Manual UI Walkthrough (passed)
 - **Decision**: **PASS for CLM-01, CLM-03, CLM-04, CLM-05**
@@ -817,7 +817,7 @@ CLM-06 is closed and marked as PASS.
 
 ### UI/UX Feedback & Future Recommendations
 During the manual visual walkthrough on 2026-07-09, the following areas were identified as potential future improvements:
-1. **Navigation & Layout Intuition**: 
+1. **Navigation & Layout Intuition**:
    - The "Promote to Design" (★ 建立為獨立設計案) button is located at the bottom of the candidate comparison page but not on the candidate detail page. Moving or duplicating it to the detail page header/sidebar would be more intuitive.
    - The custom dynamic simulation button (🧪 執行自定義動態模擬) is at the very bottom of the candidate detail page inside the "Advanced Info" card. Elevating this to a prominent top action button would enhance discoverability.
 2. **Text Overflow in Charts**:
@@ -1065,7 +1065,7 @@ outputs/mvp_validation/2026-07-08_9f2dd33dad46-working-tree/host_optimization/ru
 ## 14.19 2026-07-09 Final MVP Release-Candidate Decision
 
 - **Decision**: **GO** (MVP Release Candidate 1 is fully signed off)
-- **Commit / working-tree identifier**: `9f2dd33dad46b031d71e6550d535442f4cb56ddd` (plus local working tree modifications for validation scripts)
+- **Commit / working-tree identifier**: final `codex/html-frontend-migration-v1` branch head after hygiene commit and CI; evidence base originally captured from `9f2dd33dad46b031d71e6550d535442f4cb56ddd`.
 - **Evidence package**: `outputs/mvp_validation/2026-07-08_9f2dd33dad46-working-tree/`
 - **Public-clean package**: `outputs/mvp_validation/2026-07-08_9f2dd33dad46-working-tree_public_clean/`
 - **Remaining limitations**:

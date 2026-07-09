@@ -28,7 +28,7 @@
         <input name="model_name" id="setting-model-name" value="{{ settings.model_name }}" required placeholder="例如：gpt-5.4-mini">
       </label>
     </div>
-    
+
     <label>API Key (金鑰)
       <input type="password" name="api_key" id="setting-api-key" value="{{ settings.api_key }}" placeholder="貼上此工作階段要使用的服務金鑰（已遮蔽）">
     </label>
@@ -40,7 +40,7 @@
       此平台目前沒有已設定的持久化秘密儲存後端。API Key 只保留於目前伺服器程序，重新啟動後需要重新輸入。
       {% endif %}
     </div>
-    
+
     <label>API Base URL (端點網址)
       <input name="api_base" id="setting-api-base" value="{{ settings.api_base }}" placeholder="選填，自架端點或特殊 Provider 專用，例如：https://api.openai.com/v1">
     </label>
@@ -50,7 +50,7 @@
         ⚙️ Cello 與物理映射配置 (Cello & Mapping Settings)
       </h3>
       <p class="muted" style="margin-bottom: 16px;">設定本機 Cello 執行指令與預設 UCF 配置，讓多步驟電路設計能順暢執行物理對應與評估。</p>
-      
+
       <div class="grid grid-2">
         <label>Cello 可執行指令 (Cello Command)
           <input name="cello_command" id="setting-cello-command" value="{{ settings.cello_command }}" placeholder="例如：cello 或 docker run --rm cello">
@@ -72,7 +72,7 @@
           <input type="number" name="default_compute_budget" id="setting-default-compute-budget" value="{{ settings.default_compute_budget }}" min="1" max="60" required>
         </label>
       </div>
-      
+
       <!-- Cello 健康檢測狀態區 -->
       <div style="margin-top: 20px; background: #f8fafc; border: 1px solid var(--line); padding: 14px; border-radius: 10px;">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
@@ -85,7 +85,7 @@
             <span class="badge" style="background: #fff5f5; color: var(--error); font-weight: bold; font-size: 11px; padding: 4px 8px; border-radius: 6px;">🔴 偵測失敗 (Unavailable)</span>
           {% endif %}
         </div>
-        
+
         <div style="font-size: 12px; color: #475569;">
           {% if cello_status.version %}
             <div><strong>Cello 版本:</strong> <code>{{ cello_status.version }}</code></div>
@@ -104,7 +104,7 @@
         </div>
       </div>
     </div>
-    
+
     <div class="inline" style="margin-top: 10px;">
       <button class="button" type="submit">儲存設定</button>
       <button class="button secondary" type="button" id="test-connection-btn">測試連線</button>
@@ -116,7 +116,7 @@
     <button class="button secondary" type="submit">清除 API Key</button>
   </form>
   {% endif %}
-  
+
   <div id="test-result" style="margin-top: 18px; display: none;"></div>
 </article>
 {% endblock %}

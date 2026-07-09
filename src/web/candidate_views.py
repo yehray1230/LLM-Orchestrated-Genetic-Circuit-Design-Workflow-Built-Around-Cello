@@ -89,12 +89,12 @@ class CandidateDetailView:
     next_steps: List[str]
     evidence_level: str
     scores: List[ScoreComponentView]
-    
+
     # Logical Design
     boolean_expression: str
     verilog_code: str
     topology_graph: Dict[str, Any]  # nodes and edges
-    
+
     # Biological Design
     regulatory_graph: Dict[str, Any]
     constructs: List[Dict[str, Any]]
@@ -102,7 +102,7 @@ class CandidateDetailView:
     parts: List[Dict[str, Any]]
     cello_mapping_status: str
     cello_fallback_used: bool
-    
+
     # Advanced
     raw_json: str
     tool_versions: Dict[str, str]
@@ -114,7 +114,7 @@ class CandidateDetailView:
 def _extract_candidate_topologies(run_id: str, run_result: dict) -> list[CanonicalCandidateReference]:
     if not isinstance(run_result, dict):
         return []
-    
+
     def get_topology_hash(topo: dict) -> str:
         def serialize_clean(obj):
             if isinstance(obj, dict):
@@ -142,7 +142,7 @@ def _extract_candidate_topologies(run_id: str, run_result: dict) -> list[Canonic
             )
             for i, t in enumerate(topologies)
         ]
-        
+
     # 2. Check summary key
     summary = run_result.get("summary")
     if isinstance(summary, dict):
@@ -173,7 +173,7 @@ def _extract_candidate_topologies(run_id: str, run_result: dict) -> list[Canonic
                 raise ValueError(f"State artifact JSON is corrupted: {e}")
             if not isinstance(state_data, dict):
                 raise ValueError("State artifact shape is invalid: not a dictionary")
-            
+
             topologies = state_data.get("candidate_topologies")
             if isinstance(topologies, list) and topologies:
                 return [
@@ -188,7 +188,7 @@ def _extract_candidate_topologies(run_id: str, run_result: dict) -> list[Canonic
                 ]
             else:
                 raise ValueError("State artifact has no candidate topologies list")
-                
+
     # 4. Check if best_topology is the only candidate available
     best_topo = run_result.get("best_topology") or (summary.get("best_topology") if isinstance(summary, dict) else None)
     if isinstance(best_topo, dict) and best_topo:
@@ -221,21 +221,21 @@ def _extract_verilog_summary(topo: dict) -> str:
     # Remove comments
     clean_verilog = re.sub(r"//.*", "", verilog)
     clean_verilog = re.sub(r"/\*.*?\*/", "", clean_verilog, flags=re.DOTALL)
-    
+
     inputs = re.findall(r"\binput\b\s+([^;]+)", clean_verilog)
     outputs = re.findall(r"\boutput\b\s+([^;]+)", clean_verilog)
-    
+
     input_count = 0
     output_count = 0
     for inp in inputs:
         input_count += len([i.strip() for i in inp.split(",") if i.strip()])
     for out in outputs:
         output_count += len([o.strip() for o in out.split(",") if o.strip()])
-        
+
     gate_count = topo.get("gate_count") or topo.get("gene_count")
     if not gate_count:
         gate_count = len(re.findall(r"assign\s+", clean_verilog))
-        
+
     if input_count or output_count:
         return f"{input_count} In / {output_count} Out | {gate_count} Gates"
     elif verilog.strip():
@@ -256,7 +256,7 @@ def _determine_score_status(score: float) -> str:
 def _get_limiting_factor(topo: dict) -> str:
     if topo.get("mapping_status") == "MAPPING_FAILED":
         return "Cello 映射失敗 (UCF 限制不匹配或無可用邏輯閘)"
-        
+
     score_fields = [
         ("functional_score", "Functional"),
         ("kinetic_score", "Kinetic / ODE"),
@@ -268,10 +268,10 @@ def _get_limiting_factor(topo: dict) -> str:
         ("toxicity_score", "Toxicity"),
         ("semantic_faithfulness_score", "Semantic Faithfulness"),
     ]
-    
+
     lowest_score = 1.0
     lowest_label = None
-    
+
     for field_key, label in score_fields:
         val = topo.get(field_key)
         if val is not None:
@@ -282,29 +282,29 @@ def _get_limiting_factor(topo: dict) -> str:
                     lowest_label = label
             except (ValueError, TypeError):
                 pass
-                
+
     if lowest_label and lowest_score < 0.75:
         return f"{lowest_label} 表現較差 ({lowest_score:.2f})"
-        
+
     return "無明顯限制因素"
 
 
 def _extract_warnings(topo: dict) -> list[WarningView]:
     warnings = []
-    
+
     # Provisional Warning
     source = str(topo.get("source") or "").lower()
     cello_mode = str(topo.get("cello_mode") or "").lower()
     claim_level = str(topo.get("cello_claim_level") or "").lower()
     warning_text = str(topo.get("cello_warning") or "")
-    
+
     if cello_mode == "mock" or claim_level == "mock_only" or "mock" in source or "示範" in warning_text:
         warnings.append(WarningView(
             message=warning_text or "此結果採用示範 (Mock) 模式生成，尚未經過真實元件庫物理映射驗證。",
             level="warning",
             category="provisional"
         ))
-        
+
     # Fallback Warning
     if topo.get("cello_fallback_used") or topo.get("mapping_status") == "fallback" or "fallback" in claim_level:
         warnings.append(WarningView(
@@ -312,7 +312,7 @@ def _extract_warnings(topo: dict) -> list[WarningView]:
             level="warning",
             category="fallback"
         ))
-        
+
     # Incomplete Warning
     ode_status = topo.get("ode_status", "disabled")
     if ode_status == "disabled":
@@ -327,7 +327,7 @@ def _extract_warnings(topo: dict) -> list[WarningView]:
             level="error",
             category="incomplete"
         ))
-        
+
     return warnings
 
 
@@ -337,7 +337,7 @@ def build_candidate_list_view(
     run_result: Optional[dict]
 ) -> CandidateListView:
     status_str = run_status.get("status", "unknown")
-    
+
     user_intent = run_status.get("summary", {}).get("user_intent") or run_status.get("request", {}).get("user_intent") or ""
     host_organism = run_status.get("summary", {}).get("host_organism") or run_status.get("request", {}).get("host_organism") or "Escherichia coli"
     tool_versions = run_status.get("summary", {}).get("tool_versions") or run_status.get("tool_versions") or {}
@@ -358,7 +358,7 @@ def build_candidate_list_view(
             total_candidates=0,
             empty_state_type="not_completed",
         )
-        
+
     if not isinstance(run_result, dict):
         return CandidateListView(
             run_id=run_id,
@@ -372,7 +372,7 @@ def build_candidate_list_view(
             total_candidates=0,
             empty_state_type="unparseable",
         )
-        
+
     try:
         candidate_refs = _extract_candidate_topologies(run_id, run_result)
     except Exception:
@@ -388,7 +388,7 @@ def build_candidate_list_view(
             total_candidates=0,
             empty_state_type="unparseable",
         )
-        
+
     if not candidate_refs:
         return CandidateListView(
             run_id=run_id,
@@ -402,23 +402,23 @@ def build_candidate_list_view(
             total_candidates=0,
             empty_state_type="empty",
         )
-        
+
     # Check all failed
     all_failed = all(ref.topology.get("mapping_status") == "MAPPING_FAILED" for ref in candidate_refs)
-    
+
     # Calculate best candidate
     best_score = -9999.0
     best_idx = 0
-    
+
     best_topo = run_result.get("best_topology") or run_result.get("summary", {}).get("best_topology")
-    
+
     for idx, ref in enumerate(candidate_refs):
         topo = ref.topology
         score = float(topo.get("score", topo.get("weighted_total_score", 0.0)))
         if score > best_score:
             best_score = score
             best_idx = idx
-            
+
     if best_topo and isinstance(best_topo, dict):
         best_topo_score = float(best_topo.get("score", best_topo.get("weighted_total_score", 0.0)))
         for idx, ref in enumerate(candidate_refs):
@@ -433,12 +433,12 @@ def build_candidate_list_view(
     for idx, ref in enumerate(candidate_refs):
         topo = ref.topology
         score_val = float(topo.get("score", topo.get("weighted_total_score", 0.0)))
-        
+
         topo_warnings = _extract_warnings(topo)
         is_fallback = any(w.category == "fallback" for w in topo_warnings)
         is_provisional = any(w.category == "provisional" for w in topo_warnings)
         is_incomplete = any(w.category == "incomplete" for w in topo_warnings)
-        
+
         candidates_view.append(
             CandidateSummaryView(
                 index=idx,
@@ -456,7 +456,7 @@ def build_candidate_list_view(
                 is_incomplete=is_incomplete,
             )
         )
-        
+
     return CandidateListView(
         run_id=run_id,
         run_status=status_str,
@@ -480,20 +480,20 @@ def build_candidate_detail_view(
     candidate_refs = _extract_candidate_topologies(run_id, run_result)
     if index < 0 or index >= len(candidate_refs):
         raise ValueError(f"Candidate index {index} is out of range.")
-        
+
     topo = candidate_refs[index].topology
-    
+
     best_idx = 0
     best_score = -9999.0
     best_topo = run_result.get("best_topology") or run_result.get("summary", {}).get("best_topology")
-    
+
     for idx, ref in enumerate(candidate_refs):
         t = ref.topology
         score_val = float(t.get("score", t.get("weighted_total_score", 0.0)))
         if score_val > best_score:
             best_score = score_val
             best_idx = idx
-            
+
     if best_topo and isinstance(best_topo, dict):
         best_topo_score = float(best_topo.get("score", best_topo.get("weighted_total_score", 0.0)))
         for idx, ref in enumerate(candidate_refs):
@@ -502,10 +502,10 @@ def build_candidate_detail_view(
             if t.get("verilog_index") == best_topo.get("verilog_index") and abs(topo_score - best_topo_score) < 1e-5:
                 best_idx = idx
                 break
-                
+
     is_best = (index == best_idx)
     score_val = float(topo.get("score", topo.get("weighted_total_score", 0.0)))
-    
+
     score_fields = [
         ("functional_score", "Functional (功能正確性)", "邏輯閘行為與預期布林代數真值表的一致程度。"),
         ("kinetic_score", "Kinetic / ODE (動態動力學)", "系統過渡狀態、動態邊際與穩定狀態之動態分析得分。"),
@@ -517,12 +517,12 @@ def build_candidate_detail_view(
         ("toxicity_score", "Toxicity (細胞毒性)", "表現產物是否對宿主細胞具有毒性，影響細胞生長。"),
         ("semantic_faithfulness_score", "Semantic Faithfulness (語意忠實度)", "生成設計是否完全符合自然語言指令之主要規範。"),
     ]
-    
+
     scores_view = []
     advantages = []
     limitations = []
     next_steps = []
-    
+
     for key, label, desc in score_fields:
         val = topo.get(key)
         if val is not None:
@@ -538,7 +538,7 @@ def build_candidate_detail_view(
                     status_class=status_class,
                     description=desc
                 ))
-                
+
                 if f_val >= 0.85:
                     advantages.append(f"{label} 得分優異 ({f_val:.2f})")
                 elif f_val < 0.70:
@@ -553,7 +553,7 @@ def build_candidate_detail_view(
                         next_steps.append("動力學動態邊際偏低，建議重新調整回饋環路或元件延遲。")
             except (ValueError, TypeError):
                 pass
-                
+
     if not advantages:
         advantages.append("基本邏輯架構與 Verilog 編譯正確。")
     if not limitations:
@@ -575,11 +575,11 @@ def build_candidate_detail_view(
         conclusion_summary = f"此方案評分偏低 ({score_val:.3f})，主因為：{_get_limiting_factor(topo)}。可能需要重新設計邏輯拓樸或更換元件庫。"
 
     host_organism = run_status.get("summary", {}).get("host_organism") or run_status.get("request", {}).get("host_organism") or "Escherichia coli"
-    
+
     parts = []
     constructs = []
     regulatory_edges = []
-    
+
     try:
         design_ir = topology_to_design_ir(topo, host_organism=host_organism)
         for p in design_ir.parts:
@@ -600,7 +600,7 @@ def build_candidate_detail_view(
                     "confidence": str(p.assignment.confidence or "verified"),
                 } if p.assignment else None
             })
-            
+
         for c in design_ir.constructs:
             constructs.append({
                 "id": c.id,
@@ -610,7 +610,7 @@ def build_candidate_detail_view(
                 "backbone": c.backbone or "未指定載體",
                 "assembly_method": c.assembly_method or "標準 Golden Gate",
             })
-            
+
         for i in design_ir.interactions:
             regulatory_edges.append({
                 "source": i.source,
@@ -665,7 +665,7 @@ def build_candidate_detail_view(
     nodes = []
     edges = []
     graph = topo.get("topology_graph") or topo.get("graph")
-    
+
     if isinstance(graph, dict):
         raw_nodes = graph.get("nodes")
         raw_edges = graph.get("edges")
@@ -685,15 +685,15 @@ def build_candidate_detail_view(
                         "target": e.get("target") or e.get("to") or "",
                         "label": e.get("label") or e.get("type") or ""
                     })
-                    
+
     if not nodes:
         verilog_code = str(topo.get("verilog") or "")
         clean_v = re.sub(r"//.*", "", verilog_code)
         clean_v = re.sub(r"/\*.*?\*/", "", clean_v, flags=re.DOTALL)
-        
+
         inputs_found = re.findall(r"\binput\b\s+([^;]+)", clean_v)
         outputs_found = re.findall(r"\boutput\b\s+([^;]+)", clean_v)
-        
+
         for inp in inputs_found:
             for i in inp.split(","):
                 i_name = i.strip()
@@ -704,7 +704,7 @@ def build_candidate_detail_view(
                 o_name = o.strip()
                 if o_name:
                     nodes.append({"id": o_name, "label": o_name, "type": "output"})
-                    
+
         assigns = re.findall(r"assign\s+(\w+)\s*=\s*([^;]+);", clean_v)
         for var, expr in assigns:
             if {"id": var, "label": var, "type": "output"} not in nodes:
@@ -747,11 +747,11 @@ def build_candidate_detail_view(
                 regulatory_graph["nodes"].append({"id": node_id, "label": node_id, "type": n_type})
 
     warnings = _extract_warnings(topo)
-    
+
     tool_versions = run_status.get("summary", {}).get("tool_versions") or run_status.get("tool_versions") or {}
     if not tool_versions and isinstance(run_result, dict):
         tool_versions = run_result.get("summary", {}).get("tool_versions") or run_result.get("tool_versions") or {}
-        
+
     provenance = []
     raw_prov = topo.get("provenance") or []
     if isinstance(raw_prov, list):
@@ -763,7 +763,7 @@ def build_candidate_detail_view(
                     "agent": p.get("agent") or p.get("executor") or "",
                     "details": p.get("details") or p.get("description") or "",
                 })
-                
+
     simulation_metadata = {
         "simulation_model_version": topo.get("simulation_model_version") or "1.0.0",
         "ode_status": topo.get("ode_status") or "disabled",
@@ -837,13 +837,13 @@ class CandidateComparisonView:
     user_intent: str
     host_organism: str
     candidates: List[CandidateCompareItem]
-    
+
     # Compatibility alerts
     has_host_mismatch: bool
     has_mapping_mismatch: bool
     has_provisional_warnings: bool
     compatibility_notices: List[str]
-    
+
     # Recommendation
     recommended_index: Optional[int]
     recommendation_reason: str
@@ -857,29 +857,29 @@ def build_candidate_comparison_view(
 ) -> CandidateComparisonView:
     if not isinstance(run_result, dict):
         raise ValueError("Run result data is not available.")
-        
+
     candidate_refs = _extract_candidate_topologies(run_id, run_result)
     if not candidate_refs:
         raise ValueError("No candidate topologies found in this run.")
-        
+
     # Validate selected indexes
     for idx in indexes:
         if idx < 0 or idx >= len(candidate_refs):
             raise ValueError(f"Candidate index {idx} is out of range.")
-            
+
     # Calculate best index across ALL candidates (for is_best flag)
     best_idx = 0
     best_score = -9999.0
     best_topo = run_result.get("best_topology") or run_result.get("summary", {}).get("best_topology")
     all_failed = all(ref.topology.get("mapping_status") == "MAPPING_FAILED" for ref in candidate_refs)
-    
+
     for idx, ref in enumerate(candidate_refs):
         t = ref.topology
         score_val = float(t.get("score", t.get("weighted_total_score", 0.0)))
         if score_val > best_score:
             best_score = score_val
             best_idx = idx
-            
+
     if best_topo and isinstance(best_topo, dict):
         best_topo_score = float(best_topo.get("score", best_topo.get("weighted_total_score", 0.0)))
         for idx, ref in enumerate(candidate_refs):
@@ -891,18 +891,18 @@ def build_candidate_comparison_view(
 
     user_intent = run_status.get("summary", {}).get("user_intent") or run_status.get("request", {}).get("user_intent") or ""
     default_host = run_status.get("summary", {}).get("host_organism") or run_status.get("request", {}).get("host_organism") or "Escherichia coli"
-    
+
     candidates_compare = []
-    
+
     for idx in indexes:
         topo = candidate_refs[idx].topology
         score_val = float(topo.get("score", topo.get("weighted_total_score", 0.0)))
-        
+
         topo_warnings = _extract_warnings(topo)
         is_fallback = any(w.category == "fallback" for w in topo_warnings)
         is_provisional = any(w.category == "provisional" for w in topo_warnings)
         is_incomplete = any(w.category == "incomplete" for w in topo_warnings)
-        
+
         # Verilog expression
         boolean_expression = topo.get("logic_expression") or topo.get("boolean_expression") or ""
         if not boolean_expression:
@@ -912,14 +912,14 @@ def build_candidate_comparison_view(
                 boolean_expression = ", ".join(f"{var} = {expr.strip()}" for var, expr in assigns)
             else:
                 boolean_expression = "未定義布林表達式"
-                
+
         # Count parts of various types from assignment
         part_assignments = topo.get("part_assignments", topo.get("assignments", []))
         parts_count = len(part_assignments)
         promoters_count = sum(1 for p in part_assignments if "promoter" in str(p.get("part_type", "")).lower())
         rbs_count = sum(1 for p in part_assignments if "rbs" in str(p.get("part_type", "")).lower())
         cds_count = sum(1 for p in part_assignments if "cds" in str(p.get("part_type", "")).lower())
-        
+
         candidates_compare.append(
             CandidateCompareItem(
                 index=idx,
@@ -948,12 +948,12 @@ def build_candidate_comparison_view(
                 cds_count=cds_count,
             )
         )
-        
+
     # Compute compatibility notices
     has_host_mismatch = len(set(c.host_organism for c in candidates_compare)) > 1
     has_mapping_mismatch = len(set(c.cello_mapping_status for c in candidates_compare)) > 1
     has_provisional_warnings = any(c.is_provisional for c in candidates_compare)
-    
+
     compatibility_notices = []
     if has_host_mismatch:
         compatibility_notices.append("⚠️ 警告：所選的候選方案適用於不同的宿主生物體，直接對比可能不具科學意義。")
@@ -961,15 +961,15 @@ def build_candidate_comparison_view(
         compatibility_notices.append("⚠️ 注意：部分候選方案已成功進行 Cello 物理映射，而其他方案映射失敗或未使用實體元件庫。")
     if has_provisional_warnings:
         compatibility_notices.append("💡 提示：此對比包含示範 (Mock) 數據產生的候選方案，其物理元件屬性為預估值。")
-        
+
     # Compute recommendation
     valid_candidates = [c for c in candidates_compare if c.cello_mapping_status != "MAPPING_FAILED"]
     if not valid_candidates:
         valid_candidates = candidates_compare
-        
+
     recommended_item = max(valid_candidates, key=lambda c: c.score, default=None)
     recommended_index = recommended_item.index if recommended_item else None
-    
+
     if recommended_item:
         reasons = []
         if recommended_item.is_best:
@@ -980,14 +980,14 @@ def build_candidate_comparison_view(
             reasons.append("ODE 動態模擬動力學指標優異")
         if recommended_item.metabolic_burden_score and recommended_item.metabolic_burden_score >= 0.85:
             reasons.append("代謝負擔低，對宿主細胞生理壓力小")
-            
+
         if not reasons:
             reasons.append("在所選比對候選中表現相對均衡")
-            
+
         reason_str = f"系統推薦 {recommended_item.name}，原因包括：{ '、'.join(reasons)}。該設計在「{recommended_item.limiting_factor}」表現穩定，具備較高可行性。"
     else:
         reason_str = "無法得出推薦結論。"
-        
+
     return CandidateComparisonView(
         run_id=run_id,
         user_intent=user_intent,

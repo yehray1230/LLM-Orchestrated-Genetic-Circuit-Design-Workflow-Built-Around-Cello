@@ -64,7 +64,7 @@ def test_simulation_ode_routes(client, test_services):
     # Save a design first
     design = _create_sample_design("design_test_sim")
     test_services.designs.save_v2(design)
-    
+
     # 1. GET ODE page
     response = client.get("/web/designs/design_test_sim/simulation/ode")
     assert response.status_code == 200
@@ -180,4 +180,3 @@ def test_parameter_fit_comparison(client, test_services):
     )
     assert response.status_code == 200
     assert b"Theoretical" in response.content or b"default_run" in response.content or b"metric_deltas" in response.content
-

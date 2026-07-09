@@ -47,10 +47,10 @@ def _create_sample_design(design_id: str) -> DesignIRV2:
 def test_revisions_comparison_logic(test_services):
     design_id = "rev_test_1"
     design_v2 = _create_sample_design(design_id)
-    
+
     # Save first revision
     test_services.designs.save_v2(design_v2)
-    
+
     # Add a part for revision 2
     design_v2.parts.append(
         BiologicalPartV2(
@@ -81,10 +81,10 @@ def test_revisions_comparison_logic(test_services):
 def test_revisions_api_endpoints(client, test_services):
     design_id = "rev_api_test"
     design_v2 = _create_sample_design(design_id)
-    
+
     # Save first revision
     test_services.designs.save_v2(design_v2)
-    
+
     # Add a part for revision 2
     design_v2.parts.append(
         BiologicalPartV2(
@@ -111,7 +111,7 @@ def test_revisions_api_endpoints(client, test_services):
 def test_revisions_web_history_snapshot(client, test_services):
     design_id = "rev_web_test"
     design_v2 = _create_sample_design(design_id)
-    
+
     test_services.designs.save_v2(design_v2)
 
     # GET default web design detail (latest)

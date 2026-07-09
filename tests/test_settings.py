@@ -46,7 +46,7 @@ def test_settings_service_load_save_mask(tmp_path: Path):
         "api_key": "my-secret-key-12345",
         "api_base": "https://api.anthropic.com"
     })
-    
+
     saved = service.load_settings()
     assert saved["provider"] == "Anthropic"
     assert saved["model_name"] == "claude-3-opus"
@@ -131,7 +131,7 @@ def test_settings_service_check_availability(mock_completion, tmp_path: Path):
         "api_key": "testkey",
         "api_base": ""
     })
-    
+
     res = service.check_availability()
     assert res["available"] is True
     assert res["mode"] == "byok"
@@ -229,14 +229,14 @@ def test_settings_run_service_injection(test_services):
 def test_settings_service_cello_fields(tmp_path: Path):
     settings_file = tmp_path / "settings.json"
     service = SettingsService(settings_file)
-    
+
     # 1. Verify defaults
     settings = service.load_settings()
     assert settings["cello_command"] == ""
     assert settings["ucf_path"] == ""
     assert settings["default_host"] == "Escherichia coli"
     assert settings["default_compute_budget"] == 6
-    
+
     # 2. Verify save and load
     service.save_settings({
         "cello_command": "docker run cello",
@@ -244,7 +244,7 @@ def test_settings_service_cello_fields(tmp_path: Path):
         "default_host": "Saccharomyces cerevisiae",
         "default_compute_budget": 12,
     })
-    
+
     loaded = service.load_settings()
     assert loaded["cello_command"] == "docker run cello"
     assert loaded["ucf_path"] == "/path/to/ucf"
@@ -280,7 +280,7 @@ def test_web_settings_page_post_success(client, test_services):
     assert "docker run -v" in resp.text
     assert "Eco1C1G1T1.UCF.json" in resp.text
     assert "Bacillus subtilis" in resp.text
-    
+
     # Verify values were persisted in SettingsService
     settings = test_services.settings.load_settings()
     assert settings["provider"] == "LiteLLM"
@@ -293,7 +293,7 @@ def test_web_settings_page_post_success(client, test_services):
 
 def test_web_settings_delete_api_key(client, test_services):
     test_services.settings.save_settings({"api_key": "storedkey"})
-    
+
     resp = client.post("/web/settings/api-key/delete")
     assert resp.status_code == 200
     assert "金鑰已清除！" in resp.text
@@ -320,6 +320,3 @@ def test_settings_run_service_cello_injection(test_services):
         assert kwargs["ucf_path"] == "stored-ucf-path"
         assert kwargs["host_organism"] == "Bacillus subtilis"
         assert kwargs["compute_budget"] == 18
-
-
-

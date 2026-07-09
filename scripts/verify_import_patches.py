@@ -38,13 +38,13 @@ def verify_file(filepath: Path) -> bool:
     patch_found = False
     for line_idx, line in enumerate(lines, start=1):
         stripped = line.strip()
-        
+
         # Check for the path insert patch
         if "sys.path.insert" in stripped and "Path(__file__)" in stripped:
             patch_found = True
             print(f"[OK] Found sys.path patch in {filepath.name} at line {line_idx}")
             break
-            
+
         # Check for import statements before the patch
         if stripped.startswith("import ") or stripped.startswith("from "):
             # Extract first module name
@@ -68,7 +68,7 @@ def verify_file(filepath: Path) -> bool:
 def main() -> int:
     root_dir = Path(__file__).resolve().parent.parent
     success = True
-    
+
     for relative_path in FILES_TO_CHECK:
         filepath = root_dir / relative_path
         if not verify_file(filepath):

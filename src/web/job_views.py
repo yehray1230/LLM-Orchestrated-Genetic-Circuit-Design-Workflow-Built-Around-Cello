@@ -32,10 +32,10 @@ def build_job_view(
         status = services.runs.status(run_id)
         if status.get("status") == "not_found":
             raise ValueError(f"Design run {run_id} not found.")
-        
+
         is_term = status.get("status") in TERMINAL_RUN_STATUSES
         res_data = services.runs.result(run_id) if is_term else None
-        
+
         artifacts_raw = services.runs.artifacts(run_id).get("artifacts", {})
         artifacts = []
         for name, path in artifacts_raw.items():
@@ -43,7 +43,7 @@ def build_job_view(
                 "name": name,
                 "url": f"/api/v1/designs/{run_id}/exports/{name}"  # Or custom path
             })
-            
+
         return JobContextView(
             id=run_id,
             kind="design",
@@ -65,21 +65,21 @@ def build_job_view(
         status = services.research.status(run_id)
         if status.get("status") == "not_found":
             raise ValueError(f"Research run {run_id} not found.")
-            
+
         is_term = status.get("status") in TERMINAL_RUN_STATUSES
         res_data = services.research.result(run_id) if is_term else None
-        
+
         artifacts_raw = status.get("artifacts", {})
         if not artifacts_raw and res_data:
             artifacts_raw = res_data.get("artifacts", {})
-            
+
         artifacts = []
         for name, path in artifacts_raw.items():
             artifacts.append({
                 "name": name,
                 "url": f"/api/v2/research/runs/{run_id}/artifacts/{name}"
             })
-            
+
         return JobContextView(
             id=run_id,
             kind="research",

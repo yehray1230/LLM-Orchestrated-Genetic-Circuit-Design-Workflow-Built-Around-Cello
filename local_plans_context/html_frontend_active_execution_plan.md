@@ -1,8 +1,8 @@
 # HTML 前端遷移：目前有效的詳細執行計畫
 
-> 文件狀態：Completed / 遷移計畫已全部完成  
-> 基線日期：2026-07-04  
-> 產品目標：[`html_frontend_design_spec.md`](html_frontend_design_spec.md)  
+> 文件狀態：Completed / 遷移計畫已全部完成
+> 基線日期：2026-07-04
+> 產品目標：[`html_frontend_design_spec.md`](html_frontend_design_spec.md)
 > 現況與歷史決策：[`html_frontend_implementation_roadmap.md`](html_frontend_implementation_roadmap.md)
 
 ---

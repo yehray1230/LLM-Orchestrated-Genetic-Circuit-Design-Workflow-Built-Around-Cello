@@ -28,7 +28,7 @@ def client(test_services):
 
 def test_design_draft_service_load_save_clear(test_services):
     service = test_services.design_drafts
-    
+
     # 1. No active draft initially
     assert service.get_active() is None
 
@@ -121,7 +121,7 @@ def test_design_draft_cleared_on_run_start(client, test_services):
     # Simulate successful run start via /web/runs
     with patch("application.services.start_design_run") as mock_start:
         mock_start.return_value = {"run_id": "run_wizard_test", "status": "queued"}
-        
+
         response = client.post(
             "/web/runs",
             data={

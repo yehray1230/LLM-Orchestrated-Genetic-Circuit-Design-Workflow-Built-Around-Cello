@@ -48,11 +48,11 @@
 </div>
 
 <div class="grid grid-3" style="grid-template-columns: 1fr 2fr; gap: 24px; align-items: start;">
-  
+
   <!-- Left Column: Settings Form -->
   <article class="card" style="padding: 20px;">
     <h2 style="font-size: 16px; margin-top: 0; margin-bottom: 16px; border-bottom: 1px solid var(--line); padding-bottom: 8px;">🎛️ ODE 模擬設定</h2>
-    
+
     <form method="POST" action="/web/designs/{{ view.design_id }}/simulation/ode{% if is_historical %}?rev={{ viewed_rev }}{% endif %}" id="simulation-form">
       <div style="display: grid; gap: 12px; margin-bottom: 20px;">
         <div>
@@ -123,7 +123,7 @@
 
   <!-- Right Column: Job Status & Result -->
   <section class="grid grid-1" style="gap: 24px;">
-    
+
     <!-- 1. 問題說明 -->
     <article class="card" style="background: #f8fafc; border-left: 4px solid var(--brand);">
       <h3 style="margin: 0 0 6px 0;">動態動力學分析回答的問題</h3>
@@ -199,10 +199,10 @@ function toggleSignalConfig(sig, value) {
 document.addEventListener('DOMContentLoaded', () => {
   const ctx = document.getElementById('simulation-chart').getContext('2d');
   const trace = {{ run_data.result.candidate.ode_trace | tojson }};
-  
+
   const datasets = [];
   const time = trace.time;
-  
+
   Object.keys(trace).forEach(key => {
     if (key !== 'time') {
       const isOutput = key.toLowerCase().includes('output') || key === 'Y' || key === 'Q';

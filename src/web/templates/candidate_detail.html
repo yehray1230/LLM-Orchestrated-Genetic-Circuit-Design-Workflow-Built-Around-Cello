@@ -35,7 +35,7 @@
       <p style="font-size: 15px; line-height: 1.6; color: var(--text); margin-bottom: 20px;">
         {{ view.conclusion_summary }}
       </p>
-      
+
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 13px;">
         <div style="background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid var(--line);">
           <span class="muted" style="display: block; margin-bottom: 4px;">整體加權評分</span>
@@ -55,7 +55,7 @@
 
   <article class="card">
     <h2 style="font-size: 18px; margin-top: 0; margin-bottom: 12px;">優勢、限制與下一步建議</h2>
-    
+
     <div style="display: flex; flex-direction: column; gap: 14px; font-size: 13.5px;">
       <div>
         <strong style="color: var(--success); display: block; margin-bottom: 4px;">✓ 設計優勢 (Pros)</strong>
@@ -107,7 +107,7 @@
 <!-- Section 2: Scoring Breakdown -->
 <section class="card section-space" style="margin-bottom: 24px;">
   <h2 style="font-size: 18px; margin-bottom: 14px;">🎛️ 評分拆解與維度評估 (Scoring Breakdown)</h2>
-  
+
   <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
     {% for score in view.scores %}
     <div style="background: #f8fafc; padding: 12px 16px; border-radius: 10px; border: 1px solid var(--line); display: flex; flex-direction: column; justify-content: space-between;">
@@ -158,7 +158,7 @@
           <button class="button secondary" style="padding: 2px 8px; font-size: 11px;" onclick="graphTop.resetView()">重設</button>
         </div>
       </h2>
-      
+
       {% if view.topology_graph.nodes %}
       <div style="position: relative; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #fafafa;">
         <canvas id="topology-canvas" width="500" height="280" style="display: block; cursor: grab; width: 100%; height: 280px;"></canvas>
@@ -216,7 +216,7 @@
         <button class="button secondary" style="padding: 2px 8px; font-size: 11px;" onclick="graphReg.resetView()">重設</button>
       </div>
     </div>
-    
+
     {% if view.regulatory_graph.nodes %}
     <div style="position: relative; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #fafafa;">
       <canvas id="regulatory-canvas" width="1000" height="300" style="display: block; cursor: grab; width: 100%; height: 300px;"></canvas>
@@ -363,9 +363,9 @@
 <!-- Section 5: Advanced Info -->
 <section class="card section-space" style="margin-bottom: 24px;">
   <h2 style="font-size: 18px; margin-bottom: 14px;">⚙️ 進階資訊與運行詮釋資料</h2>
-  
+
   <div style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 20px; align-items: start; margin-bottom: 18px;">
-    
+
     <!-- Left: Versions & Simulation Specs -->
     <div style="display: flex; flex-direction: column; gap: 14px; font-size: 13px;">
       <div style="background: #f8fafc; border: 1px solid var(--line); padding: 14px; border-radius: 10px;">
@@ -380,7 +380,7 @@
         </div>
         <a class="button" href="/web/runs/{{ view.run_id }}/candidates/{{ view.index }}/simulate" style="width: 100%; text-align: center; text-decoration: none; display: block; background: var(--brand); color: white; border-radius: 6px; padding: 8px 12px; font-weight: bold;">🧪 執行自定義動態模擬</a>
       </div>
-      
+
       <div style="background: #f8fafc; border: 1px solid var(--line); padding: 14px; border-radius: 10px;">
         <strong style="display: block; margin-bottom: 8px;">工具版本矩陣</strong>
         {% if view.tool_versions %}
@@ -449,7 +449,7 @@ class CanvasGraph {
     this.nodes = JSON.parse(JSON.stringify(data.nodes || []));
     this.edges = JSON.parse(JSON.stringify(data.edges || []));
     this.options = options;
-    
+
     // Zoom and pan state
     this.scale = 1.0;
     this.offsetX = 0;
@@ -457,17 +457,17 @@ class CanvasGraph {
     this.isPanning = false;
     this.panStartX = 0;
     this.panStartY = 0;
-    
+
     // Drag state
     this.draggedNode = null;
     this.hoveredNode = null;
-    
+
     this.resizeCanvas();
     window.addEventListener('resize', () => this.resizeCanvas());
-    
+
     this.initLayout();
     this.runSimulation();
-    
+
     this.setupEventListeners();
     this.draw();
   }
@@ -484,7 +484,7 @@ class CanvasGraph {
   initLayout() {
     const width = this.canvas.width / window.devicePixelRatio;
     const height = this.canvas.height / window.devicePixelRatio;
-    
+
     this.nodes.forEach(node => {
       node.x = width / 2 + (Math.random() - 0.5) * 160;
       node.y = height / 2 + (Math.random() - 0.5) * 160;
@@ -499,7 +499,7 @@ class CanvasGraph {
     const k = 0.08;
     const rep = 1500;
     const ticks = 180;
-    
+
     for (let t = 0; t < ticks; t++) {
       for (let i = 0; i < this.nodes.length; i++) {
         const n1 = this.nodes[i];
@@ -520,7 +520,7 @@ class CanvasGraph {
           }
         }
       }
-      
+
       this.edges.forEach(edge => {
         const n1 = this.nodes.find(n => n.id === edge.source);
         const n2 = this.nodes.find(n => n.id === edge.target);
@@ -538,13 +538,13 @@ class CanvasGraph {
           n2.vy -= fy;
         }
       });
-      
+
       this.nodes.forEach(node => {
         const cx = width / 2;
         const cy = height / 2;
         node.vx += (cx - node.x) * 0.005;
         node.vy += (cy - node.y) * 0.005;
-        
+
         node.x += node.vx;
         node.y += node.vy;
         node.vx *= 0.82;
@@ -556,20 +556,20 @@ class CanvasGraph {
   draw() {
     const width = this.canvas.width / window.devicePixelRatio;
     const height = this.canvas.height / window.devicePixelRatio;
-    
+
     this.ctx.clearRect(0, 0, width, height);
-    
+
     this.ctx.save();
     this.ctx.translate(this.offsetX, this.offsetY);
     this.ctx.scale(this.scale, this.scale);
-    
+
     this.drawGrid(width, height);
-    
+
     this.edges.forEach(edge => this.drawEdge(edge));
     this.nodes.forEach(node => this.drawNode(node));
-    
+
     this.ctx.restore();
-    
+
     requestAnimationFrame(() => this.draw());
   }
 
@@ -578,12 +578,12 @@ class CanvasGraph {
     this.ctx.strokeStyle = '#f1f5f9';
     this.ctx.lineWidth = 1;
     this.ctx.setLineDash([5, 5]);
-    
+
     const startX = Math.floor((-this.offsetX) / this.scale / 40) * 40 - 80;
     const endX = startX + (width / this.scale) + 160;
     const startY = Math.floor((-this.offsetY) / this.scale / 40) * 40 - 80;
     const endY = startY + (height / this.scale) + 160;
-    
+
     for (let x = startX; x <= endX; x += 40) {
       this.ctx.beginPath();
       this.ctx.moveTo(x, startY);
@@ -603,12 +603,12 @@ class CanvasGraph {
     const fromNode = this.nodes.find(n => n.id === edge.source);
     const toNode = this.nodes.find(n => n.id === edge.target);
     if (!fromNode || !toNode) return;
-    
+
     const isHovered = this.hoveredNode && (this.hoveredNode.id === edge.source || this.hoveredNode.id === edge.target);
     const hasActiveHover = this.hoveredNode !== null;
-    
+
     this.ctx.save();
-    
+
     if (hasActiveHover) {
       this.ctx.strokeStyle = isHovered ? '#3157d5' : '#e2e8f0';
       this.ctx.lineWidth = isHovered ? 2.5 : 1.0;
@@ -616,41 +616,41 @@ class CanvasGraph {
       this.ctx.strokeStyle = '#94a3b8';
       this.ctx.lineWidth = 1.8;
     }
-    
+
     const dx = toNode.x - fromNode.x;
     const dy = toNode.y - fromNode.y;
     const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-    
+
     const toRadius = this.getNodeRadius(toNode);
     const fromRadius = this.getNodeRadius(fromNode);
-    
+
     const startX = fromNode.x + (dx / dist) * fromRadius;
     const startY = fromNode.y + (dy / dist) * fromRadius;
     const endX = toNode.x - (dx / dist) * toRadius;
     const endY = toNode.y - (dy / dist) * toRadius;
-    
+
     this.ctx.beginPath();
     this.ctx.moveTo(startX, startY);
     this.ctx.lineTo(endX, endY);
     this.ctx.stroke();
-    
+
     const angle = Math.atan2(dy, dx);
-    const isRepression = this.options.isRegulatory && 
-      (String(edge.type).toLowerCase() === 'repression' || 
-       String(edge.label).toLowerCase() === 'repression' || 
+    const isRepression = this.options.isRegulatory &&
+      (String(edge.type).toLowerCase() === 'repression' ||
+       String(edge.label).toLowerCase() === 'repression' ||
        String(edge.type).toLowerCase() === 'inhibition');
-       
+
     if (isRepression) {
       this.ctx.save();
       this.ctx.strokeStyle = hasActiveHover ? (isHovered ? '#f04438' : '#e2e8f0') : '#f04438';
       this.ctx.lineWidth = isHovered ? 3 : 2;
-      
+
       const barLen = 12;
       const bx = endX;
       const by = endY;
       const perpX = -Math.sin(angle) * (barLen / 2);
       const perpY = Math.cos(angle) * (barLen / 2);
-      
+
       this.ctx.beginPath();
       this.ctx.moveTo(bx - perpX, by - perpY);
       this.ctx.lineTo(bx + perpX, by + perpY);
@@ -659,10 +659,10 @@ class CanvasGraph {
     } else {
       this.ctx.save();
       this.ctx.fillStyle = hasActiveHover ? (isHovered ? '#3157d5' : '#e2e8f0') : '#94a3b8';
-      
+
       const arrowLen = 8;
       const arrowAngle = Math.PI / 6;
-      
+
       this.ctx.beginPath();
       this.ctx.moveTo(endX, endY);
       this.ctx.lineTo(
@@ -677,7 +677,7 @@ class CanvasGraph {
       this.ctx.fill();
       this.ctx.restore();
     }
-    
+
     if (edge.label && edge.label !== 'logic' && edge.label !== 'expression') {
       const midX = (startX + endX) / 2;
       const midY = (startY + endY) / 2;
@@ -687,7 +687,7 @@ class CanvasGraph {
       this.ctx.fillText(edge.label, midX + 5, midY - 5);
       this.ctx.restore();
     }
-    
+
     this.ctx.restore();
   }
 
@@ -702,12 +702,12 @@ class CanvasGraph {
     const isHovered = this.hoveredNode && this.hoveredNode.id === node.id;
     const isNeighbor = this.hoveredNode && this.isNeighbor(this.hoveredNode.id, node.id);
     const hasActiveHover = this.hoveredNode !== null;
-    
+
     this.ctx.save();
-    
+
     let color = '#94a3b8';
     let isRect = false;
-    
+
     if (node.type === 'input' || node.type === 'sensor' || node.type === 'signal') {
       color = '#2563eb';
     } else if (node.type === 'output' || node.type === 'reporter') {
@@ -718,16 +718,16 @@ class CanvasGraph {
     } else if (node.type === 'promoter') {
       color = '#7f56d9';
     }
-    
+
     if (hasActiveHover) {
       this.ctx.globalAlpha = (isHovered || isNeighbor) ? 1.0 : 0.25;
     }
-    
+
     this.ctx.fillStyle = color;
     this.ctx.shadowColor = 'rgba(16, 24, 40, 0.08)';
     this.ctx.shadowBlur = isHovered ? 8 : 3;
     this.ctx.shadowOffsetY = 2;
-    
+
     if (isRect) {
       const w = 44;
       const h = 26;
@@ -750,23 +750,23 @@ class CanvasGraph {
         this.ctx.stroke();
       }
     }
-    
+
     this.ctx.shadowColor = 'transparent';
     this.ctx.fillStyle = '#ffffff';
     this.ctx.font = 'bold 11px sans-serif';
     this.ctx.textAlign = 'center';
     this.ctx.textBaseline = 'middle';
-    
+
     let label = node.label || node.id;
     if (label.length > 8) label = label.slice(0, 6) + '..';
     this.ctx.fillText(label, node.x, node.y);
-    
+
     this.ctx.restore();
   }
 
   isNeighbor(id1, id2) {
-    return this.edges.some(edge => 
-      (edge.source === id1 && edge.target === id2) || 
+    return this.edges.some(edge =>
+      (edge.source === id1 && edge.target === id2) ||
       (edge.source === id2 && edge.target === id1)
     );
   }
@@ -776,7 +776,7 @@ class CanvasGraph {
       const rect = this.canvas.getBoundingClientRect();
       const clientX = evt.clientX - rect.left;
       const clientY = evt.clientY - rect.top;
-      
+
       const x = (clientX - this.offsetX) / this.scale;
       const y = (clientY - this.offsetY) / this.scale;
       return { x, y, clientX, clientY };
@@ -794,7 +794,7 @@ class CanvasGraph {
     this.canvas.addEventListener('mousedown', (evt) => {
       const coords = getMouseCoords(evt);
       const node = findNodeAt(coords.x, coords.y);
-      
+
       if (node) {
         this.draggedNode = node;
         this.canvas.style.cursor = 'grabbing';
@@ -808,25 +808,25 @@ class CanvasGraph {
 
     this.canvas.addEventListener('mousemove', (evt) => {
       const coords = getMouseCoords(evt);
-      
+
       if (this.draggedNode) {
         this.draggedNode.x = coords.x;
         this.draggedNode.y = coords.y;
         return;
       }
-      
+
       if (this.isPanning) {
         this.offsetX = coords.clientX - this.panStartX;
         this.offsetY = coords.clientY - this.panStartY;
         return;
       }
-      
+
       const node = findNodeAt(coords.x, coords.y);
       if (node !== this.hoveredNode) {
         this.hoveredNode = node;
         this.updateDetails(node);
       }
-      
+
       this.canvas.style.cursor = node ? 'pointer' : (this.isPanning ? 'move' : 'grab');
     });
 
@@ -846,12 +846,12 @@ class CanvasGraph {
     this.canvas.addEventListener('wheel', (evt) => {
       evt.preventDefault();
       const coords = getMouseCoords(evt);
-      
+
       const zoomFactor = 1.05;
       const nextScale = evt.deltaY < 0 ? this.scale * zoomFactor : this.scale / zoomFactor;
-      
+
       if (nextScale < 0.3 || nextScale > 3.0) return;
-      
+
       this.offsetX = coords.clientX - (coords.clientX - this.offsetX) * (nextScale / this.scale);
       this.offsetY = coords.clientY - (coords.clientY - this.offsetY) * (nextScale / this.scale);
       this.scale = nextScale;
@@ -864,20 +864,20 @@ class CanvasGraph {
       this.detailsEl.innerHTML = this.options.defaultText || '滑鼠懸停於節點上可檢視詳情。';
       return;
     }
-    
+
     let typeLabel = node.type;
     let desc = '';
-    
+
     if (this.options.isRegulatory) {
       const details = this.options.partsList ? this.options.partsList.find(p => p.id === node.id || (p.assignment && p.assignment.part_id === node.id)) : null;
       if (details) {
         const type = details.part_type || 'Unknown';
         const role = details.role || '未指定角色';
         const seqLen = details.sequence ? details.sequence.length : 0;
-        
+
         desc = `
-          <strong>分派元件 ID:</strong> <code>${node.id}</code> · 
-          <strong>元件類型:</strong> <span class="badge" style="font-size:10px; padding:1px 5px; background:var(--brand-soft); color:var(--brand);">${type.toUpperCase()}</span> · 
+          <strong>分派元件 ID:</strong> <code>${node.id}</code> ·
+          <strong>元件類型:</strong> <span class="badge" style="font-size:10px; padding:1px 5px; background:var(--brand-soft); color:var(--brand);">${type.toUpperCase()}</span> ·
           <strong>鹼基長度:</strong> ${seqLen} bp <br>
           <strong>角色與說明:</strong> ${role}
         `;
@@ -893,7 +893,7 @@ class CanvasGraph {
         desc = `<strong>邏輯閘 (Gate):</strong> <code>${node.id}</code> · 執行組合邏輯運算。`;
       }
     }
-    
+
     this.detailsEl.innerHTML = desc;
   }
 
@@ -919,7 +919,7 @@ class CanvasGraph {
 document.addEventListener('DOMContentLoaded', () => {
   const topologyData = JSON.parse(document.getElementById('topology-data').textContent);
   const regulatoryData = JSON.parse(document.getElementById('regulatory-data').textContent);
-  
+
   // Clean special characters injection inside json string
   const cleanJsonText = (text) => {
     return text.replace(/<\/script>/g, '<\\/script>');
@@ -932,7 +932,7 @@ document.addEventListener('DOMContentLoaded', () => {
     height: 280,
     defaultText: '滑鼠懸停於節點上可檢視邏輯訊號或門詳情。'
   });
-  
+
   window.graphReg = new CanvasGraph('regulatory-canvas', 'regulatory-details', regulatoryData, {
     height: 300,
     isRegulatory: true,

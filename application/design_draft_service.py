@@ -36,7 +36,7 @@ class DesignDraftService:
         # Convert to DesignDraft to apply defaults and filter keys
         draft = DesignDraft.from_dict(merged)
         draft.last_saved = datetime.now(timezone.utc).isoformat()
-        
+
         saved_dict = draft.to_dict()
         self.repository.save("active_draft", saved_dict)
         return saved_dict

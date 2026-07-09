@@ -103,7 +103,7 @@ def test_notification_api_endpoints(client, test_services):
     data = response.json()["data"]
     assert data["unread_count"] >= 1
     assert len(data["notifications"]) >= 1
-    
+
     # We allow any active status since the background thread runs immediately
     notif_id = data["notifications"][0]["notification_id"]
     assert notif_id.startswith("run_run_api_test_")

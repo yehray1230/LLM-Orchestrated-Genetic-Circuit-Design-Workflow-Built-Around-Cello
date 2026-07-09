@@ -146,10 +146,10 @@ def test_i18n_translation_keys(client, test_services):
     assert response.status_code == 200
     assert "lang" in response.cookies
     assert response.cookies["lang"] == "en"
-    
+
     # Verify translated texts are shown in English
     assert "Design Library" in response.text
-    
+
     # Request Chinese (or default)
     response = client.get("/web/designs?lang=zh-Hant")
     assert response.status_code == 200
@@ -192,13 +192,13 @@ def test_deletion_impact_preview_and_purge_cleanup(client, test_services):
         follow_redirects=False,
     )
     assert response.status_code == 303  # Redirect to /web/designs
-    
+
     # Verify design is purged
     assert test_services.designs.get_v2(design_id) is None
-    
+
     # Verify deliverable record is deleted
     assert test_services.assembly_deliverables.get(deliverable_id) is None
-    
+
     # Verify on-disk files are purged
     assert not deliv_dir.exists()
 

@@ -29,7 +29,7 @@ def test_candidates_run_not_found(client: TestClient) -> None:
 def test_candidates_run_not_completed(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     # 4. Run not completed displays "not completed" state
     services = client.app.state.test_services
-    
+
     monkeypatch.setattr(
         services.runs,
         "status",
@@ -50,7 +50,7 @@ def test_candidates_run_not_completed(client: TestClient, monkeypatch: pytest.Mo
 def test_candidates_completed_but_empty(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     # 5. Completed but no candidates
     services = client.app.state.test_services
-    
+
     monkeypatch.setattr(
         services.runs,
         "status",
@@ -78,7 +78,7 @@ def test_candidates_completed_but_empty(client: TestClient, monkeypatch: pytest.
 
 def test_candidates_unparseable_result(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     services = client.app.state.test_services
-    
+
     monkeypatch.setattr(
         services.runs,
         "status",
@@ -89,10 +89,10 @@ def test_candidates_unparseable_result(client: TestClient, monkeypatch: pytest.M
             "summary": {"user_intent": "Test intent"}
         }
     )
-    
+
     def fail_result(run_id):
         raise ValueError("Invalid JSON format")
-        
+
     monkeypatch.setattr(services.runs, "result", fail_result)
 
     response = client.get("/web/runs/broken_run/candidates")
@@ -104,7 +104,7 @@ def test_candidates_unparseable_result(client: TestClient, monkeypatch: pytest.M
 def test_candidates_all_failed(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     # 6. Cello mapping failure
     services = client.app.state.test_services
-    
+
     monkeypatch.setattr(
         services.runs,
         "status",
@@ -144,7 +144,7 @@ def test_candidates_list_and_details_success(client: TestClient, monkeypatch: py
     # 8. fallback/provisional warnings
     # 10. Same scores in detail and list
     services = client.app.state.test_services
-    
+
     monkeypatch.setattr(
         services.runs,
         "status",
@@ -159,7 +159,7 @@ def test_candidates_list_and_details_success(client: TestClient, monkeypatch: py
             }
         }
     )
-    
+
     mock_topologies = [
         {
             "score": 0.88,
@@ -193,7 +193,7 @@ def test_candidates_list_and_details_success(client: TestClient, monkeypatch: py
             ]
         }
     ]
-    
+
     monkeypatch.setattr(
         services.runs,
         "result",
@@ -232,7 +232,7 @@ def test_candidates_list_and_details_success(client: TestClient, monkeypatch: py
     bad_index_resp = client.get("/web/runs/success_run/candidates/99")
     assert bad_index_resp.status_code == 404
     assert "Candidate index 99 is out of range." in bad_index_resp.json()["error"]["message"]
-    
+
     # Test Unfinished Detail page returns 400
     unfinished_detail_resp = client.get("/web/runs/active_run/candidates/0")
     assert unfinished_detail_resp.status_code == 400
@@ -242,7 +242,7 @@ def test_candidates_list_and_details_success(client: TestClient, monkeypatch: py
 def test_candidates_special_characters_safety(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     # 9. HTML Injection prevention
     services = client.app.state.test_services
-    
+
     monkeypatch.setattr(
         services.runs,
         "status",
@@ -253,7 +253,7 @@ def test_candidates_special_characters_safety(client: TestClient, monkeypatch: p
             "summary": {"user_intent": "<script>alert('injection')</script>"}
         }
     )
-    
+
     monkeypatch.setattr(
         services.runs,
         "result",
@@ -279,7 +279,7 @@ def test_candidates_special_characters_safety(client: TestClient, monkeypatch: p
 
 def test_candidate_simulate_get(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     services = client.app.state.test_services
-    
+
     monkeypatch.setattr(
         services.runs,
         "status",
@@ -316,7 +316,7 @@ def test_candidate_simulate_get(client: TestClient, monkeypatch: pytest.MonkeyPa
 
 def test_candidate_simulate_post_success(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     services = client.app.state.test_services
-    
+
     monkeypatch.setattr(
         services.runs,
         "status",
@@ -343,7 +343,7 @@ def test_candidate_simulate_post_success(client: TestClient, monkeypatch: pytest
             ]
         }
     )
-    
+
     mock_sim_result = {
         "simulation_spec": {},
         "simulation_result": {},
@@ -366,7 +366,7 @@ def test_candidate_simulate_post_success(client: TestClient, monkeypatch: pytest
             }
         }
     }
-    
+
     monkeypatch.setattr(
         services.simulations,
         "simulate",
@@ -395,7 +395,7 @@ def test_candidate_simulate_post_success(client: TestClient, monkeypatch: pytest
 
 def test_candidate_compare_get(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     services = client.app.state.test_services
-    
+
     mock_topologies = [
         {
             "score": 0.88,
@@ -428,7 +428,7 @@ def test_candidate_compare_get(client: TestClient, monkeypatch: pytest.MonkeyPat
             ]
         }
     ]
-    
+
     monkeypatch.setattr(
         services.runs,
         "status",
@@ -475,7 +475,7 @@ def test_candidate_compare_get(client: TestClient, monkeypatch: pytest.MonkeyPat
 
 def test_candidate_promote_post(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     services = client.app.state.test_services
-    
+
     mock_topologies = [
         {
             "score": 0.88,
@@ -486,7 +486,7 @@ def test_candidate_promote_post(client: TestClient, monkeypatch: pytest.MonkeyPa
             ]
         }
     ]
-    
+
     monkeypatch.setattr(
         services.runs,
         "status",
@@ -519,11 +519,9 @@ def test_candidate_promote_post(client: TestClient, monkeypatch: pytest.MonkeyPa
     response = client.post("/web/runs/success_run/candidates/0/promote", follow_redirects=False)
     assert response.status_code == 303
     assert response.headers["location"].startswith("/web/designs/design_")
-    
+
     # Verify design was converted and saved
     assert len(saved_design) == 1
     design = saved_design[0]
     assert design.name == "Design from Run success_ Candidate #1"
     assert design.parts[0].host_compatibility == ["Escherichia coli"]
-
-

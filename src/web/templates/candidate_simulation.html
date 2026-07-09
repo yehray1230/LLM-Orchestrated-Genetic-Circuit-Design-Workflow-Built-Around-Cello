@@ -23,13 +23,13 @@
 </header>
 
 <div class="grid grid-3" style="grid-template-columns: 1fr 2fr; gap: 24px; align-items: start;">
-  
+
   <!-- Left Column: Settings Form -->
   <article class="card" style="padding: 20px;">
     <h2 style="font-size: 16px; margin-top: 0; margin-bottom: 16px; border-bottom: 1px solid var(--line); padding-bottom: 8px;">🎛️ 模擬控制與輸入設定</h2>
-    
+
     <form method="POST" action="/web/runs/{{ view.run_id }}/candidates/{{ view.index }}/simulate" id="simulation-form">
-      
+
       <!-- General Settings -->
       <div style="display: grid; gap: 12px; margin-bottom: 20px;">
         <div>
@@ -58,13 +58,13 @@
 
       <!-- Temporal Inputs Specs -->
       <h3 style="font-size: 13.5px; border-top: 1px solid var(--line); padding-top: 12px; margin-top: 12px; margin-bottom: 10px;">🧬 輸入信號波形控制</h3>
-      
+
       {% if inputs %}
         <div style="display: flex; flex-direction: column; gap: 14px;">
           {% for sig in inputs %}
           <div style="background: #f8fafc; border: 1px solid var(--line); border-radius: 8px; padding: 10px;">
             <strong style="font-size: 13px; color: var(--brand); display: block; margin-bottom: 6px;">信號 {{ sig }}</strong>
-            
+
             <div style="margin-bottom: 8px;">
               <label style="font-size: 11px; color: var(--muted); display: block; margin-bottom: 2px;">波形類型</label>
               <select name="input_type_{{ sig }}" onchange="toggleSignalConfig('{{ sig }}', this.value)" style="width: 100%; padding: 6px; border: 1px solid var(--line); border-radius: 4px; font-size: 12.5px;">
@@ -137,7 +137,7 @@
 
   <!-- Right Column: Plot & Results -->
   <section style="display: flex; flex-direction: column; gap: 24px;">
-    
+
     <!-- Errors Callout -->
     {% if errors %}
     <div class="error-box" style="margin: 0;">
@@ -154,12 +154,12 @@
             <span>📈 軌跡響應模擬圖 (Trajectories)</span>
             <span class="status-badge status-ready" style="font-size: 12px; padding: 2px 8px;">ODE Simulated</span>
           </h2>
-          
+
           <!-- Trajectory Plot Container -->
           <div style="position: relative; height: 320px; border: 1px solid var(--line); border-radius: 8px; background: white; padding: 10px;">
             <canvas id="simulation-chart" style="width: 100%; height: 300px;"></canvas>
           </div>
-          
+
           <!-- Quick metrics summary -->
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-top: 18px;">
             <div style="background: #f8fafc; border: 1px solid var(--line); padding: 8px 12px; border-radius: 8px; text-align: center;">
@@ -212,7 +212,7 @@
         </div>
       {% endif %}
     </article>
-    
+
   </section>
 
 </div>
@@ -222,7 +222,7 @@
 function toggleSignalConfig(sig, value) {
   const blocks = document.querySelectorAll('.sig-config-block-' + sig);
   blocks.forEach(b => b.style.display = 'none');
-  
+
   const target = document.getElementById('sig-config-' + value + '-' + sig);
   if (target) target.style.display = 'block';
 }
@@ -241,7 +241,7 @@ function setLoadingState(btn) {
 document.addEventListener('DOMContentLoaded', () => {
   const ctx = document.getElementById('simulation-chart').getContext('2d');
   const trace = {{ results.ode_trace | tojson }};
-  
+
   new Chart(ctx, {
     type: 'line',
     data: {

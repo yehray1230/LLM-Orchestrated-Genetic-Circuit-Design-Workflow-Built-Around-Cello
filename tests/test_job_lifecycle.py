@@ -32,7 +32,7 @@ def test_job_view_building(test_services):
         "compute_budget": 5,
     })
     run_id = result["run_id"]
-    
+
     # Build design job view
     job_view = build_job_view(run_id, "design", test_services)
     assert job_view.id == run_id
@@ -42,7 +42,7 @@ def test_job_view_building(test_services):
     assert not job_view.terminal
     assert job_view.can_cancel
     assert not job_view.can_retry
-    
+
     # Cancel the run
     test_services.runs.cancel(run_id)
     job_view = build_job_view(run_id, "design", test_services)
@@ -57,23 +57,23 @@ def test_web_routes_lifecycle(client, test_services):
         "compute_budget": 5,
     })
     run_id = result["run_id"]
-    
+
     # 1. Detail page
     response = client.get(f"/web/runs/{run_id}")
     assert response.status_code == 200
     assert b"Design run monitor" in response.content
     assert b"decision-history" in response.content
-    
+
     # 2. Decision history page
     response = client.get(f"/web/runs/{run_id}/decision-history")
     assert response.status_code == 200
     assert b"AI Search Tree" in response.content
-    
+
     # 3. Cancel the run
     response = client.post(f"/web/runs/{run_id}/cancel", follow_redirects=False)
     assert response.status_code == 303
     assert response.headers["location"].endswith(f"/web/runs/{run_id}")
-    
+
     # 4. Retry the run
     response = client.post(f"/web/runs/{run_id}/retry", follow_redirects=False)
     assert response.status_code == 303

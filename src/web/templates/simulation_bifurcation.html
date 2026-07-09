@@ -48,11 +48,11 @@
 </div>
 
 <div class="grid grid-3" style="grid-template-columns: 1fr 2fr; gap: 24px; align-items: start;">
-  
+
   <!-- Left Column: Settings Form -->
   <article class="card" style="padding: 20px;">
     <h2 style="font-size: 16px; margin-top: 0; margin-bottom: 16px; border-bottom: 1px solid var(--line); padding-bottom: 8px;">🎛️ 分岔與轉移函數</h2>
-    
+
     <form method="POST" action="/web/designs/{{ view.design_id }}/simulation/bifurcation{% if is_historical %}?rev={{ viewed_rev }}{% endif %}" id="simulation-form">
       <div style="display: grid; gap: 12px; margin-bottom: 20px;">
         <div>
@@ -87,7 +87,7 @@
 
   <!-- Right Column: Job Status & Result -->
   <section class="grid grid-1" style="gap: 24px;">
-    
+
     <!-- 1. 問題說明 -->
     <article class="card" style="background: #f8fafc; border-left: 4px solid var(--brand);">
       <h3 style="margin: 0 0 6px 0;">分岔與轉移函數分析回答的問題</h3>
@@ -173,7 +173,7 @@
 document.addEventListener('DOMContentLoaded', () => {
   const ctx = document.getElementById('simulation-chart').getContext('2d');
   const sweepRes = {{ run_data.result.bif_result | tojson }};
-  
+
   const values = sweepRes.results.map(r => r.input_value);
   const out = sweepRes.results.map(r => r.output_value);
   const burden = sweepRes.results.map(r => r.burden_nM);

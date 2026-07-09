@@ -12,7 +12,7 @@ def test_app_py_has_deprecation_warning():
     """Verify that app.py contains the st.warning banner about maintenance mode."""
     app_path = Path("app.py")
     assert app_path.exists(), "app.py should exist"
-    
+
     content = app_path.read_text(encoding="utf-8")
     assert "st.warning(" in content
     assert "維護模式" in content

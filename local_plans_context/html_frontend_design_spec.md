@@ -1,8 +1,8 @@
 # HTML 前端完整化設計規格
 
-> 文件狀態：設計基準（implementation-ready product specification）  
-> 建立日期：2026-07-03  
-> 適用範圍：以 FastAPI、Jinja、HTML、CSS、JavaScript 為主的 `web/` 前端  
+> 文件狀態：設計基準（implementation-ready product specification）
+> 建立日期：2026-07-03
+> 適用範圍：以 FastAPI、Jinja、HTML、CSS、JavaScript 為主的 `web/` 前端
 > 目標：讓 HTML 前端完整承接目前 Streamlit 與既有 Web 介面的主要功能，同時維持一般使用者容易理解、每頁聚焦且資訊完整。
 
 ## 1. 文件目的

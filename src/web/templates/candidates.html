@@ -43,7 +43,7 @@
     <div>
       <span class="muted" style="font-size: 12px; display: block; margin-bottom: 4px;">候選數量與最佳分數</span>
       <span style="font-size: 15px; font-weight: 700;">
-        {{ view.total_candidates }} 個候選 | Best: 
+        {{ view.total_candidates }} 個候選 | Best:
         <span style="color: var(--success);">{{ "%.3f"|format(view.best_score) if view.best_score is not none else "-" }}</span>
       </span>
     </div>
@@ -62,25 +62,25 @@
 <!-- Empty States / Loading States -->
 {% if view.empty_state_type %}
 <section class="card" style="text-align: center; padding: 48px 24px; display: grid; gap: 16px; justify-items: center; border-radius: 14px;">
-  
+
   {% if view.empty_state_type == "not_completed" %}
     <div style="font-size: 48px;">⏳</div>
     <h2 style="margin: 0; color: var(--brand);">運行尚未完成</h2>
     <p class="muted" style="max-width: 480px; margin: 0 auto;">此設計運行目前處於 <strong>{{ view.run_status }}</strong> 狀態。請在執行完成或暫停後，再返回本工作台瀏覽候選結果。</p>
     <a class="button" href="/web/runs/{{ view.run_id }}">返回監控頁面觀看進度</a>
-    
+
   {% elif view.empty_state_type == "empty" %}
     <div style="font-size: 48px;">📂</div>
     <h2 style="margin: 0; color: var(--muted);">完成但沒有候選方案</h2>
     <p class="muted" style="max-width: 480px; margin: 0 auto;">電路設計搜尋已結束，但未產生任何有效的候選拓樸方案。這可能是由於布林邏輯不可滿足，或未配置適當的評估參數。</p>
     <a class="button secondary" href="/web/new-design">重新配置並建立新設計</a>
-    
+
   {% elif view.empty_state_type == "unparseable" %}
     <div style="font-size: 48px;">⚠️</div>
     <h2 style="margin: 0; color: #b42318;">執行結果無法解析</h2>
     <p class="muted" style="max-width: 480px; margin: 0 auto;">系統無法載入或解析此執行的 <code>result.json</code> 資料。此運行可能因異常錯誤終止，或輸出檔案已損毀。</p>
     <a class="button secondary" href="/web/runs/{{ view.run_id }}">檢視事件與錯誤日誌</a>
-    
+
   {% elif view.empty_state_type == "all_failed" %}
     <div style="font-size: 48px;">❌</div>
     <h2 style="margin: 0; color: #b42318;">候選方案全部 Mapping 失敗</h2>
@@ -98,7 +98,7 @@
 <div class="grid grid-3" style="align-items: start; gap: 20px;">
   {% for candidate in view.candidates %}
   <article class="card" style="display: flex; flex-direction: column; justify-content: space-between; min-height: 380px; transition: transform 0.2s, box-shadow 0.2s; position: relative; overflow: hidden; border: 1px solid {% if candidate.is_best %}#a6f4c5{% else %}var(--line){% endif %}; box-shadow: {% if candidate.is_best %}0 4px 12px rgba(18, 183, 106, 0.08){% else %}0 1px 2px rgba(16, 24, 40, .04){% endif %};">
-    
+
     <!-- Select for Compare Checkbox -->
     <label style="position: absolute; top: 10px; left: 12px; display: flex; align-items: center; gap: 6px; font-size: 11.5px; z-index: 10; cursor: pointer; background: white; padding: 3px 8px; border-radius: 6px; border: 1px solid var(--line); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
       <input type="checkbox" class="candidate-select" data-index="{{ candidate.index }}" style="margin: 0; width: 14px; height: 14px;"> 選擇對比
@@ -133,7 +133,7 @@
 
       <!-- Detail Specs List -->
       <div style="display: flex; flex-direction: column; gap: 8px; font-size: 13px; margin-bottom: 18px;">
-        
+
         <div style="display: flex; justify-content: space-between; border-bottom: 1px dashed var(--line); padding-bottom: 6px;">
           <span class="muted">Cello Mapping 狀態</span>
           {% if candidate.mapping_status == "mapped" %}
@@ -206,11 +206,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const checkboxes = document.querySelectorAll(".candidate-select");
     const compareBtn = document.getElementById("compare-btn");
     const selectCount = document.getElementById("select-count");
-    
+
     function updateCompareButton() {
         const selected = Array.from(checkboxes).filter(cb => cb.checked);
         selectCount.textContent = selected.length;
-        
+
         if (selected.length >= 2 && selected.length <= 4) {
             compareBtn.style.display = "inline-flex";
             compareBtn.disabled = false;
@@ -222,11 +222,11 @@ document.addEventListener("DOMContentLoaded", () => {
             compareBtn.style.display = "none";
         }
     }
-    
+
     checkboxes.forEach(cb => {
         cb.addEventListener("change", updateCompareButton);
     });
-    
+
     window.compareCandidates = function() {
         const selectedIndexes = Array.from(checkboxes)
             .filter(cb => cb.checked)

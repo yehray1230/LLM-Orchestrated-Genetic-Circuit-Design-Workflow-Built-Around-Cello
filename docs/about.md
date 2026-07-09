@@ -31,7 +31,7 @@ This document consolidates the developer's personal motivation, strategic profil
 
 * **探索以環境反饋引導的智能體工作流 (Environment-Feedback Loop)**：
   傳統的大語言模型在處理複雜的生物設計任務時，常因長上下文漂移（Context Drift）而產生幻覺（Hallucination）。本專案旨在探索一種「閉環反饋」機制——AI 系統不單靠使用者指令工作，還能將真值表檢驗、Cello 編譯結果、ODE 模擬數值與基準分數等「環境反饋」作為結構化信號，引導智能體進行迭代與自我修正（Reflexion）。
-  
+
 * **解決 AI 生物學設計中的「偽流暢性」差距 (Addressing "Pseudofluency" Gap)**：
   大語言模型能生成看起來非常專業且令人信服的啟動子、邏輯閘或質體描述，但這些設計背後往往缺乏明確的約束與物理合理性。本專案選擇「不將 LLM 的直接輸出當作最終結果」，而是建立嚴格的翻譯、模擬、評估、批判鏈條，將設計背後的生物學假設與不確定性顯性化，使人類研究者能夠審查和糾錯。
 

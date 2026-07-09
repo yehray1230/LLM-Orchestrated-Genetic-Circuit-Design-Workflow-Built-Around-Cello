@@ -32,7 +32,7 @@ def test_elicitation_endpoints_flow(client, test_services):
         "current_step": 1,
         "user_intent": "Build an oscillator circuit"
     })
-    
+
     # Mock call_pm_agent
     mock_state = DesignState(
         user_intent="Build an oscillator circuit",
@@ -47,7 +47,7 @@ def test_elicitation_endpoints_flow(client, test_services):
         },
         pm_stage="elicitation"
     )
-    
+
     with patch("agents.pm_agent.call_pm_agent", return_value=mock_state):
         # 2. Call elicitation/next
         response = client.post("/api/v1/designs/drafts/elicitation/next")
@@ -74,7 +74,7 @@ def test_elicitation_endpoints_flow(client, test_services):
             },
             pm_stage="elicitation"
         )
-        
+
         with patch("agents.pm_agent.call_pm_agent", return_value=next_mock_state):
             response = client.post("/api/v1/designs/drafts/elicitation/propose", json={
                 "choice": "agree"
@@ -101,7 +101,7 @@ def test_elicitation_endpoints_flow(client, test_services):
             pending_proposal={},
             pm_stage="completed"
         )
-        
+
         with patch("agents.pm_agent.call_pm_agent", return_value=final_mock_state):
             response = client.post("/api/v1/designs/drafts/elicitation/propose", json={
                 "choice": "override",
@@ -118,7 +118,7 @@ def test_elicitation_endpoints_flow(client, test_services):
         "current_step": 1,
         "user_intent": "Build an oscillator circuit"
     })
-    
+
     response = client.post("/api/v1/designs/drafts/elicitation/skip")
     assert response.status_code == 200
     data = response.json()["data"]
