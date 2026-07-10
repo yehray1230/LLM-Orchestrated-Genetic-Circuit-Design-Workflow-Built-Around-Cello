@@ -1,60 +1,60 @@
 {% extends "base.html" %}
-{% block title %}New Assembly Deliverable{% endblock %}
+{% block title %}{{ _tr('新裝配交付物', 'New Assembly Deliverable') }}{% endblock %}
 {% block content %}
 <header class="page-header split-header">
   <div>
-    <span class="eyebrow">Assembly workflow</span>
-    <h1>New Assembly Deliverable</h1>
-    <p class="muted">Create a sequence-level assembly plan and primer package from a DesignIR v2 record and registered backbone.</p>
+    <span class="eyebrow">{{ _tr('裝配工作流程', 'Assembly Workflow') }}</span>
+    <h1>{{ _tr('新裝配交付物', 'New Assembly Deliverable') }}</h1>
+    <p class="muted">{{ _tr('使用 DesignIR v2 紀錄與已註冊骨架，建立序列層級的裝配計畫與引子套件。', 'Create a sequence-level assembly plan and primer package from a DesignIR v2 record and registered backbone.') }}</p>
   </div>
-  <a class="button secondary" href="/web/assembly/backbones">Manage backbones</a>
+  <a class="button secondary" href="/web/assembly/backbones">{{ _tr('管理骨架', 'Manage Backbones') }}</a>
 </header>
 
 <nav class="workspace-steps">
-  <a href="/web/assembly">Overview</a>
-  <a href="/web/assembly/backbones">Backbones</a>
-  <a class="active" href="/web/assembly/new">New deliverable</a>
-  <span>Report</span>
-  <span>Downloads</span>
+  <a href="/web/assembly">{{ _tr('總覽', 'Overview') }}</a>
+  <a href="/web/assembly/backbones">{{ _tr('骨架', 'Backbones') }}</a>
+  <a class="active" href="/web/assembly/new">{{ _tr('新交付物', 'New Deliverable') }}</a>
+  <span>{{ _tr('報告', 'Report') }}</span>
+  <span>{{ _tr('下載', 'Downloads') }}</span>
 </nav>
 
 {% if not designs or not backbones %}
-<div class="warning-box section-space">A DesignIR v2 design and a registered backbone are required before generating a deliverable.</div>
+<div class="warning-box section-space">{{ _tr('產生交付物前，需要一個 DesignIR v2 設計與一個已註冊骨架。', 'A DesignIR v2 design and a registered backbone are required before generating a deliverable.') }}</div>
 {% endif %}
 
 <section class="card section-space">
   <span class="step-number">02</span>
-  <h2>Assembly and primer settings</h2>
+  <h2>{{ _tr('裝配與引子設定', 'Assembly and Primer Settings') }}</h2>
   <form action="/web/assembly/deliverables" method="post">
     <div class="form-grid">
-      <label>Design & Revision (設計與版本)
+      <label>{{ _tr('設計與版本', 'Design and Revision') }}
         <select name="design_id" required>
           {% for design in designs %}
             <option value="{{ design.design_id }}@{{ design.revision.revision_number }}">
-              {{ design.name }} (Rev {{ design.revision.revision_number }} - {{ design.design_id[:8] }}...{% if design.provenance %}, Source: Run {{ design.provenance[0].id[:8] }}{% endif %})
+              {{ design.name }} ({{ _tr('版本', 'Rev') }} {{ design.revision.revision_number }} - {{ design.design_id[:8] }}...{% if design.provenance %}, {{ _tr('來源：執行', 'Source: Run') }} {{ design.provenance[0].id[:8] }}{% endif %})
             </option>
           {% endfor %}
         </select>
       </label>
-      <label>Plasmid ID<input name="plasmid_id" placeholder="plasmid_1" required></label>
-      <label>Backbone
+      <label>{{ _tr('質體 ID', 'Plasmid ID') }}<input name="plasmid_id" placeholder="plasmid_1" required></label>
+      <label>{{ _tr('骨架', 'Backbone') }}
         <select name="backbone_id" required>
           {% for item in backbones %}<option value="{{ item.backbone_id }}">{{ item.name }} ({{ item.backbone_id }})</option>{% endfor %}
         </select>
       </label>
-      <label>Backbone version<input name="backbone_version" value="1.0.0" required></label>
-      <label>Insertion region ID<input name="insertion_region_id" value="mcs" required></label>
-      <label>Insertion start<input type="number" name="insertion_start" min="0" required></label>
-      <label>Insertion end<input type="number" name="insertion_end" min="0" required></label>
-      <label>Assembly method
-        <select name="method"><option value="gibson">Gibson</option><option value="golden_gate">Golden Gate</option><option value="restriction_cloning">Restriction cloning</option></select>
+      <label>{{ _tr('骨架版本', 'Backbone Version') }}<input name="backbone_version" value="1.0.0" required></label>
+      <label>{{ _tr('插入區域 ID', 'Insertion Region ID') }}<input name="insertion_region_id" value="mcs" required></label>
+      <label>{{ _tr('插入起點', 'Insertion Start') }}<input type="number" name="insertion_start" min="0" required></label>
+      <label>{{ _tr('插入終點', 'Insertion End') }}<input type="number" name="insertion_end" min="0" required></label>
+      <label>{{ _tr('裝配方法', 'Assembly Method') }}
+        <select name="method"><option value="gibson">{{ _enum_label('gibson') }}</option><option value="golden_gate">{{ _enum_label('golden_gate') }}</option><option value="restriction_cloning">{{ _enum_label('restriction_cloning') }}</option></select>
       </label>
-      <label>Restriction enzymes<input name="restriction_enzymes" value="EcoRI,BsaI,BsmBI"></label>
-      <label>Gibson overlap length<input type="number" name="gibson_overlap_length" value="25" min="15" max="80"></label>
-      <label>Golden Gate enzyme<select name="golden_gate_enzyme"><option>BsaI</option><option>BsmBI</option></select></label>
-      <label>Golden Gate overhangs<input name="golden_gate_overhangs" placeholder="AATG,GCTT"></label>
+      <label>{{ _tr('限制酶', 'Restriction Enzymes') }}<input name="restriction_enzymes" value="EcoRI,BsaI,BsmBI"></label>
+      <label>{{ _tr('Gibson 重疊長度', 'Gibson Overlap Length') }}<input type="number" name="gibson_overlap_length" value="25" min="15" max="80"></label>
+      <label>{{ _tr('Golden Gate 酵素', 'Golden Gate Enzyme') }}<select name="golden_gate_enzyme"><option>BsaI</option><option>BsmBI</option></select></label>
+      <label>{{ _tr('Golden Gate 突出端', 'Golden Gate Overhangs') }}<input name="golden_gate_overhangs" placeholder="AATG,GCTT"></label>
     </div>
-    <button class="button" type="submit" {% if not designs or not backbones %}disabled{% endif %}>Validate and generate deliverables</button>
+    <button class="button" type="submit" {% if not designs or not backbones %}disabled{% endif %}>{{ _tr('驗證並產生交付物', 'Validate and Generate Deliverables') }}</button>
   </form>
 </section>
 {% endblock %}

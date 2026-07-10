@@ -1,61 +1,61 @@
 {% extends "base.html" %}
-{% block title %}Research Workspace{% endblock %}
+{% block title %}{{ _tr('研究工作區', 'Research Workspace') }}{% endblock %}
 {% block content %}
 <header class="page-header split-header">
-  <div><span class="eyebrow">v2.0</span><h1>Research Workspace</h1>
-  <p class="muted">Configure, run, evaluate, compare, and export reproducible simulations.</p></div>
-  <a class="button secondary" href="/web/research/compare">Compare runs</a>
+  <div><span class="eyebrow">v2.0</span><h1>{{ _tr('研究工作區', 'Research Workspace') }}</h1>
+  <p class="muted">{{ _tr('設定、執行、評估、比較並匯出可重現的模擬結果。', 'Configure, run, evaluate, compare, and export reproducible simulations.') }}</p></div>
+  <a class="button secondary" href="/web/research/compare">{{ _tr('比較執行結果', 'Compare Runs') }}</a>
 </header>
 
 <section class="workspace-steps">
-  <span class="active">1 Design</span><span>2 Simulation</span>
-  <span>3 Evaluation</span><span>4 Compare</span><span>5 Report</span>
+  <span class="active">1 {{ _tr('設計', 'Design') }}</span><span>2 {{ _tr('模擬', 'Simulation') }}</span>
+  <span>3 {{ _tr('評估', 'Evaluation') }}</span><span>4 {{ _tr('比較', 'Compare') }}</span><span>5 {{ _tr('報告', 'Report') }}</span>
 </section>
 
 <section class="grid grid-2 section-space">
   <article class="card">
-    <h2>Start research run</h2>
+    <h2>{{ _tr('啟動研究執行', 'Start Research Run') }}</h2>
     <form method="post" action="/web/research/runs">
-      <label>Stored design
-        <select name="design_id"><option value="">Direct topology</option>
+      <label>{{ _tr('已儲存設計', 'Stored Design') }}
+        <select name="design_id"><option value="">{{ _tr('直接輸入拓撲', 'Direct Topology') }}</option>
         {% for design in designs %}<option value="{{ design.design_id }}">{{ design.name }}</option>{% endfor %}</select>
       </label>
       <details>
-        <summary>Direct topology input</summary>
+        <summary>{{ _tr('直接輸入拓撲', 'Direct Topology Input') }}</summary>
         <label>Verilog<textarea name="verilog" placeholder="module c(input A, output Y); assign Y = A; endmodule"></textarea></label>
-        <label>Truth table JSON<textarea name="truth_table_json" data-json-input="array" placeholder='[{"A":0,"Y":0},{"A":1,"Y":1}]'></textarea></label>
+        <label>{{ _tr('真值表 JSON', 'Truth Table JSON') }}<textarea name="truth_table_json" data-json-input="array" placeholder='[{"A":0,"Y":0},{"A":1,"Y":1}]'></textarea></label>
       </details>
       <div class="form-grid">
-        <label>Copy number<input type="number" name="copy_number" value="1" min="0.1" step="0.1"></label>
-        <label>Simulation time (s)<input type="number" name="simulation_time" value="600" min="1"></label>
-        <label>Samples<input type="number" name="sample_count" value="80" min="2"></label>
-        <label>Monte Carlo runs<input type="number" name="monte_carlo_samples" value="1" min="1"></label>
-        <label>Noise fraction<input type="number" name="noise_fraction" value="0.15" min="0" step="0.01"></label>
-        <label>Random seed<input type="number" name="random_seed" placeholder="Automatic stable seed" min="0"></label>
+        <label>{{ _tr('拷貝數', 'Copy Number') }}<input type="number" name="copy_number" value="1" min="0.1" step="0.1"></label>
+        <label>{{ _tr('模擬時間（秒）', 'Simulation Time (s)') }}<input type="number" name="simulation_time" value="600" min="1"></label>
+        <label>{{ _tr('取樣點數', 'Samples') }}<input type="number" name="sample_count" value="80" min="2"></label>
+        <label>{{ _tr('蒙地卡羅執行次數', 'Monte Carlo Runs') }}<input type="number" name="monte_carlo_samples" value="1" min="1"></label>
+        <label>{{ _tr('噪聲比例', 'Noise Fraction') }}<input type="number" name="noise_fraction" value="0.15" min="0" step="0.01"></label>
+        <label>{{ _tr('隨機種子', 'Random Seed') }}<input type="number" name="random_seed" placeholder="{{ _tr('自動產生穩定種子', 'Automatic stable seed') }}" min="0"></label>
       </div>
-      <label>Evaluation profile<select name="profile_id">
+      <label>{{ _tr('評估設定檔', 'Evaluation Profile') }}<select name="profile_id">
         {% for profile in profiles %}<option value="{{ profile.profile_id }}" {{ "selected" if profile.profile_id == "research-v2-preview" else "" }}>{{ profile.name }} @ {{ profile.version }}</option>{% endfor %}
       </select></label>
-      <button class="button" type="submit">Queue research run</button>
+      <button class="button" type="submit">{{ _tr('將研究工作加入佇列', 'Queue Research Run') }}</button>
     </form>
   </article>
   <article class="card">
-    <h2>Model boundary</h2>
+    <h2>{{ _tr('模型適用邊界', 'Model Boundary') }}</h2>
     {% for model in models %}
     <dl class="definition-list">
-      <dt>Model</dt><dd>{{ model.model_id }} @ {{ model.version }}</dd>
-      <dt>State</dt><dd>{{ model.state_model }}</dd>
-      <dt>Status</dt><dd><span class="badge">{{ model.status }}</span></dd>
+      <dt>{{ _tr('模型', 'Model') }}</dt><dd>{{ model.model_id }} @ {{ model.version }}</dd>
+      <dt>{{ _tr('狀態模型', 'State Model') }}</dt><dd>{{ _enum_label(model.state_model) }}</dd>
+      <dt>{{ _tr('狀態', 'Status') }}</dt><dd><span class="badge">{{ _enum_label(model.status) }}</span></dd>
     </dl>
     {% endfor %}
-    <div class="warning-box">Results are computational screening evidence. They do not establish wet-lab viability.</div>
+    <div class="warning-box">{{ _tr('結果僅為計算式篩選證據，不能證明濕實驗可行性。', 'Results are computational screening evidence. They do not establish wet-lab viability.') }}</div>
   </article>
 </section>
 
 <section class="card section-space">
-  <div class="split-header"><div><h2>Recent research runs</h2><p class="muted">Background tasks persist manifests and reports.</p></div></div>
-  <table><tr><th>Run</th><th>Status</th><th>Progress</th><th>Created</th></tr>
-  {% for run in runs %}<tr><td><a href="/web/research/runs/{{ run.run_id }}">{{ run.run_id }}</a></td><td><span class="badge">{{ run.status }}</span></td><td>{{ "%.0f"|format(run.progress * 100) }}%</td><td>{{ run.created_at }}</td></tr>
-  {% else %}<tr><td colspan="4" class="muted">No research runs yet.</td></tr>{% endfor %}</table>
+  <div class="split-header"><div><h2>{{ _tr('最近研究執行', 'Recent Research Runs') }}</h2><p class="muted">{{ _tr('背景工作會保存資訊清單與報告。', 'Background tasks persist manifests and reports.') }}</p></div></div>
+  <table><tr><th>{{ _tr('執行 ID', 'Run') }}</th><th>{{ _tr('狀態', 'Status') }}</th><th>{{ _tr('進度', 'Progress') }}</th><th>{{ _tr('建立時間', 'Created') }}</th></tr>
+  {% for run in runs %}<tr><td><a href="/web/research/runs/{{ run.run_id }}">{{ run.run_id }}</a></td><td><span class="badge">{{ _status_label(run.status) }}</span></td><td>{{ "%.0f"|format(run.progress * 100) }}%</td><td>{{ run.created_at }}</td></tr>
+  {% else %}<tr><td colspan="4" class="muted">{{ _tr('尚無研究執行紀錄。', 'No research runs yet.') }}</td></tr>{% endfor %}</table>
 </section>
 {% endblock %}

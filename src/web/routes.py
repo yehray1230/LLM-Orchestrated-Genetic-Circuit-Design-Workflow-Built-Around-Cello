@@ -1040,18 +1040,121 @@ GLOSSARY = {
 }
 
 
+def _request_language(request: Request) -> str:
+    lang = request.query_params.get("lang") or request.cookies.get("lang") or "zh-Hant"
+    return lang if lang in {"zh-Hant", "en"} else "zh-Hant"
+
+
+def _localized(request: Request, zh_hant: str, english: str) -> str:
+    return english if _request_language(request) == "en" else zh_hant
+
+
 def _template(
     request: Request,
     name: str,
     **context: object,
 ) -> Response:
-    lang = request.query_params.get("lang") or request.cookies.get("lang") or "zh-Hant"
-    if lang not in ["zh-Hant", "en"]:
-        lang = "zh-Hant"
+    lang = _request_language(request)
 
     def _t(text: str) -> str:
         if lang == "en":
             return GLOSSARY.get(text, text)
+        return text
+
+    def _tr(zh_hant: str, english: str) -> str:
+        return english if lang == "en" else zh_hant
+
+    status_labels = {
+        "queued": ("排隊中", "Queued"),
+        "running": ("執行中", "Running"),
+        "starting": ("啟動中", "Starting"),
+        "simulation": ("模擬中", "Simulation"),
+        "evaluation": ("評估中", "Evaluation"),
+        "reporting": ("產生報告中", "Reporting"),
+        "needs_human_input": ("等待人工回覆", "Awaiting human input"),
+        "completed": ("已完成", "Completed"),
+        "failed": ("失敗", "Failed"),
+        "error": ("錯誤", "Error"),
+        "cancelled": ("已取消", "Cancelled"),
+        "ready": ("就緒", "Ready"),
+        "primer_ready": ("引子已就緒", "Primer ready"),
+        "blocked": ("受阻", "Blocked"),
+        "preview": ("預覽", "Preview"),
+    }
+    job_kind_labels = {
+        "design": ("設計", "Design"),
+        "research": ("研究", "Research"),
+    }
+    enum_labels = {
+        **status_labels,
+        "concentration": ("濃度狀態模型", "Concentration state model"),
+        "unknown": ("未知", "Unknown"),
+        "low": ("低", "Low"),
+        "medium": ("中", "Medium"),
+        "high": ("高", "High"),
+        "pcr": ("PCR 擴增", "PCR"),
+        "direct_synthesis": ("直接合成", "Direct synthesis"),
+        "forward": ("正向", "Forward"),
+        "reverse": ("反向", "Reverse"),
+        "gibson": ("Gibson 組裝", "Gibson assembly"),
+        "golden_gate": ("Golden Gate 組裝", "Golden Gate assembly"),
+        "restriction_cloning": ("限制酶選殖", "Restriction cloning"),
+        "mapped": ("已映射", "Mapped"),
+        "mapping_failed": ("映射失敗", "Mapping failed"),
+        "simulated": ("已模擬", "Simulated"),
+        "disabled": ("未啟用", "Disabled"),
+        "provisional": ("暫定結果", "Provisional"),
+        "fallback": ("備援結果", "Fallback"),
+        "incomplete": ("不完整", "Incomplete"),
+        "pass": ("通過", "Pass"),
+        "fail": ("未通過", "Fail"),
+        "functional": ("功能正確性", "Functional"),
+        "kinetic": ("動力學", "Kinetic"),
+        "static_plausibility": ("靜態合理性", "Static plausibility"),
+        "metabolic_burden": ("代謝負擔", "Metabolic burden"),
+        "robustness": ("穩健性", "Robustness"),
+        "orthogonality": ("正交性", "Orthogonality"),
+        "cello_assignment": ("Cello 元件指派", "Cello assignment"),
+        "toxicity": ("毒性", "Toxicity"),
+        "semantic_faithfulness": ("語意忠實度", "Semantic faithfulness"),
+    }
+
+    def _localized_label(value: object, labels: dict[str, tuple[str, str]]) -> str:
+        normalized = str(value or "")
+        lookup_key = normalized.lower()
+        zh_hant, english = labels.get(
+            lookup_key,
+            (normalized.replace("_", " "), normalized.replace("_", " ").title()),
+        )
+        return english if lang == "en" else zh_hant
+
+    def _candidate_limit_label(value: object) -> str:
+        text = str(value or "")
+        if lang != "en":
+            return text
+        exact = {
+            "Cello 映射失敗 (UCF 限制不匹配或無可用邏輯閘)": (
+                "Cello mapping failed (UCF constraints did not match or no logic gate was available)"
+            ),
+            "無明顯限制因素": "No obvious limiting factor",
+        }
+        if text in exact:
+            return exact[text]
+        match = re.fullmatch(r"(.+) 表現較差 \(([^)]+)\)", text)
+        if match:
+            return f"{match.group(1)} underperforms ({match.group(2)})"
+        return text
+
+    dynamic_copy = {
+        "Synthetic, deterministic fixtures for validating score direction, evidence sensitivity, and comparison/report infrastructure.": (
+            "用於驗證分數方向、證據敏感度，以及比較與報告基礎設施的合成確定性測試資料。"
+        ),
+    }
+
+    def _domain_text(value: object) -> str:
+        text = str(value or "")
+        if lang == "zh-Hant":
+            return dynamic_copy.get(text, text)
         return text
 
     from api.dependencies import get_services
@@ -1101,6 +1204,12 @@ def _template(
             "active_path": request.url.path,
             "lang": lang,
             "_t": _t,
+            "_tr": _tr,
+            "_status_label": lambda value: _localized_label(value, status_labels),
+            "_job_kind_label": lambda value: _localized_label(value, job_kind_labels),
+            "_enum_label": lambda value: _localized_label(value, enum_labels),
+            "_candidate_limit_label": _candidate_limit_label,
+            "_domain_text": _domain_text,
             "unread_notifications": unread_notifications,
             "running_jobs": running_jobs,
             "settings": settings,
@@ -1868,7 +1977,7 @@ def web_save_settings(
         "settings.html",
         settings=settings,
         cello_status=cello_status,
-        success_msg="設定儲存成功！",
+        success_msg=_localized(request, "設定儲存成功！", "Settings saved successfully."),
     )
 
 
@@ -1902,7 +2011,7 @@ def web_clear_settings_api_key(
         "settings.html",
         settings=settings,
         cello_status=cello_status,
-        success_msg="金鑰已清除！",
+        success_msg=_localized(request, "金鑰已清除！", "API key cleared."),
     )
 
 

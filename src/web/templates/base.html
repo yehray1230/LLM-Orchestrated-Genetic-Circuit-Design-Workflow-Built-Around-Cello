@@ -20,37 +20,37 @@
   </style>
 </head>
 <body>
-  <a class="skip-link" href="#main-content">{{ _t('跳至主要內容') }}</a>
+  <a class="skip-link" href="#main-content">{{ _tr('跳至主要內容', 'Skip to main content') }}</a>
   <div class="shell">
     <aside class="sidebar">
       <div class="brand">Genetic Circuit<br>Research Studio</div>
       <nav class="nav">
         <a href="/web" class="{{ 'active' if active_path == '/web' or active_path == '/' else '' }}" style="display: flex; align-items: center; justify-content: space-between;">
-          <span>{{ _t('儀表板') }}</span>
+          <span>{{ _tr('儀表板', 'Dashboard') }}</span>
           {% if unread_notifications > 0 %}
             <span class="nav-badge" id="global-unread-badge">{{ unread_notifications }}</span>
           {% endif %}
         </a>
-        <a href="/web/new-design" class="{{ 'active' if active_path == '/web/new-design' else '' }}">{{ _t('新增設計') }}</a>
-        <a href="/web/runs" class="{{ 'active' if active_path.startswith('/web/runs') else '' }}">{{ _t('工作執行紀錄') }}</a>
-        <a href="/web/imports" class="{{ 'active' if active_path.startswith('/web/imports') else '' }}">{{ _t('外部設計匯入') }}</a>
-        <a href="/web/designs" class="{{ 'active' if active_path.startswith('/web/designs') else '' }}">{{ _t('設計資料庫') }}</a>
-        <a href="/web/research" class="{{ 'active' if active_path.startswith('/web/research') else '' }}">{{ _t('研究工作區') }}</a>
-        <a href="/web/assembly" class="{{ 'active' if active_path.startswith('/web/assembly') else '' }}">{{ _t('裝配交付中心') }}</a>
-        <a href="/web/benchmarks" class="{{ 'active' if active_path.startswith('/web/benchmarks') else '' }}">{{ _t('基準測試') }}</a>
-        <a href="/web/compare" class="{{ 'active' if active_path == '/web/compare' else '' }}">{{ _t('比較') }}</a>
-        <a href="/web/settings" class="{{ 'active' if active_path == '/web/settings' else '' }}">{{ _t('設定') }}</a>
-        <a href="/docs">{{ _t('API文件') }}</a>
+        <a href="/web/new-design" class="{{ 'active' if active_path == '/web/new-design' else '' }}">{{ _tr('新增設計', 'New Design') }}</a>
+        <a href="/web/runs" class="{{ 'active' if active_path.startswith('/web/runs') else '' }}">{{ _tr('工作執行紀錄', 'Runs') }}</a>
+        <a href="/web/imports" class="{{ 'active' if active_path.startswith('/web/imports') else '' }}">{{ _tr('外部設計匯入', 'External Imports') }}</a>
+        <a href="/web/designs" class="{{ 'active' if active_path.startswith('/web/designs') else '' }}">{{ _tr('設計資料庫', 'Design Library') }}</a>
+        <a href="/web/research" class="{{ 'active' if active_path.startswith('/web/research') else '' }}">{{ _tr('研究工作區', 'Research Workspace') }}</a>
+        <a href="/web/assembly" class="{{ 'active' if active_path.startswith('/web/assembly') else '' }}">{{ _tr('裝配交付中心', 'Assembly Delivery') }}</a>
+        <a href="/web/benchmarks" class="{{ 'active' if active_path.startswith('/web/benchmarks') else '' }}">{{ _tr('基準測試', 'Benchmarks') }}</a>
+        <a href="/web/compare" class="{{ 'active' if active_path == '/web/compare' else '' }}">{{ _tr('比較', 'Compare') }}</a>
+        <a href="/web/settings" class="{{ 'active' if active_path == '/web/settings' else '' }}">{{ _tr('設定', 'Settings') }}</a>
+        <a href="/docs">{{ _tr('API文件', 'API Docs') }}</a>
         <a href="http://127.0.0.1:8501">Streamlit</a>
         <div style="margin-top: 20px; padding: 10px 12px; border-top: 1px solid #344054; font-size: 13px; color: #98a2b3; display: flex; align-items: center; justify-content: space-between;">
-          <span>🔬 {{ _t('進階模式') }}</span>
+          <span>🔬 {{ _tr('進階模式', 'Advanced mode') }}</span>
           <label class="switch-toggle" style="position: relative; display: inline-block; width: 36px; height: 20px;">
             <input type="checkbox" id="global-mode-toggle" style="opacity: 0; width: 0; height: 0;">
             <span class="slider" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #475569; transition: .3s; border-radius: 20px;"></span>
           </label>
         </div>
         <div style="padding: 10px 12px; border-top: 1px solid #344054; font-size: 13px; color: #98a2b3;">
-          🌐 {{ _t('語系') }}:
+          🌐 {{ _tr('語系', 'Language') }}:
           <a href="?lang=zh-Hant" style="color: {% if lang == 'zh-Hant' %}white; font-weight: bold;{% else %}#d0d5dd;{% endif %}; text-decoration: none; margin-right: 8px;">中文</a>
           <a href="?lang=en" style="color: {% if lang == 'en' %}white; font-weight: bold;{% else %}#d0d5dd;{% endif %}; text-decoration: none;">EN</a>
         </div>
@@ -64,7 +64,7 @@
             {% if running_jobs %}
               <span style="font-weight: bold; color: var(--brand); display: flex; align-items: center; gap: 6px;">
                 <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--brand); animation: pulse 1.5s infinite;"></span>
-                進行中背景工作 ({{ running_jobs|length }})：
+                {{ _tr('進行中背景工作', 'Active background jobs') }} ({{ running_jobs|length }}):
               </span>
               <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                 {% for job in running_jobs %}
@@ -73,19 +73,19 @@
                     <code>{{ job_id[:8] }}...</code>
                     <span class="muted">({{ (job.progress * 100)|int }}%)</span>
                     {% if job.status == 'needs_human_input' %}
-                      <span style="color: #b54708; font-weight: bold;">💬 待回覆</span>
+                      <span style="color: #b54708; font-weight: bold;">💬 {{ _tr('待回覆', 'Awaiting reply') }}</span>
                     {% endif %}
                   </a>
                 {% endfor %}
               </div>
             {% else %}
-              <span class="muted">當前無運行中的背景工作</span>
+              <span class="muted">{{ _tr('當前無運行中的背景工作', 'No background jobs are currently running') }}</span>
             {% endif %}
           </div>
 
           {% if unread_notifications > 0 %}
             <a href="/web/settings#notifications" style="color: #d92d20; font-weight: bold; text-decoration: none; display: flex; align-items: center; gap: 4px;">
-              🔔 您有 {{ unread_notifications }} 則未讀通知 &rarr;
+              🔔 {{ _tr('您有', 'You have') }} {{ unread_notifications }} {{ _tr('則未讀通知', 'unread notifications') }} &rarr;
             </a>
           {% endif %}
         </div>

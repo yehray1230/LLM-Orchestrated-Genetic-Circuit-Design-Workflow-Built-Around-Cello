@@ -565,7 +565,7 @@ def test_web_run_detail_monitor_endpoint(
 
 
 def test_web_interaction_enhancements_are_available(client: TestClient) -> None:
-    research = client.get("/web/research")
+    research = client.get("/web/research?lang=en")
     assembly = client.get("/web/assembly")
     assembly_backbones = client.get("/web/assembly/backbones")
     assembly_new = client.get("/web/assembly/new")

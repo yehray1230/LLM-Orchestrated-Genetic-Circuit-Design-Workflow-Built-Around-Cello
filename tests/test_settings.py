@@ -291,6 +291,27 @@ def test_web_settings_page_post_success(client, test_services):
     assert settings["default_compute_budget"] == 15
 
 
+def test_web_settings_success_messages_follow_selected_language(client):
+    client.cookies.set("lang", "en")
+    resp = client.post(
+        "/web/settings",
+        data={
+            "provider": "LiteLLM",
+            "model_name": "custom-llm",
+            "api_key": "some-api-key",
+            "api_base": "http://my-endpoint",
+            "cello_command": "cello",
+            "ucf_path": "C:/ucf/example.json",
+            "default_host": "Escherichia coli",
+            "default_compute_budget": "6",
+        },
+    )
+
+    assert resp.status_code == 200
+    assert "Settings saved successfully." in resp.text
+    assert "設定儲存成功！" not in resp.text
+
+
 def test_web_settings_delete_api_key(client, test_services):
     test_services.settings.save_settings({"api_key": "storedkey"})
 

@@ -8,6 +8,7 @@ Covers:
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -155,6 +156,95 @@ def test_i18n_translation_keys(client, test_services):
     assert response.status_code == 200
     assert response.cookies["lang"] == "zh-Hant"
     assert "設計資料庫" in response.text
+
+
+@pytest.mark.parametrize(
+    ("path", "expected", "forbidden"),
+    [
+        ("/web", "Research Dashboard", ["研究工作台", "快速開始"]),
+        ("/web/new-design", "Create a New Design", ["建立新設計", "自然語言設計需求"]),
+        ("/web/settings", "Key and Model Settings", ["金鑰與模型設定", "儲存設定"]),
+    ],
+)
+def test_p0_english_pages_do_not_render_known_chinese_copy(
+    client,
+    path: str,
+    expected: str,
+    forbidden: list[str],
+):
+    response = client.get(f"{path}?lang=en")
+
+    assert response.status_code == 200
+    assert expected in response.text
+    assert "New Design" in response.text
+    assert "Advanced mode" in response.text
+    for text in forbidden:
+        assert text not in response.text
+
+
+def test_p0_localization_sources_require_explicit_bilingual_pairs():
+    repository_root = Path(__file__).parents[1]
+    template_paths = [
+        repository_root / "src/web/templates/base.html",
+        repository_root / "src/web/templates/dashboard.html",
+        repository_root / "src/web/templates/new_design.html",
+        repository_root / "src/web/templates/settings.html",
+        repository_root / "src/web/templates/research.html",
+        repository_root / "src/web/templates/research_compare.html",
+        repository_root / "src/web/templates/research_run.html",
+        repository_root / "src/web/templates/assembly.html",
+        repository_root / "src/web/templates/assembly_backbones.html",
+        repository_root / "src/web/templates/assembly_new.html",
+        repository_root / "src/web/templates/assembly_report.html",
+        repository_root / "src/web/templates/assembly_downloads.html",
+        repository_root / "src/web/templates/candidates.html",
+        repository_root / "src/web/templates/benchmarks.html",
+        repository_root / "src/web/templates/benchmark_detail.html",
+    ]
+    untranslated_template_lines: list[str] = []
+    for path in template_paths:
+        for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if not re.search(r"[\u3400-\u9fff\uf900-\ufaff]", line):
+                continue
+            if "_tr(" in line or "中文</a>" in line or "<!--" in line:
+                continue
+            untranslated_template_lines.append(f"{path.name}:{line_number}: {line.strip()}")
+
+    app_js = repository_root / "src/web/static/app.js"
+    untranslated_js_lines = [
+        f"app.js:{line_number}: {line.strip()}"
+        for line_number, line in enumerate(app_js.read_text(encoding="utf-8").splitlines(), 1)
+        if re.search(r"[\u3400-\u9fff\uf900-\ufaff]", line) and "uiText(" not in line
+    ]
+
+    assert untranslated_template_lines == []
+    assert untranslated_js_lines == []
+
+
+@pytest.mark.parametrize(
+    ("path", "zh_expected", "en_expected"),
+    [
+        ("/web/research", "研究工作區", "Research Workspace"),
+        ("/web/research/compare", "比較研究執行", "Compare Research Runs"),
+        ("/web/assembly", "裝配交付中心", "Assembly Delivery"),
+        ("/web/assembly/backbones", "骨架註冊庫", "Backbone Registry"),
+        ("/web/assembly/new", "新裝配交付物", "New Assembly Deliverable"),
+    ],
+)
+def test_research_and_assembly_landing_pages_follow_language(
+    client,
+    path: str,
+    zh_expected: str,
+    en_expected: str,
+):
+    zh_response = client.get(f"{path}?lang=zh-Hant")
+    en_response = client.get(f"{path}?lang=en")
+
+    assert zh_response.status_code == en_response.status_code == 200
+    assert zh_expected in zh_response.text
+    assert en_expected not in zh_response.text
+    assert en_expected in en_response.text
+    assert zh_expected not in en_response.text
 
 
 def test_deletion_impact_preview_and_purge_cleanup(client, test_services):

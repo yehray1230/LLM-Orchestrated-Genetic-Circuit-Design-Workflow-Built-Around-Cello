@@ -1,32 +1,32 @@
 {% extends "base.html" %}
-{% block title %}New Design - 建立新設計{% endblock %}
+{% block title %}{{ _tr('建立新設計', 'New Design') }}{% endblock %}
 {% block content %}
 <header class="page-header">
-  <h1>建立新設計</h1>
-  <p class="muted">透過四步驟設計精靈，配置您的基因電路規格並啟動自動化設計流程。</p>
+  <h1>{{ _tr('建立新設計', 'Create a New Design') }}</h1>
+  <p class="muted">{{ _tr('透過四步驟設計精靈，配置您的基因電路規格並啟動自動化設計流程。', 'Use the four-step wizard to configure your genetic-circuit specification and start the automated design workflow.') }}</p>
 </header>
 
 <div id="draft-recovery-banner" class="warning-box" style="margin-bottom: 18px; display: none; background: #fffbeb; color: #b54708; border: 1px solid #fed7aa; display: flex; justify-content: space-between; align-items: center; padding: 12px 16px;">
-  <span>⚠️ 偵測到您有上次未完成的設計草稿（最後儲存於 <span id="draft-saved-time">-</span>），是否恢復進度？</span>
+  <span>⚠️ {{ _tr('偵測到上次未完成的設計草稿（最後儲存於', 'An unfinished design draft was found (last saved at') }} <span id="draft-saved-time">-</span>{{ _tr('）。', '). ') }}{{ _tr('是否恢復進度？', 'Restore it?') }}</span>
   <div style="display: flex; gap: 8px;">
-    <button class="button" id="btn-restore-draft" style="padding: 6px 12px; font-size: 13px;">恢復草稿</button>
-    <button class="button secondary" id="btn-discard-draft" style="padding: 6px 12px; font-size: 13px;">重新開始</button>
+    <button class="button" id="btn-restore-draft" style="padding: 6px 12px; font-size: 13px;">{{ _tr('恢復草稿', 'Restore Draft') }}</button>
+    <button class="button secondary" id="btn-discard-draft" style="padding: 6px 12px; font-size: 13px;">{{ _tr('重新開始', 'Start Over') }}</button>
   </div>
 </div>
 
 <div class="workspace-steps" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 24px;">
-  <span class="active" id="step-indicator-1">1. 描述目標</span>
-  <span id="step-indicator-2">2. AI 規格引導</span>
-  <span id="step-indicator-3">3. 進階選項</span>
-  <span id="step-indicator-4">4. 確認規格</span>
+  <span class="active" id="step-indicator-1">1. {{ _tr('描述目標', 'Describe Goal') }}</span>
+  <span id="step-indicator-2">2. {{ _tr('AI 規格引導', 'AI Specification Guidance') }}</span>
+  <span id="step-indicator-3">3. {{ _tr('進階選項', 'Advanced Options') }}</span>
+  <span id="step-indicator-4">4. {{ _tr('確認規格', 'Confirm Specification') }}</span>
 </div>
 
 <article class="card">
   <form id="wizard-form" method="post" action="/web/runs">
     <!-- Step 1: User Intent -->
     <div class="wizard-step" id="step-content-1">
-      <label>自然語言設計需求
-        <textarea name="user_intent" id="wizard-user-intent" required placeholder="例如：只有 A 存在且 B 不存在時表達 GFP。當兩者皆存在或皆不存在時關閉。" style="height: 120px;"></textarea>
+      <label>{{ _tr('自然語言設計需求', 'Natural-language design requirement') }}
+        <textarea name="user_intent" id="wizard-user-intent" required placeholder="{{ _tr('例如：只有 A 存在且 B 不存在時表達 GFP。當兩者皆存在或皆不存在時關閉。', 'Example: Express GFP only when A is present and B is absent. Turn it off when both or neither are present.') }}" style="height: 120px;"></textarea>
       </label>
     </div>
 
@@ -43,8 +43,8 @@
           <!-- Chat Header -->
           <div class="chat-header" style="background: var(--bg-card); padding: 12px 16px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 8px;">
             <div style="width: 8px; height: 8px; background: #12b886; border-radius: 50%;"></div>
-            <strong style="font-size: 14px; color: var(--text-dark);">PM Agent 引導對話</strong>
-            <span style="font-size: 11px; color: var(--text-light); margin-left: auto;">AI 規格優化中</span>
+            <strong style="font-size: 14px; color: var(--text-dark);">{{ _tr('PM Agent 引導對話', 'PM Agent Guidance') }}</strong>
+            <span style="font-size: 11px; color: var(--text-light); margin-left: auto;">{{ _tr('AI 規格優化中', 'AI specification refinement') }}</span>
           </div>
 
           <!-- Chat Messages (Scrollable) -->
@@ -63,7 +63,7 @@
 
           <!-- Specs Preview Card -->
           <div class="specs-preview-card" style="background: #ffffff; border: 1px solid var(--line); border-radius: 12px; padding: 16px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03); flex-grow: 1; display: flex; flex-direction: column;">
-            <strong style="font-size: 13.5px; color: var(--text-dark); display: block; margin-bottom: 12px;">📊 當前確認規格 (Specs Preview)</strong>
+            <strong style="font-size: 13.5px; color: var(--text-dark); display: block; margin-bottom: 12px;">📊 {{ _tr('當前確認規格', 'Specification Preview') }}</strong>
             <div id="elicitation-specs-preview" style="font-size: 12.5px; line-height: 1.6; color: var(--text-dark); flex-grow: 1; overflow-y: auto;">
               <!-- Dynamic specs preview goes here -->
             </div>
@@ -71,7 +71,7 @@
             <!-- Skip Button -->
             <div style="margin-top: 16px; border-top: 1px solid var(--line); padding-top: 12px; text-align: center;">
               <button type="button" class="button secondary" id="elicitation-skip-btn" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 12.5px; padding: 8px 12px;">
-                <span>⚡</span> 略過剩餘對話，直接套用預設值
+                <span>⚡</span> {{ _tr('略過剩餘對話，直接套用預設值', 'Skip the remaining dialogue and apply defaults') }}
               </button>
             </div>
           </div>
@@ -85,22 +85,22 @@
     <div class="wizard-step" id="step-content-3" style="display: none;">
       <div class="inline" style="margin-bottom: 18px; gap: 18px;">
         <label style="flex-direction: row; align-items: center; gap: 6px;">
-          <input type="checkbox" name="enable_rag" id="wizard-enable-rag" value="on" checked> 啟用 RAG 知識增強
+          <input type="checkbox" name="enable_rag" id="wizard-enable-rag" value="on" checked> {{ _tr('啟用 RAG 知識增強', 'Enable RAG knowledge augmentation') }}
         </label>
         <label style="flex-direction: row; align-items: center; gap: 6px;">
-          <input type="checkbox" name="enable_ode" id="wizard-enable-ode" value="on" checked> 啟用 ODE 模擬
+          <input type="checkbox" name="enable_ode" id="wizard-enable-ode" value="on" checked> {{ _tr('啟用 ODE 模擬', 'Enable ODE simulation') }}
         </label>
         <label style="flex-direction: row; align-items: center; gap: 6px;">
-          <input type="checkbox" name="enable_skill_extraction" id="wizard-enable-skill" value="on" checked> 啟用技能提取
+          <input type="checkbox" name="enable_skill_extraction" id="wizard-enable-skill" value="on" checked> {{ _tr('啟用技能提取', 'Enable skill extraction') }}
         </label>
       </div>
 
       <div class="grid grid-2">
-        <label>LiteLLM 模型名稱（選填，留空時使用預設）
-          <input name="model_name" id="wizard-model-name" placeholder="預設：{{ settings.model_name or 'gpt-5.4-mini' }}">
+        <label>{{ _tr('LiteLLM 模型名稱（選填，留空時使用預設）', 'LiteLLM model name (optional; leave blank to use the default)') }}
+          <input name="model_name" id="wizard-model-name" placeholder="{{ _tr('預設：', 'Default: ') }}{{ settings.model_name or 'gpt-5.4-mini' }}">
         </label>
-        <label>API Base URL (端點，選填)
-          <input name="api_base" id="wizard-api-base" placeholder="例如：https://api.openai.com/v1">
+        <label>{{ _tr('API Base URL（端點，選填）', 'API Base URL (optional endpoint)') }}
+          <input name="api_base" id="wizard-api-base" placeholder="{{ _tr('例如：https://api.openai.com/v1', 'Example: https://api.openai.com/v1') }}">
         </label>
       </div>
 
@@ -108,43 +108,43 @@
       <div style="margin-top: 18px; background: #f8fafc; border: 1px solid var(--line); padding: 12px 16px; border-radius: 8px; font-size: 13px; display: flex; align-items: center; justify-content: space-between;">
         <div style="display: flex; align-items: center; gap: 8px;">
           <span>⚙️</span>
-          <strong>Cello 物理映射狀態：</strong>
+          <strong>{{ _tr('Cello 物理映射狀態：', 'Cello mapping status:') }}</strong>
           {% if cello_status.status == 'available' %}
-            <span class="badge" style="background: #ecfdf3; color: var(--success); font-weight: bold; font-size: 11.5px; padding: 2px 8px; border-radius: 4px;">🟢 正常可用 (Available)</span>
+            <span class="badge" style="background: #ecfdf3; color: var(--success); font-weight: bold; font-size: 11.5px; padding: 2px 8px; border-radius: 4px;">🟢 {{ _tr('正常可用', 'Available') }}</span>
           {% elif cello_status.status == 'fallback' or cello_status.fallback_used %}
-            <span class="badge" style="background: #fff9db; color: #f08c00; font-weight: bold; font-size: 11.5px; padding: 2px 8px; border-radius: 4px;">🟡 使用模擬備援 (Fallback Mode)</span>
+            <span class="badge" style="background: #fff9db; color: #f08c00; font-weight: bold; font-size: 11.5px; padding: 2px 8px; border-radius: 4px;">🟡 {{ _tr('使用模擬備援', 'Simulation Fallback') }}</span>
           {% else %}
-            <span class="badge" style="background: #fff5f5; color: var(--error); font-weight: bold; font-size: 11.5px; padding: 2px 8px; border-radius: 4px;">🔴 偵測失敗 (Unavailable)</span>
+            <span class="badge" style="background: #fff5f5; color: var(--error); font-weight: bold; font-size: 11.5px; padding: 2px 8px; border-radius: 4px;">🔴 {{ _tr('偵測失敗', 'Unavailable') }}</span>
           {% endif %}
         </div>
-        <a href="/web/settings" target="_blank" style="color: var(--brand); text-decoration: none; font-weight: 500; font-size: 12.5px;">⚙️ 前往設定頁配置</a>
+        <a href="/web/settings" target="_blank" style="color: var(--brand); text-decoration: none; font-weight: 500; font-size: 12.5px;">⚙️ {{ _tr('前往設定頁配置', 'Configure in Settings') }}</a>
       </div>
     </div>
 
     <!-- Step 4: Preview Specification -->
     <div class="wizard-step" id="step-content-4" style="display: none;">
-      <h3 style="margin-top: 0;">設計案最終確認</h3>
+      <h3 style="margin-top: 0;">{{ _tr('設計案最終確認', 'Final Design Confirmation') }}</h3>
       <div class="card" style="background: #f8fafc; border: 1px solid var(--line); padding: 20px; margin-bottom: 12px; box-shadow: none;">
         <dl class="definition-list" style="grid-template-columns: 180px minmax(0, 1fr);">
-          <dt>設計目標</dt>
+          <dt>{{ _tr('設計目標', 'Design Goal') }}</dt>
           <dd id="preview-user-intent">-</dd>
 
-          <dt>宿主生物</dt>
+          <dt>{{ _tr('宿主生物', 'Host Organism') }}</dt>
           <dd id="preview-host-organism">-</dd>
 
-          <dt>計算預算</dt>
+          <dt>{{ _tr('計算預算', 'Compute Budget') }}</dt>
           <dd id="preview-compute-budget">-</dd>
 
-          <dt>模型配置</dt>
+          <dt>{{ _tr('模型配置', 'Model Configuration') }}</dt>
           <dd id="preview-model-config">-</dd>
 
-          <dt>分析工具</dt>
+          <dt>{{ _tr('分析工具', 'Analysis Tools') }}</dt>
           <dd id="preview-tools">-</dd>
         </dl>
       </div>
 
       <div class="warning-box" style="margin-top: 14px; font-size: 13px;">
-        💡 點擊「啟動背景設計」後，系統會生成背景執行任務。您可以在背景任務監控頁面查看 AI 設計搜尋樹及 Critic 反饋，並在此之後處理 PM 需求澄清。
+        💡 {{ _tr('點擊「啟動背景設計」後，系統會生成背景執行任務。您可以在背景任務監控頁面查看 AI 設計搜尋樹及 Critic 反饋，並在此之後處理 PM 需求澄清。', 'After selecting Start Background Design, the system creates a background run. Use the run monitor to review the AI design search tree and Critic feedback, and respond to any PM clarification requests.') }}
       </div>
     </div>
 
@@ -154,9 +154,9 @@
         <span id="draft-autosave-indicator" class="muted" style="font-size: 12.5px; transition: opacity 0.3s ease;"></span>
       </div>
       <div class="inline" style="gap: 8px;">
-        <button class="button secondary" type="button" id="btn-wizard-prev" style="display: none;">上一步</button>
-        <button class="button" type="button" id="btn-wizard-next">下一步</button>
-        <button class="button" type="submit" id="btn-wizard-submit" style="display: none;">啟動背景設計</button>
+        <button class="button secondary" type="button" id="btn-wizard-prev" style="display: none;">{{ _tr('上一步', 'Previous') }}</button>
+        <button class="button" type="button" id="btn-wizard-next">{{ _tr('下一步', 'Next') }}</button>
+        <button class="button" type="submit" id="btn-wizard-submit" style="display: none;">{{ _tr('啟動背景設計', 'Start Background Design') }}</button>
       </div>
     </div>
   </form>

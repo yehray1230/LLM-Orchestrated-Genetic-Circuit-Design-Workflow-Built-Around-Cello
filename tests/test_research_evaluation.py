@@ -243,6 +243,8 @@ def test_evaluation_and_benchmark_api_contract(tmp_path: Path) -> None:
             )
             page = client.get("/web/benchmarks")
             detail = client.get(f"/web/benchmarks/{run_id}")
+            page_en = client.get("/web/benchmarks?lang=en")
+            detail_en = client.get(f"/web/benchmarks/{run_id}?lang=en")
     finally:
         app.dependency_overrides.clear()
 
@@ -254,8 +256,13 @@ def test_evaluation_and_benchmark_api_contract(tmp_path: Path) -> None:
     assert compared.json()["data"]["warning"] is not None
     assert page.status_code == 200
     assert "Research evaluation smoke benchmark" in page.text
+    assert "研究評估" in page.text
+    assert "執行 ID" in page.text
+    assert "Research Evaluation" in page_en.text
+    assert "Pass Rate" in page_en.text
     assert detail.status_code == 200
-    assert "Benchmark" in detail.text
+    assert "基準測試結果" in detail.text
+    assert "Benchmark Result" in detail_en.text
 
 
 def test_benchmark_service_persists_and_compares_runs(tmp_path: Path) -> None:
