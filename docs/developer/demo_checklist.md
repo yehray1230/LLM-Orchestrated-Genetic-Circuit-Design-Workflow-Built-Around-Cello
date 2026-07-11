@@ -117,7 +117,7 @@ For the fixed demo, confirm the available result includes:
 Generate the fixed baseline evidence packet:
 
 ```powershell
-.\venv\Scripts\python.exe scripts\generate_demo_baseline.py --timeout-seconds 60
+.\venv\Scripts\python.exe -m src.scripts.generate_demo_baseline --timeout-seconds 60
 ```
 
 Confirm the generated packet reports the staged baseline progression:
@@ -151,7 +151,7 @@ Recommended focused validation before pushing this milestone:
 Recommended review / commit scope for the baseline-freeze milestone:
 
 - `application/demo_baseline.py`
-- `scripts/generate_demo_baseline.py`
+- `src/scripts/generate_demo_baseline.py`
 - `tests/test_demo_baseline_freeze.py`
 - `tests/test_readiness_evaluator.py`
 - `benchmark_suite/readiness_evaluator.py`

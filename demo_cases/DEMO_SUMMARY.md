@@ -7,9 +7,22 @@ Update it after each case is run.
 
 | Case | Intent | Status | Cello mode | Score | Readiness | Main blocker | Report |
 | --- | --- | --- | --- | ---: | --- | --- | --- |
-| 01 | `A AND NOT B -> GFP` | draft | pending |  | pending | pending | [case_01_a_and_not_b_gfp.md](case_01_a_and_not_b_gfp.md) |
+| 01 | `A AND NOT B -> GFP` | baseline captured | not_run / not_mapped | 0.85 | primer_ready | no external Cello or wet-lab validation | [case_01_a_and_not_b_gfp.md](case_01_a_and_not_b_gfp.md) |
 | 02 | `A OR B -> reporter` | draft | pending |  | pending | pending | [case_02_a_or_b_reporter.md](case_02_a_or_b_reporter.md) |
 | 03 | `NOT A -> GFP` | draft | pending |  | pending | pending | [case_03_not_a_gfp.md](case_03_not_a_gfp.md) |
+
+## Cold Outreach Readiness
+
+For first-wave cold outreach, Case 01 is the flagship demo. The current baseline
+packet is:
+
+```text
+outputs/demo_baseline/demo_baseline_cc928f18c446/demo_baseline_summary.md
+```
+
+This baseline supports research-preview outreach, but not biological claims.
+It uses direct topology simulation and explicitly does not claim external Cello
+mapping or wet-lab validation.
 
 ## Storyline
 

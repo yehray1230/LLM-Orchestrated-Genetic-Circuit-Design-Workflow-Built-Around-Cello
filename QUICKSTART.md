@@ -1,12 +1,9 @@
-# Quickstart / 快速啟動
+# Quickstart
 
 This guide is the shortest path for running and verifying the local research
 prototype. For project scope, biological claim boundaries, and architecture,
-read `README.md`, `docs/limitations.md`, `docs/architecture.md`, and `docs/workflow.md`.
-
-本文件的目標是讓協作者可以快速把專案跑起來並完成基本驗證。若要理解研究邊界、
-生物學宣稱限制與架構細節，請閱讀 `README.md`、`docs/limitations.md`、
-`docs/architecture.md` 與 `docs/workflow.md`。
+read `README.md`, `docs/limitations.md`, `docs/architecture.md`, and
+`docs/workflow.md`.
 
 ## 1. Environment
 
@@ -74,15 +71,15 @@ Assembly workspace:    /web/assembly
 Design library:        /web/designs
 ```
 
-The OpenAPI document also exposes simulation sweeps/bifurcation reports,
+The OpenAPI document also exposes simulation sweeps and bifurcation reports,
 parameter-fit snapshots, host/sequence optimization, readiness-related
 artifacts, assembly deliverables, and asynchronous run feedback/resume APIs.
 
 ## 4. Streamlit Research UI (Legacy / Maintenance-only)
 
 > [!WARNING]
-> This interface has entered maintenance-only mode. All new features and updates
-> are only available on the official HTML Web Workspace.
+> This interface has entered maintenance-only mode. All new demo-facing work
+> should use the HTML Web Workspace.
 
 Use this interface only as a backup or for legacy research inspection.
 
@@ -146,7 +143,8 @@ real Cello:
 
 ## 7. Demo Readiness Rule
 
-Before showing the project to another person, complete `DEMO_CHECKLIST.md`.
+Before showing the project to another person, complete
+`docs/developer/demo_checklist.md`.
 
 The phase-one completion target is:
 

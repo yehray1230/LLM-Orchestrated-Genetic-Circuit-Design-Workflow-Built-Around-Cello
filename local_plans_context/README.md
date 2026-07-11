@@ -12,6 +12,15 @@ The detailed execution notes live in `local_plans_private/`, which remains ignor
 
 Use this folder when you want to mention the planning context inside Codex. It contains stable, non-sensitive summaries of the private plan structure.
 
+## Cold Outreach
+
+- [`cold_outreach_packet.md`](cold_outreach_packet.md) is the current first-wave
+  outreach packet. Use it to prepare a small research-preview cold email with
+  safe claims, a flagship demo boundary, go/no-go checks, and a reply tracker.
+- [`cold_outreach_launch_roadmap.md`](cold_outreach_launch_roadmap.md) preserves
+  the earlier staged outreach roadmap. Treat the packet above as the active
+  send-preparation artifact.
+
 ## Private Source Folder
 
 - Private source: `local_plans_private/`
