@@ -547,9 +547,9 @@ Release summary 至少包含：
 
 ### 本輪修補內容
 
-1. **S2 穩定化**：修復 [demo_baseline.py](file:///c:/Users/yehra/OneDrive/Desktop/side%20project/A-Multi-Agent-Framework-for-Translating-Natural-Language-to-Genetic-Circuits/application/demo_baseline.py)，在 `make_reproducible_packet` 中額外將 `benchmark_run` 的 `result_hash` 也納入 masked 遮罩範圍，消除因 UUID/時間戳漂移而產生的動態雜湊變動。
-2. **S1 PM UI 防禦**：修復 [app.js](file:///c:/Users/yehra/OneDrive/Desktop/side%20project/A-Multi-Agent-Framework-for-Translating-Natural-Language-to-Genetic-Circuits/src/web/static/app.js) 的 `spec.inputs` / `spec.outputs` array 類型判斷，增加 fallback 機制防止 user 或 LLM 非預期字串輸入導致的 runtime crash。
-3. **S1 Error Truthfulness**：修復 [run_store.py](file:///c:/Users/yehra/OneDrive/Desktop/side%20project/A-Multi-Agent-Framework-for-Translating-Natural-Language-to-Genetic-Circuits/src/mcp_server/run_store.py) 中 `_compact_summary` 丟失 `last_error` 的行為，並於 [run_detail.html](file:///c:/Users/yehra/OneDrive/Desktop/side%20project/A-Multi-Agent-Framework-for-Translating-Natural-Language-to-Genetic-Circuits/src/web/templates/run_detail.html) 中採用 `run.summary.last_error` 優先呈現，解決對外回傳 error 欄位偏誤造成的防禦性引導錯誤。
+1. **S2 穩定化**：修復 [demo_baseline.py](../../application/demo_baseline.py)，在 `make_reproducible_packet` 中額外將 `benchmark_run` 的 `result_hash` 也納入 masked 遮罩範圍，消除因 UUID/時間戳漂移而產生的動態雜湊變動。
+2. **S1 PM UI 防禦**：修復 [app.js](../../src/web/static/app.js) 的 `spec.inputs` / `spec.outputs` array 類型判斷，增加 fallback 機制防止 user 或 LLM 非預期字串輸入導致的 runtime crash。
+3. **S1 Error Truthfulness**：修復 [run_store.py](../../src/mcp_server/run_store.py) 中 `_compact_summary` 丟失 `last_error` 的行為，並於 [run_detail.html](../../src/web/templates/run_detail.html) 中採用 `run.summary.last_error` 優先呈現，解決對外回傳 error 欄位偏誤造成的防禦性引導錯誤。
 
 ---
 

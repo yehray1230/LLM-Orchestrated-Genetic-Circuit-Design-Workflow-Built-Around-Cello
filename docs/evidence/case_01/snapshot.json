@@ -1,0 +1,66 @@
+{
+  "snapshot_schema": "public-demo-evidence@1.0.0",
+  "source_revision": "d1378ab",
+  "intent": "Activate GFP only when input A is present and input B is absent.",
+  "claim_boundary": "Computational screening evidence only; not external Cello mapping, wet-lab validation, a primer design, or an experimental protocol.",
+  "research_run": {
+    "simulation_model": "resource-aware-regulatory-ode@1.9.0",
+    "configuration_hash": "2fb665d9dd39fc1c06982e7052bd1438c8260e8d7537bdcbbf24b1251b5780ca",
+    "result_hash": "55cc49bb2a3398b5ffe909c9e561147ac2676b6859041ba6310742b8e2bc53b4",
+    "scoring_profile": "research-v2-preview",
+    "scoring_version": "1.9.0",
+    "weighted_total_score": 0.85,
+    "grade": "Excellent",
+    "grade_interpretation": "Heuristic computational grade under the named scoring profile; not an experimentally calibrated success probability."
+  },
+  "benchmark_run": {
+    "dataset_id": "research_smoke_v1",
+    "dataset_version": "1.0.0",
+    "case_count": 4,
+    "pass_rate": 1.0,
+    "mean_score": 0.716625,
+    "evidence_type": "synthetic infrastructure fixtures; not wet-lab validated circuits"
+  },
+  "cello": {
+    "mode": "not_run",
+    "claim_level": "not_mapped",
+    "mapping_status": "not_mapped"
+  },
+  "sequence_evidence": {
+    "status": "passed",
+    "parts_analyzed": 16,
+    "blocked_parts": 0,
+    "warning_count": 0,
+    "interpretation": "Implemented sequence checks passed for illustrative demo sequences; this is not empirical part characterization."
+  },
+  "assembly_plan": {
+    "method": "abstract_non_experimental_ordering",
+    "status": "ready",
+    "backbone_id": "not_selected",
+    "fragment_count": 4,
+    "junction_count": 3,
+    "target_length": 134
+  },
+  "primer_planning_gate": {
+    "internal_status": "ready",
+    "public_label": "primer-planning gate passed",
+    "actual_primer_sequences_generated": false,
+    "experimental_evidence": false,
+    "experimental_readiness_score": null,
+    "next_action": "Select a concrete backbone, assembly method, and policy-approved primer design workflow before generating actionable oligos."
+  },
+  "readiness": {
+    "internal_status": "primer_ready",
+    "next_required_stage": "sequence_optimized",
+    "public_interpretation": "Non-experimental staged workflow status only."
+  },
+  "packet_hash": "cc928f18c446e3ad2755a65cb20d10ac4cd3d33869c6aae8aab09b1221a508cc",
+  "captured_file_sha256": {
+    "assembly_plan.json": "e4bdb1c29d94f376898a0267c4dfd43daeed76fb1723e00d49697d75908541ff",
+    "demo_baseline_packet.json": "7d9e96d32d5b47508ca9e3daa3833c62cdda6d74d648232718ccd1ee1c65c3a0",
+    "demo_baseline_summary.md": "2eeb829bdf730b012e27c44222172329cd9f1f204dca2dabb5a42724a107edbf",
+    "primer_readiness.json": "af8b4ea56fe4ccd0ed7b14b1397665dd0c3b0857ff8bfb61bd9b41375b29da3b",
+    "sequence_analysis.json": "bcd92603bbd75a1c1edfc8b4fbe21861bfcac987c6de9ad407ef4fd665578132",
+    "sequence_evidence_report.json": "8c7f96ddc70c7cf3735298798b86125af89a881a1a2fd0c7689a208adf27dee6"
+  }
+}

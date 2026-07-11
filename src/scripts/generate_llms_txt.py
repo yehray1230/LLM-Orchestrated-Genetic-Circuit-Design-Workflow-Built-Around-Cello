@@ -12,6 +12,11 @@ DOCUMENTS = [
     "evaluation_metrics.md",
     "future_roadmap.md",
     "ai_reviewer_guide.md",
+    "audiences/synthetic_biology.md",
+    "audiences/mathematical_modeling.md",
+    "audiences/ai4science_agents.md",
+    "audiences/bio_cad_interoperability.md",
+    "audiences/potential_collaborators.md",
 ]
 
 
@@ -33,8 +38,8 @@ def main() -> None:
     print(f"Generating aggregated context file at: {output_file.relative_to(workspace_root)}")
 
     combined_content = []
-    combined_content.append("# LLM-Orchestrated Genetic Circuit Design Workflow - Complete Documentation\n")
-    combined_content.append("This file aggregates all core documentation files for this repository to allow AI reviewers or agents to consume the entire codebase context in a single request.\n\n")
+    combined_content.append("# Evidence-Aware Genetic Circuit Design Research Prototype - Complete Documentation\n")
+    combined_content.append("This generated file aggregates the core claim boundaries, methods, roadmap, and audience guides for AI reviewers that need full repository context. Use llms.txt for shorter audience-aware routing.\n\n")
 
     for filename in DOCUMENTS:
         filepath = docs_dir / filename

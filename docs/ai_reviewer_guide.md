@@ -117,17 +117,17 @@ Important paths:
 
 | Path | What to inspect |
 | --- | --- |
-| [`app.py`](app.py) | Legacy Streamlit demo interface (maintenance-only). |
-| [`api/`](api) | FastAPI endpoints and API schemas. |
-| [`web/`](web) | HTML research workspace pages. |
-| [`agents/`](agents) | Agent roles and decision logic. |
-| [`workflows/reflexion_controller.py`](workflows/reflexion_controller.py) | Main Reflexion loop. |
-| [`tools/cello_wrapper.py`](tools/cello_wrapper.py) | External Cello integration and mock-mode boundary. |
-| [`tools/ode_simulator.py`](tools/ode_simulator.py) | Simplified ODE simulation. |
-| [`benchmark_suite/`](benchmark_suite) | Candidate evaluation dimensions. |
-| [`schemas/`](schemas) | DesignIR, simulation, readiness, host, and sequence contracts. |
-| [`exporters/`](exporters) | GenBank, SBOL3, BOM, and assembly-oriented outputs. |
-| [`tests/`](tests) | Regression coverage and expected behavior. |
+| [`app.py`](../app.py) | Legacy Streamlit demo interface (maintenance-only). |
+| [`src/api/`](../src/api) | FastAPI endpoints and API schemas. |
+| [`src/web/`](../src/web) | HTML research workspace pages. |
+| [`src/agents/`](../src/agents) | Agent roles and decision logic. |
+| [`src/workflows/reflexion_controller.py`](../src/workflows/reflexion_controller.py) | Main Reflexion loop. |
+| [`src/tools/cello_wrapper.py`](../src/tools/cello_wrapper.py) | External Cello integration and mock-mode boundary. |
+| [`src/tools/ode_simulator.py`](../src/tools/ode_simulator.py) | Simplified ODE simulation. |
+| [`benchmark_suite/`](../benchmark_suite) | Candidate evaluation dimensions. |
+| [`src/schemas/`](../src/schemas) | DesignIR, simulation, readiness, host, and sequence contracts. |
+| [`src/exporters/`](../src/exporters) | GenBank, SBOL3, BOM, and assembly-oriented outputs. |
+| [`tests/`](../tests) | Regression coverage and expected behavior. |
 
 ## Biological Scope Calibration
 
@@ -169,8 +169,8 @@ It may be less relevant if the recipient only wants:
 
 If reviewing this project for whether to reply to a cold email, focus on:
 
-- whether the author understands the boundary between computational design and
-  biological validation;
+- whether the repository consistently preserves the boundary between
+  computational design and biological validation;
 - whether the architecture shows a serious attempt at traceability and critique;
 - whether the demo cases make the workflow easy to inspect;
 - whether the limitations are explicit rather than hidden;

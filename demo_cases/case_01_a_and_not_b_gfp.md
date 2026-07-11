@@ -82,7 +82,8 @@ Run ID: generated per baseline run; see the current baseline summary
 Configuration hash: 2fb665d9dd39fc1c06982e7052bd1438c8260e8d7537bdcbbf24b1251b5780ca
 Result hash: 55cc49bb2a3398b5ffe909c9e561147ac2676b6859041ba6310742b8e2bc53b4
 Score: 0.85
-Grade: Excellent
+Grade: Excellent under research-v2-preview@1.9.0
+Interpretation: heuristic computational grade, not a calibrated probability
 ```
 
 ## 7. Benchmark
@@ -92,12 +93,15 @@ Dataset: research_smoke_v1@1.0.0
 Cases: 4
 Pass rate: 1.0
 Mean score: 0.716625
+Evidence type: synthetic infrastructure fixtures, not measured circuits
 ```
 
 ## 8. Readiness
 
 ```text
-Status: primer_ready
+Internal status: primer_ready
+Public interpretation: non-experimental primer-planning gate passed
+Actual primer sequences generated: False
 Next required stage: sequence_optimized
 Experimental readiness: None
 ```
@@ -105,20 +109,11 @@ Experimental readiness: None
 ## 9. Export Artifacts
 
 ```text
-Baseline packet:
-outputs/demo_baseline/demo_baseline_cc928f18c446/demo_baseline_packet.json
+Public sanitized snapshot:
+docs/evidence/case_01/snapshot.json
 
-Baseline summary:
-outputs/demo_baseline/demo_baseline_cc928f18c446/demo_baseline_summary.md
-
-Sequence evidence:
-outputs/demo_baseline/demo_baseline_cc928f18c446/sequence_analysis.json
-
-Assembly plan:
-outputs/demo_baseline/demo_baseline_cc928f18c446/assembly_plan.json
-
-Primer readiness:
-outputs/demo_baseline/demo_baseline_cc928f18c446/primer_readiness.json
+Local full packet (gitignored; regenerate with the documented command):
+outputs/demo_baseline/demo_baseline_cc928f18c446/
 ```
 
 ## 10. Interpretation
@@ -129,6 +124,11 @@ Verilog, scoring, and readiness reporting.
 
 It does not prove biological buildability unless external Cello mapping,
 sequence-level evidence, and experimental validation are added.
+
+The `primer_ready` value is an internal staged-workflow label. No primer
+sequences, ordering information, PCR conditions, or wet-lab protocol were
+generated. See the [public evidence snapshot](../docs/evidence/case_01/README.md)
+for the exact interpretation and captured hashes.
 
 ## 11. Next Checks
 

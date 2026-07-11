@@ -304,7 +304,7 @@ Stage / Slice：Stage A (Slice A1 - A3)
 .\venv\Scripts\python.exe -m pytest tests/test_candidate_routes.py tests/test_web_pm_elicitation.py -q
 .\venv\Scripts\python.exe -m ruff check web api application tests
 .\venv\Scripts\python.exe -m py_compile web\candidate_views.py web\routes.py
-& 'C:\Users\yehra\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe' --check web\static\app.js
+node --check src\web\static\app.js
 .\venv\Scripts\python.exe -m pytest -q
 ```
 
