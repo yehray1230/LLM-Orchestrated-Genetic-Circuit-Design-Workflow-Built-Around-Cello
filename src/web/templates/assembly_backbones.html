@@ -1,67 +1,67 @@
 {% extends "base.html" %}
-{% block title %}Backbone Registry{% endblock %}
+{% block title %}{{ _tr('骨架註冊庫', 'Backbone Registry') }}{% endblock %}
 {% block content %}
 <header class="page-header split-header">
   <div>
-    <span class="eyebrow">Assembly workflow</span>
-    <h1>Backbone Registry</h1>
-    <p class="muted">Register trusted vector backbones and insertion regions before creating assembly deliverables.</p>
+    <span class="eyebrow">{{ _tr('裝配工作流程', 'Assembly Workflow') }}</span>
+    <h1>{{ _tr('骨架註冊庫', 'Backbone Registry') }}</h1>
+    <p class="muted">{{ _tr('建立裝配交付物前，請先註冊可信任的載體骨架與插入區域。', 'Register trusted vector backbones and insertion regions before creating assembly deliverables.') }}</p>
   </div>
-  <a class="button secondary" href="/web/assembly/new">Create deliverable</a>
+  <a class="button secondary" href="/web/assembly/new">{{ _tr('建立交付物', 'Create Deliverable') }}</a>
 </header>
 
 <nav class="workspace-steps">
-  <a href="/web/assembly">Overview</a>
-  <a class="active" href="/web/assembly/backbones">Backbones</a>
-  <a href="/web/assembly/new">New deliverable</a>
-  <span>Report</span>
-  <span>Downloads</span>
+  <a href="/web/assembly">{{ _tr('總覽', 'Overview') }}</a>
+  <a class="active" href="/web/assembly/backbones">{{ _tr('骨架', 'Backbones') }}</a>
+  <a href="/web/assembly/new">{{ _tr('新交付物', 'New Deliverable') }}</a>
+  <span>{{ _tr('報告', 'Report') }}</span>
+  <span>{{ _tr('下載', 'Downloads') }}</span>
 </nav>
 
 {% if selected_backbone %}
-<div class="form-notice section-space">Registered {{ selected_backbone }}.</div>
+<div class="form-notice section-space">{{ _tr('已註冊', 'Registered') }} {{ selected_backbone }}.</div>
 {% endif %}
 
 <section class="grid grid-2 section-space">
   <article class="card">
     <span class="step-number">01</span>
-    <h2>Upload backbone</h2>
+    <h2>{{ _tr('上傳骨架', 'Upload Backbone') }}</h2>
     <form action="/web/assembly/backbones" method="post" enctype="multipart/form-data">
       <div class="form-grid">
-        <label>GenBank file<input type="file" name="file" accept=".gb,.gbk,.genbank" required></label>
-        <label>Backbone ID<input name="backbone_id" placeholder="pUC-derived" required></label>
-        <label>Version<input name="version" value="1.0.0" required></label>
-        <label>Name<input name="name" placeholder="Trusted cloning backbone" required></label>
-        <label>Source URI<input name="source_uri" placeholder="https://... or repository accession"></label>
-        <label>Host organisms<input name="host_organisms" value="Escherichia coli" required></label>
-        <label>Origin of replication<input name="origin_of_replication" placeholder="ColE1" required></label>
-        <label>Selection marker<input name="selection_marker" placeholder="ampicillin" required></label>
-        <label>Copy-number class<select name="copy_number_class"><option>unknown</option><option>low</option><option>medium</option><option>high</option></select></label>
-        <label>Insertion region ID<input name="insertion_region_id" value="mcs" required></label>
-        <label>Insertion region name<input name="insertion_region_name" value="Multiple cloning site" required></label>
-        <label>Insertion start<input type="number" name="insertion_start" min="0" required></label>
-        <label>Insertion end<input type="number" name="insertion_end" min="1" required></label>
+        <label>{{ _tr('GenBank 檔案', 'GenBank File') }}<input type="file" name="file" accept=".gb,.gbk,.genbank" required></label>
+        <label>{{ _tr('骨架 ID', 'Backbone ID') }}<input name="backbone_id" placeholder="pUC-derived" required></label>
+        <label>{{ _tr('版本', 'Version') }}<input name="version" value="1.0.0" required></label>
+        <label>{{ _tr('名稱', 'Name') }}<input name="name" placeholder="{{ _tr('可信任的選殖骨架', 'Trusted cloning backbone') }}" required></label>
+        <label>{{ _tr('來源 URI', 'Source URI') }}<input name="source_uri" placeholder="{{ _tr('網址或資料庫登錄號', 'URL or repository accession') }}"></label>
+        <label>{{ _tr('宿主生物', 'Host Organisms') }}<input name="host_organisms" value="Escherichia coli" required></label>
+        <label>{{ _tr('複製起點', 'Origin of Replication') }}<input name="origin_of_replication" placeholder="ColE1" required></label>
+        <label>{{ _tr('篩選標記', 'Selection Marker') }}<input name="selection_marker" placeholder="ampicillin" required></label>
+        <label>{{ _tr('拷貝數等級', 'Copy-number Class') }}<select name="copy_number_class"><option value="unknown">{{ _enum_label('unknown') }}</option><option value="low">{{ _enum_label('low') }}</option><option value="medium">{{ _enum_label('medium') }}</option><option value="high">{{ _enum_label('high') }}</option></select></label>
+        <label>{{ _tr('插入區域 ID', 'Insertion Region ID') }}<input name="insertion_region_id" value="mcs" required></label>
+        <label>{{ _tr('插入區域名稱', 'Insertion Region Name') }}<input name="insertion_region_name" value="Multiple cloning site" required></label>
+        <label>{{ _tr('插入起點', 'Insertion Start') }}<input type="number" name="insertion_start" min="0" required></label>
+        <label>{{ _tr('插入終點', 'Insertion End') }}<input type="number" name="insertion_end" min="1" required></label>
       </div>
-      <label>Essential regions JSON
+      <label>{{ _tr('必要區域 JSON', 'Essential Regions JSON') }}
         <textarea name="essential_regions_json" data-json-input="array">[]</textarea>
       </label>
-      <button class="button" type="submit">Register backbone version</button>
+      <button class="button" type="submit">{{ _tr('註冊骨架版本', 'Register Backbone Version') }}</button>
     </form>
   </article>
 
   <article class="card">
-    <h2>Registered backbones</h2>
+    <h2>{{ _tr('已註冊骨架', 'Registered Backbones') }}</h2>
     <div class="table-scroll"><table>
-      <tr><th>Name</th><th>ID</th><th>Host</th><th>Copy</th></tr>
+      <tr><th>{{ _tr('名稱', 'Name') }}</th><th>ID</th><th>{{ _tr('宿主', 'Host') }}</th><th>{{ _tr('拷貝數', 'Copy') }}</th></tr>
       {% for item in backbones %}
       <tr>
         <td>{{ item.name }}</td>
         <td><code>{{ item.backbone_id }}@{{ item.version }}</code></td>
         <td>{{ item.host_organisms|join(", ") }}</td>
-        <td>{{ item.copy_number_class }}</td>
+        <td>{{ _enum_label(item.copy_number_class) }}</td>
       </tr>
       {% else %}
-      <tr><td colspan="4" class="muted">No registered backbone yet.</td></tr>
+      <tr><td colspan="4" class="muted">{{ _tr('尚無已註冊骨架。', 'No registered backbone yet.') }}</td></tr>
       {% endfor %}
     </table></div>
   </article>

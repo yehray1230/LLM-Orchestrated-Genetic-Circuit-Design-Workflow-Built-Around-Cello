@@ -1,33 +1,33 @@
 {% extends "base.html" %}
-{% block title %}Assembly Downloads {{ deliverable.deliverable_id }}{% endblock %}
+{% block title %}{{ _tr('裝配下載', 'Assembly Downloads') }} {{ deliverable.deliverable_id }}{% endblock %}
 {% block content %}
 <header class="page-header split-header">
   <div>
-    <span class="eyebrow">Artifact downloads</span>
+    <span class="eyebrow">{{ _tr('成品下載', 'Artifact Downloads') }}</span>
     <h1>{{ deliverable.deliverable_id }}</h1>
     {% if design %}
       <p style="margin: 4px 0; font-size: 14px;">
-        <strong>Source Design:</strong> <a href="/web/designs/{{ design.design_id }}?rev={{ deliverable.revision_number }}">{{ design.name }} (Rev {{ deliverable.revision_number }})</a>
+        <strong>{{ _tr('來源設計：', 'Source Design:') }}</strong> <a href="/web/designs/{{ design.design_id }}?rev={{ deliverable.revision_number }}">{{ design.name }} ({{ _tr('版本', 'Rev') }} {{ deliverable.revision_number }})</a>
       </p>
     {% endif %}
-    <p class="muted">Download generated GenBank, CSV, JSON, report, and visualization artifacts for review and handoff.</p>
+    <p class="muted">{{ _tr('下載產生的 GenBank、CSV、JSON、報告與視覺化成品，以供檢視與交接。', 'Download generated GenBank, CSV, JSON, report, and visualization artifacts for review and handoff.') }}</p>
   </div>
-  <a class="button secondary" href="/web/assembly/deliverables/{{ deliverable.deliverable_id }}">Back to report</a>
+  <a class="button secondary" href="/web/assembly/deliverables/{{ deliverable.deliverable_id }}">{{ _tr('返回報告', 'Back to Report') }}</a>
 </header>
 
 <nav class="workspace-steps">
-  <a href="/web/assembly">Overview</a>
-  <a href="/web/assembly/backbones">Backbones</a>
-  <a href="/web/assembly/new">New deliverable</a>
-  <a href="/web/assembly/deliverables/{{ deliverable.deliverable_id }}">Report</a>
-  <a class="active" href="/web/assembly/deliverables/{{ deliverable.deliverable_id }}/downloads">Downloads</a>
+  <a href="/web/assembly">{{ _tr('總覽', 'Overview') }}</a>
+  <a href="/web/assembly/backbones">{{ _tr('骨架', 'Backbones') }}</a>
+  <a href="/web/assembly/new">{{ _tr('新交付物', 'New Deliverable') }}</a>
+  <a href="/web/assembly/deliverables/{{ deliverable.deliverable_id }}">{{ _tr('報告', 'Report') }}</a>
+  <a class="active" href="/web/assembly/deliverables/{{ deliverable.deliverable_id }}/downloads">{{ _tr('下載', 'Downloads') }}</a>
 </nav>
 
 <section class="card section-space">
-  <h2>Download deliverables</h2>
+  <h2>{{ _tr('下載交付物', 'Download deliverables') }}</h2>
   <div style="margin-bottom: 16px; font-size: 13px; color: #475569;">
-    <strong>Readiness:</strong> <span class="status-badge {% if deliverable.ok %}status-ready{% else %}status-warning{% endif %}">{{ deliverable.readiness.readiness_status }}</span>
-    · <strong>Source Revision:</strong> Revision {{ deliverable.revision_number }}
+    <strong>{{ _tr('就緒狀態：', 'Readiness:') }}</strong> <span class="status-badge {% if deliverable.ok %}status-ready{% else %}status-warning{% endif %}">{{ _enum_label(deliverable.readiness.readiness_status) }}</span>
+    · <strong>{{ _tr('來源版本：', 'Source Revision:') }}</strong> {{ _tr('版本', 'Revision') }} {{ deliverable.revision_number }}
   </div>
   <div class="download-grid">
     {% for key, artifact in deliverable.artifacts.items() %}
@@ -38,6 +38,6 @@
     </a>
     {% endfor %}
   </div>
-  <p class="muted section-space">These files are computational planning outputs. Review sequence assumptions, reagent constraints, and protocol details before wet-lab execution.</p>
+  <p class="muted section-space">{{ _tr('這些檔案是計算式規劃輸出。進行濕實驗前，請檢查序列假設、試劑限制與實驗流程細節。', 'These files are computational planning outputs. Review sequence assumptions, reagent constraints, and protocol details before wet-lab execution.') }}</p>
 </section>
 {% endblock %}

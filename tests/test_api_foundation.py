@@ -422,14 +422,25 @@ def test_web_run_form_redirects_to_background_run(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     services = client.app.state.test_services
+    captured_request = {}
     monkeypatch.setattr(
-        services.runs,
-        "start",
-        lambda request: {
+        services.settings,
+        "get_settings_masked",
+        lambda: {"model_credentials_configured": True},
+    )
+
+    def fake_start(request):
+        captured_request.update(request)
+        return {
             "run_id": "run_web_test",
             "status": "queued",
             "progress": 0.0,
-        },
+        }
+
+    monkeypatch.setattr(
+        services.runs,
+        "start",
+        fake_start,
     )
 
     response = client.post(
@@ -438,14 +449,105 @@ def test_web_run_form_redirects_to_background_run(
             "user_intent": "Express GFP.",
             "host_organism": "Escherichia coli",
             "compute_budget": "3",
+            "model_name": "custom-model",
+            "api_base": "https://models.example/v1",
             "enable_rag": "on",
             "enable_ode": "on",
+            "enable_skill_extraction": "on",
         },
         follow_redirects=False,
     )
 
     assert response.status_code == 303
     assert response.headers["location"] == "/web/runs/run_web_test"
+    assert captured_request == {
+        "user_intent": "Express GFP.",
+        "host_organism": "Escherichia coli",
+        "compute_budget": 3,
+        "model_name": "custom-model",
+        "api_base": "https://models.example/v1",
+        "enable_rag": True,
+        "enable_ode": True,
+        "enable_skill_extraction": True,
+    }
+
+
+def test_web_run_requires_model_credentials(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    services = client.app.state.test_services
+    monkeypatch.setattr(
+        services.settings,
+        "get_settings_masked",
+        lambda: {"model_credentials_configured": False},
+    )
+
+    response = client.post(
+        "/web/runs",
+        data={"user_intent": "Express GFP."},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/web/settings?credentials_required=1"
+
+
+def test_new_design_surfaces_preflight_without_false_draft_banner(
+    client: TestClient,
+) -> None:
+    response = client.get("/web/new-design")
+
+    assert response.status_code == 200
+    assert "啟動 AI 設計前必須先設定" in response.text
+    assert 'id="btn-wizard-submit"' in response.text
+    assert "disabled aria-disabled=\"true\"" in response.text
+    assert response.text.count("display: none;") >= 1
+    assert "display: none; background" in response.text
+
+    app_js = (
+        Path(__file__).resolve().parent.parent / "src" / "web" / "static" / "app.js"
+    ).read_text(encoding="utf-8")
+    assert "structured_spec.copy_number" not in app_js
+
+
+def test_web_run_retry_preserves_execution_contract(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    services = client.app.state.test_services
+    captured_request = {}
+    original_request = {
+        "user_intent": "Express GFP.",
+        "host_organism": "Escherichia coli",
+        "compute_budget": 9,
+        "model_name": "custom-model",
+        "api_base": "https://models.example/v1",
+        "enable_rag": False,
+        "enable_ode": True,
+        "enable_skill_extraction": False,
+        "monte_carlo_samples": 4,
+    }
+    monkeypatch.setattr(
+        services.runs,
+        "status",
+        lambda run_id: {"run_id": run_id, "request": original_request},
+    )
+
+    def fake_start(request):
+        captured_request.update(request)
+        return {"run_id": "run_retry_contract", "status": "queued"}
+
+    monkeypatch.setattr(services.runs, "start", fake_start)
+
+    response = client.post(
+        "/web/runs/run_original/retry",
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/web/runs/run_retry_contract"
+    assert captured_request == original_request
 
 
 def test_web_run_detail_monitor_endpoint(
@@ -565,7 +667,7 @@ def test_web_run_detail_monitor_endpoint(
 
 
 def test_web_interaction_enhancements_are_available(client: TestClient) -> None:
-    research = client.get("/web/research")
+    research = client.get("/web/research?lang=en")
     assembly = client.get("/web/assembly")
     assembly_backbones = client.get("/web/assembly/backbones")
     assembly_new = client.get("/web/assembly/new")
@@ -614,6 +716,69 @@ def test_web_design_detail_tabs_and_clipboard(client: TestClient) -> None:
     assert "SynBioHub" in response.text
     assert "BOM 材料 CSV 明細" in response.text
     assert "GenBank 完整圖譜" in response.text
+    assert f"/web/designs/{draft_id}/optimize/codon" in response.text
+    assert "/optimize/rbs" not in response.text
+    assert response.text.count("HTML 工作流程尚未提供") == 3
 
     app_js = (Path(__file__).resolve().parent.parent / "src" / "web" / "static" / "app.js").read_text(encoding="utf-8")
     assert "setupClipboardCopy" in app_js
+
+
+def test_web_codon_optimization_review_and_revision_flow(
+    client: TestClient,
+) -> None:
+    services = client.app.state.test_services
+    payload = _draft_payload("codon_ui_design")
+    payload["parts"][1]["sequence"] = "ATGGGTCTCTAA"
+    draft = services.imports.import_json(payload)
+    design = services.imports.confirm_by_id(draft.draft_id)
+    path = f"/web/designs/{design.design_id}/optimize/codon"
+
+    review = client.get(path)
+
+    assert review.status_code == 200
+    assert "計算篩選邊界" in review.text
+    assert "可最佳化 CDS" in review.text
+    assert "建立最佳化 revision" in review.text
+    assert len(services.designs.revisions(design.design_id)) == 1
+
+    missing_confirmation = client.post(
+        path,
+        data={
+            "host_profile_id": "ecoli_k12_default",
+            "confirm_design_id": design.design_id,
+        },
+    )
+    assert missing_confirmation.status_code == 422
+    assert len(services.designs.revisions(design.design_id)) == 1
+
+    mismatched_confirmation = client.post(
+        path,
+        data={
+            "host_profile_id": "ecoli_k12_default",
+            "confirm": "on",
+            "confirm_design_id": "wrong-design",
+        },
+    )
+    assert mismatched_confirmation.status_code == 403
+    assert len(services.designs.revisions(design.design_id)) == 1
+
+    created = client.post(
+        path,
+        data={
+            "host_profile_id": "ecoli_k12_default",
+            "confirm": "on",
+            "confirm_design_id": design.design_id,
+        },
+        follow_redirects=False,
+    )
+
+    assert created.status_code == 303
+    assert created.headers["location"].startswith(
+        f"/web/designs/{design.design_id}?rev=2"
+    )
+    revisions = services.designs.revisions(design.design_id)
+    assert len(revisions) == 2
+    optimized = services.designs.get_revision(design.design_id, 2)
+    assert optimized is not None
+    assert optimized.revision.change_type == "sequence_optimization"

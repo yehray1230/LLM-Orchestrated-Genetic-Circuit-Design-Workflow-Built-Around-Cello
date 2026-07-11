@@ -1,45 +1,45 @@
 {% extends "base.html" %}
-{% block title %}Benchmark Result{% endblock %}
+{% block title %}{{ _tr('基準測試結果', 'Benchmark Result') }}{% endblock %}
 {% block content %}
 <header class="page-header">
-  <h1>Benchmark 結果</h1>
+  <h1>{{ _tr('基準測試結果', 'Benchmark Result') }}</h1>
   <p class="muted">{{ benchmark.benchmark_run_id }}</p>
 </header>
 <section class="grid grid-3">
-  <article class="card"><span class="muted">平均分數</span><div class="metric">{{ "%.3f"|format(benchmark.summary.mean) }}</div></article>
-  <article class="card"><span class="muted">通過率</span><div class="metric">{{ "%.0f"|format(benchmark.summary.pass_rate * 100) }}%</div></article>
-  <article class="card"><span class="muted">案例數</span><div class="metric">{{ benchmark.summary.case_count }}</div></article>
+  <article class="card"><span class="muted">{{ _tr('平均分數', 'Mean Score') }}</span><div class="metric">{{ "%.3f"|format(benchmark.summary.mean) }}</div></article>
+  <article class="card"><span class="muted">{{ _tr('通過率', 'Pass Rate') }}</span><div class="metric">{{ "%.0f"|format(benchmark.summary.pass_rate * 100) }}%</div></article>
+  <article class="card"><span class="muted">{{ _tr('案例數', 'Cases') }}</span><div class="metric">{{ benchmark.summary.case_count }}</div></article>
 </section>
 <section class="grid grid-2" style="margin-top:18px">
   <article class="card">
-    <h2>版本資訊</h2>
+    <h2>{{ _tr('版本資訊', 'Version Information') }}</h2>
     <dl>
-      <dt>Dataset</dt><dd>{{ benchmark.dataset.dataset_id }} @ {{ benchmark.dataset.version }}</dd>
-      <dt>Dataset hash</dt><dd><code>{{ benchmark.dataset.content_hash }}</code></dd>
-      <dt>Profile</dt><dd>{{ benchmark.profile_id }} @ {{ benchmark.scoring_version }}</dd>
-      <dt>Configuration</dt><dd><code>{{ benchmark.scoring_configuration_hash }}</code></dd>
+      <dt>{{ _tr('資料集', 'Dataset') }}</dt><dd>{{ benchmark.dataset.dataset_id }} @ {{ benchmark.dataset.version }}</dd>
+      <dt>{{ _tr('資料集雜湊', 'Dataset Hash') }}</dt><dd><code>{{ benchmark.dataset.content_hash }}</code></dd>
+      <dt>{{ _tr('設定檔', 'Profile') }}</dt><dd>{{ benchmark.profile_id }} @ {{ benchmark.scoring_version }}</dd>
+      <dt>{{ _tr('組態', 'Configuration') }}</dt><dd><code>{{ benchmark.scoring_configuration_hash }}</code></dd>
     </dl>
   </article>
   <article class="card">
-    <h2>維度平均</h2>
+    <h2>{{ _tr('各維度平均', 'Dimension Means') }}</h2>
     {% for key, value in benchmark.summary.dimensions.items() %}
-    <p><strong>{{ key }}</strong>: {{ "%.3f"|format(value.mean) }}</p>
+    <p><strong>{{ _enum_label(key) }}</strong>: {{ "%.3f"|format(value.mean) }}</p>
     {% endfor %}
   </article>
 </section>
 <article class="card" style="margin-top:18px">
-  <h2>案例</h2>
+  <h2>{{ _tr('案例', 'Cases') }}</h2>
   <table>
-    <tr><th>Case</th><th>Score</th><th>Grade</th><th>Expectation</th></tr>
+    <tr><th>{{ _tr('案例', 'Case') }}</th><th>{{ _tr('分數', 'Score') }}</th><th>{{ _tr('等級', 'Grade') }}</th><th>{{ _tr('預期結果', 'Expectation') }}</th></tr>
     {% for case in benchmark.cases %}
     <tr>
       <td>{{ case.name }}<br><span class="muted">{{ case.case_id }}</span></td>
       <td>{{ "%.3f"|format(case.evaluation.weighted_total_score) }}</td>
       <td><span class="badge">{{ case.evaluation.grade }}</span></td>
-      <td>{{ "pass" if case.passed else "fail" }}</td>
+      <td>{{ _enum_label('pass' if case.passed else 'fail') }}</td>
     </tr>
     {% endfor %}
   </table>
 </article>
-<p class="muted">此報告僅代表計算式篩選結果，不構成濕實驗驗證。</p>
+<p class="muted">{{ _tr('此報告僅代表計算式篩選結果，不構成濕實驗驗證。', 'This report represents computational screening results only and does not constitute wet-lab validation.') }}</p>
 {% endblock %}

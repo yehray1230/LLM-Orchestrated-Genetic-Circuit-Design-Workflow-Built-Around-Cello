@@ -616,9 +616,9 @@ Stage / Slice：Stage A (Slice A1 - A3)
 ### 13.2 靜態與語法檢查
 
 ```powershell
-.\venv\Scripts\python.exe -m ruff check web api application schemas repositories tests
-.\venv\Scripts\python.exe -m py_compile web\routes.py web\candidate_views.py application\settings.py
-& 'C:\Users\yehra\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe' --check web\static\app.js
+.\venv\Scripts\python.exe -m ruff check src\web api application schemas repositories tests
+.\venv\Scripts\python.exe -m py_compile src\web\routes.py src\web\candidate_views.py application\settings.py
+node --check src\web\static\app.js
 ```
 
 ### 13.3 完整 regression
@@ -627,7 +627,9 @@ Stage / Slice：Stage A (Slice A1 - A3)
 .\venv\Scripts\python.exe -m pytest -q
 ```
 
-目前基準為 `364 passed`；測試數增加是正常的，但任何既有測試消失或被 skip 都必須說明。
+本文件中的歷史測試數只代表各 Slice 完成當時的快照。發布前應以目前
+checkout 的完整 regression 結果為準；測試數增加是正常的，但任何既有測試
+消失或被 skip 都必須說明。
 
 ## 14. 每階段更新格式
 
@@ -647,10 +649,8 @@ Stage / Slice：
 
 只有在所有出口條件都滿足時，才把 Stage 標為 Completed；頁面存在不等於階段完成。
 
-## 15. 現在應執行的工作
+## 15. 完成狀態與後續工作
 
-目前唯一建議開工項目是：
-
-> **Stage A：候選工作台穩定化與文件同步**
-
-建議順序為 `A1 統一候選解析 → A2 Promotion provenance/idempotency → A3 安全錯誤與品質閘`。完成後才進入 Stage B，不應先新增更多分析頁。
+Stage A–H 已全部完成，本遷移計畫不再作為新功能的待辦清單。後續工作應以
+小範圍的發布前 hardening、可用性回歸與證據更新為主；若要啟動新的產品階段，
+應另建有效計畫，而不是重新從本文件的 Stage A 開工。

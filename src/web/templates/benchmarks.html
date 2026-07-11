@@ -1,22 +1,22 @@
 {% extends "base.html" %}
-{% block title %}Benchmarks{% endblock %}
+{% block title %}{{ _tr('基準測試', 'Benchmarks') }}{% endblock %}
 {% block content %}
 <header class="page-header">
-  <h1>研究評估</h1>
-  <p class="muted">以固定資料集與版本化評分設定執行可重現的橫向比較。</p>
+  <h1>{{ _tr('研究評估', 'Research Evaluation') }}</h1>
+  <p class="muted">{{ _tr('以固定資料集與版本化評分設定執行可重現的橫向比較。', 'Run reproducible comparisons with a fixed dataset and versioned scoring configuration.') }}</p>
 </header>
 <section class="grid grid-2">
   <article class="card">
-    <h2>執行 Benchmark</h2>
+    <h2>{{ _tr('執行基準測試', 'Run Benchmark') }}</h2>
     <form method="post" action="/web/benchmarks">
-      <label>資料集
+      <label>{{ _tr('資料集', 'Dataset') }}
         <select name="dataset_id">
           {% for dataset in datasets %}
           <option value="{{ dataset.dataset_id }}">{{ dataset.name }} @ {{ dataset.version }}</option>
           {% endfor %}
         </select>
       </label>
-      <label>評分 Profile
+      <label>{{ _tr('評分設定檔', 'Scoring Profile') }}
         <select name="profile_id">
           {% for profile in profiles %}
           <option value="{{ profile.profile_id }}" {{ 'selected' if profile.profile_id == 'research-v1.8' else '' }}>
@@ -25,25 +25,25 @@
           {% endfor %}
         </select>
       </label>
-      <button type="submit">執行評估</button>
+      <button type="submit">{{ _tr('執行評估', 'Run Evaluation') }}</button>
     </form>
   </article>
   <article class="card">
-    <h2>資料集</h2>
+    <h2>{{ _tr('資料集', 'Datasets') }}</h2>
     {% for dataset in datasets %}
     <p><strong>{{ dataset.dataset_id }} @ {{ dataset.version }}</strong><br>
-      <span class="muted">{{ dataset.case_count }} cases · {{ dataset.description }}</span>
+      <span class="muted">{{ dataset.case_count }} {{ _tr('個案例', 'cases') }} · {{ _domain_text(dataset.description) }}</span>
     </p>
     {% else %}
-    <p class="muted">尚無可用資料集。</p>
+    <p class="muted">{{ _tr('尚無可用資料集。', 'No datasets are available.') }}</p>
     {% endfor %}
   </article>
 </section>
 <article class="card" style="margin-top:18px">
-  <h2>歷史執行</h2>
+  <h2>{{ _tr('歷史執行', 'Run History') }}</h2>
   {% if runs %}
   <table>
-    <tr><th>Run</th><th>Dataset</th><th>Profile</th><th>Mean</th><th>Pass rate</th></tr>
+    <tr><th>{{ _tr('執行 ID', 'Run') }}</th><th>{{ _tr('資料集', 'Dataset') }}</th><th>{{ _tr('設定檔', 'Profile') }}</th><th>{{ _tr('平均分數', 'Mean') }}</th><th>{{ _tr('通過率', 'Pass Rate') }}</th></tr>
     {% for run in runs %}
     <tr>
       <td><a href="/web/benchmarks/{{ run.benchmark_run_id }}">{{ run.benchmark_run_id }}</a></td>
@@ -55,7 +55,7 @@
     {% endfor %}
   </table>
   {% else %}
-  <p class="muted">尚無 Benchmark 執行紀錄。</p>
+  <p class="muted">{{ _tr('尚無基準測試執行紀錄。', 'No benchmark runs yet.') }}</p>
   {% endif %}
 </article>
 {% endblock %}

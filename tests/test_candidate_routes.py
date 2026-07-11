@@ -43,7 +43,7 @@ def test_candidates_run_not_completed(client: TestClient, monkeypatch: pytest.Mo
 
     response = client.get("/web/runs/active_run/candidates")
     assert response.status_code == 200
-    assert "運行尚未完成" in response.text
+    assert "執行尚未完成" in response.text
     assert "⏳" in response.text
 
 
@@ -72,7 +72,7 @@ def test_candidates_completed_but_empty(client: TestClient, monkeypatch: pytest.
 
     response = client.get("/web/runs/empty_run/candidates")
     assert response.status_code == 200
-    assert "完成但沒有候選方案" in response.text
+    assert "已完成但沒有候選方案" in response.text
     assert "📂" in response.text
 
 
@@ -134,7 +134,7 @@ def test_candidates_all_failed(client: TestClient, monkeypatch: pytest.MonkeyPat
 
     response = client.get("/web/runs/failed_mapping_run/candidates")
     assert response.status_code == 200
-    assert "候選方案全部 Mapping 失敗" in response.text
+    assert "所有候選方案均映射失敗" in response.text
     assert "❌" in response.text
 
 
@@ -212,13 +212,20 @@ def test_candidates_list_and_details_success(client: TestClient, monkeypatch: py
     assert "★ 目前最佳" in response.text
     assert "0.940" in response.text
     assert "0.880" in response.text
-    assert "Provisional" in response.text  # Candidate #1 mock
-    assert "Fallback" in response.text     # Candidate #2 fallback
+    assert "暫定結果" in response.text  # Candidate #1 mock
+    assert "備援結果" in response.text  # Candidate #2 fallback
     assert "未啟用" in response.text         # Candidate #1 ODE disabled
-    assert "✓已完成" in response.text        # Candidate #2 ODE simulated
+    assert "✓ 已模擬" in response.text       # Candidate #2 ODE simulated
+
+    response_en = client.get("/web/runs/success_run/candidates?lang=en")
+    assert response_en.status_code == 200
+    assert "Run Candidates" in response_en.text
+    assert "Current Best" in response_en.text
+    assert "Primary Limiting Factor" in response_en.text
+    assert "執行候選設計列表" not in response_en.text
 
     # Test Candidate 2 Details (Best)
-    detail_resp = client.get("/web/runs/success_run/candidates/1")
+    detail_resp = client.get("/web/runs/success_run/candidates/1?lang=zh-Hant")
     assert detail_resp.status_code == 200
     assert "Candidate #2 詳細設計報告" in detail_resp.text
     assert "★ 最佳候選" in detail_resp.text

@@ -1,4 +1,7 @@
 (() => {
+  const currentLanguage = document.documentElement.lang || "zh-Hant";
+  const uiText = (zhHant, english) => currentLanguage === "en" ? english : zhHant;
+
   const escapeHtml = (value) =>
     String(value ?? "")
       .replaceAll("&", "&amp;")
@@ -58,17 +61,17 @@
       const parsed = JSON.parse(raw);
       const expected = field.dataset.jsonInput;
       if (expected === "array" && !Array.isArray(parsed)) {
-        setFieldError(field, "Please provide a valid JSON array.");
+        setFieldError(field, uiText("請提供有效的 JSON 陣列。", "Please provide a valid JSON array."));
         return false;
       }
       if (expected === "object" && (Array.isArray(parsed) || parsed === null || typeof parsed !== "object")) {
-        setFieldError(field, "Please provide a valid JSON object.");
+        setFieldError(field, uiText("請提供有效的 JSON 物件。", "Please provide a valid JSON object."));
         return false;
       }
       setFieldError(field, "");
       return true;
     } catch (error) {
-      setFieldError(field, `Invalid JSON: ${error.message}`);
+      setFieldError(field, `${uiText("JSON 格式無效", "Invalid JSON")}: ${error.message}`);
       return false;
     }
   };
@@ -86,7 +89,7 @@
         const jsonIsValid = jsonFields.every(validateJsonField);
         if (!jsonIsValid) {
           event.preventDefault();
-          setFormMessage(form, "Please fix invalid JSON fields before submitting.");
+          setFormMessage(form, uiText("請先修正無效的 JSON 欄位再提交。", "Please fix invalid JSON fields before submitting."));
           jsonFields.find((field) => field.getAttribute("aria-invalid") === "true")?.focus();
           return;
         }
@@ -94,7 +97,7 @@
         form.setAttribute("aria-busy", "true");
         form.querySelectorAll("button[type='submit']").forEach((button) => {
           if (!button.dataset.originalText) button.dataset.originalText = button.textContent || "";
-          button.textContent = button.dataset.loadingText || "Submitting...";
+        button.textContent = button.dataset.loadingText || uiText("提交中...", "Submitting...");
           button.disabled = true;
         });
       });
@@ -161,7 +164,7 @@
           <span class="stage-chip ${escapeHtml(event.stage_class || "stage-neutral")}">${escapeHtml(event.stage || "-")}</span>
           <span class="status-badge ${escapeHtml(event.status_class || "status-neutral")}">${escapeHtml(event.status || "-")}</span>
         </div>
-        <div class="timeline-message">${escapeHtml(event.message || "No message recorded.")}</div>
+            <div class="timeline-message">${escapeHtml(event.message || uiText("沒有紀錄訊息。", "No message recorded."))}</div>
       `;
       return item;
     };
@@ -186,7 +189,7 @@
         statusPill.className = `status-badge ${monitorPayload.status_class || "status-neutral"}`;
       }
       if (stagePill) {
-        stagePill.textContent = run.stage || "waiting";
+      stagePill.textContent = run.stage || uiText("等待中", "Waiting");
         stagePill.className = `stage-chip ${monitorPayload.stage_class || "stage-neutral"}`;
       }
       if (progressLabel) progressLabel.textContent = `${Math.round(percent)}%`;
@@ -251,29 +254,29 @@
       if (status.available) {
         if (status.mode === "byok") {
           card.style.borderLeft = "5px solid var(--success)";
-          if (detailNode) detailNode.textContent = `供應商: ${status.provider} · 模型: ${status.model_name} (連線成功)`;
+          if (detailNode) detailNode.textContent = `${uiText("供應商", "Provider")}: ${status.provider} · ${uiText("模型", "Model")}: ${status.model_name} (${uiText("連線成功", "connected")})`;
           if (badgeContainer) {
-            badgeContainer.innerHTML = '<span class="status-badge status-ready">已啟用自備金鑰</span>';
+            badgeContainer.innerHTML = `<span class="status-badge status-ready">${uiText("已啟用自備金鑰", "Personal key enabled")}</span>`;
           }
         } else {
           card.style.borderLeft = "5px solid var(--warning)";
-          if (detailNode) detailNode.textContent = `使用系統環境變數 · 模型: ${status.model_name} (連線成功)`;
+          if (detailNode) detailNode.textContent = `${uiText("使用系統環境變數", "Using system environment variables")} · ${uiText("模型", "Model")}: ${status.model_name} (${uiText("連線成功", "connected")})`;
           if (badgeContainer) {
-            badgeContainer.innerHTML = '<span class="status-badge status-warning">使用系統預設</span>';
+            badgeContainer.innerHTML = `<span class="status-badge status-warning">${uiText("使用系統預設", "Using system defaults")}</span>`;
           }
         }
       } else {
         card.style.borderLeft = "5px solid #d92d20";
-        if (detailNode) detailNode.textContent = `錯誤: ${status.message || "無法連線至模型 API"}`;
+        if (detailNode) detailNode.textContent = `${uiText("錯誤", "Error")}: ${status.message || uiText("無法連線至模型 API", "Unable to connect to the model API")}`;
         if (badgeContainer) {
-          badgeContainer.innerHTML = '<span class="status-badge status-error">連線失敗 / 未設定</span>';
+          badgeContainer.innerHTML = `<span class="status-badge status-error">${uiText("連線失敗 / 未設定", "Connection failed / not configured")}</span>`;
         }
       }
     } catch (err) {
       card.style.borderLeft = "5px solid #d92d20";
-      if (detailNode) detailNode.textContent = `無法獲取連線狀態: ${err.message}`;
+      if (detailNode) detailNode.textContent = `${uiText("無法獲取連線狀態", "Unable to retrieve connection status")}: ${err.message}`;
       if (badgeContainer) {
-        badgeContainer.innerHTML = '<span class="status-badge status-error">檢查失敗</span>';
+        badgeContainer.innerHTML = `<span class="status-badge status-error">${uiText("檢查失敗", "Check failed")}</span>`;
       }
     }
   };
@@ -291,14 +294,14 @@
 
       btn.disabled = true;
       const originalText = btn.textContent;
-      btn.textContent = "測試中...";
+      btn.textContent = uiText("測試中...", "Testing...");
       if (resultNode) {
         resultNode.style.display = "block";
         resultNode.className = "warning-box";
         resultNode.style.background = "#f2f4f7";
         resultNode.style.color = "var(--muted)";
         resultNode.style.border = "1px solid var(--line)";
-        resultNode.textContent = "正在發送測試請求，請稍候...";
+        resultNode.textContent = uiText("正在發送測試請求，請稍候...", "Sending a test request. Please wait...");
       }
 
       try {
@@ -329,13 +332,13 @@
             resultNode.style.background = "#ecfdf3";
             resultNode.style.color = "#027a48";
             resultNode.style.border = "1px solid #d0f5e3";
-            resultNode.textContent = "連線測試成功！" + (status.message || "");
+            resultNode.textContent = uiText("連線測試成功！", "Connection test succeeded. ") + (status.message || "");
           } else {
             resultNode.className = "error-box";
             resultNode.style.background = "#fef3f2";
             resultNode.style.color = "#b42318";
             resultNode.style.border = "1px solid #fee4e2";
-            resultNode.textContent = "連線測試失敗: " + (status.message || "原因未知");
+            resultNode.textContent = `${uiText("連線測試失敗", "Connection test failed")}: ${status.message || uiText("原因未知", "Unknown reason")}`;
           }
         }
       } catch (err) {
@@ -344,7 +347,7 @@
           resultNode.style.background = "#fef3f2";
           resultNode.style.color = "#b42318";
           resultNode.style.border = "1px solid #fee4e2";
-          resultNode.textContent = `請求失敗: ${err.message}`;
+          resultNode.textContent = `${uiText("請求失敗", "Request failed")}: ${err.message}`;
         }
       } finally {
         btn.disabled = false;
@@ -415,19 +418,21 @@
 
       // Previews setup for Step 4
       if (currentStep === 4) {
-        if (previews.user_intent) previews.user_intent.textContent = fields.user_intent.value || "未填寫";
-        if (previews.host_organism) previews.host_organism.textContent = fields.host_organism.value || "未填寫";
+        if (previews.user_intent) previews.user_intent.textContent = fields.user_intent.value || uiText("未填寫", "Not provided");
+        if (previews.host_organism) previews.host_organism.textContent = fields.host_organism.value || uiText("未填寫", "Not provided");
         if (previews.compute_budget) previews.compute_budget.textContent = fields.compute_budget.value || "6";
 
-        let modelText = fields.model_name.value ? `自定義模型: ${fields.model_name.value}` : "使用伺服器預設模型";
+        let modelText = fields.model_name.value
+          ? `${uiText("自定義模型", "Custom model")}: ${fields.model_name.value}`
+          : uiText("使用伺服器預設模型", "Use the server default model");
         if (fields.api_base.value) modelText += ` (${fields.api_base.value})`;
         if (previews.model_config) previews.model_config.textContent = modelText;
 
         const activeTools = [];
-        if (fields.enable_rag.checked) activeTools.push("RAG 知識增強");
-        if (fields.enable_ode.checked) activeTools.push("ODE 模擬");
-        if (fields.enable_skill_extraction.checked) activeTools.push("技能提取");
-        if (previews.tools) previews.tools.textContent = activeTools.join(", ") || "無";
+        if (fields.enable_rag.checked) activeTools.push(uiText("RAG 知識增強", "RAG knowledge augmentation"));
+        if (fields.enable_ode.checked) activeTools.push(uiText("ODE 模擬", "ODE simulation"));
+        if (fields.enable_skill_extraction.checked) activeTools.push(uiText("技能提取", "Skill extraction"));
+        if (previews.tools) previews.tools.textContent = activeTools.join(", ") || uiText("無", "None");
       }
 
       // Buttons visibility
@@ -477,12 +482,12 @@
       if (!elicitationLoaded) {
         messagesContainer.innerHTML = `
           <div style="align-self: flex-start; max-width: 80%; background: #e9ecef; color: var(--text-dark); padding: 10px 14px; border-radius: 12px 12px 12px 0; margin-bottom: 8px;">
-            🤖 PM Agent 正在分析設計意圖並生成規格提案，請稍候...
+            ${uiText("🤖 PM Agent 正在分析設計意圖並生成規格提案，請稍候...", "🤖 The PM Agent is analyzing the design intent and preparing a specification proposal...")}
           </div>
         `;
         proposalContainer.innerHTML = `
           <div style="text-align: center; color: var(--muted); font-size: 13px; padding: 12px;">
-            正在載入推薦設定...
+            ${uiText("正在載入推薦設定...", "Loading recommended settings...")}
           </div>
         `;
       }
@@ -500,7 +505,7 @@
         console.error("Failed to load elicitation:", err);
         messagesContainer.innerHTML += `
           <div style="align-self: flex-start; max-width: 80%; background: #fff5f5; color: var(--error); padding: 10px 14px; border-radius: 12px 12px 12px 0; margin-bottom: 8px;">
-            ⚠️ 載入引導對話失敗，請檢查設定與網路連線。
+            ${uiText("⚠️ 載入引導對話失敗，請檢查設定與網路連線。", "⚠️ Unable to load the guidance dialogue. Check your settings and network connection.")}
           </div>
         `;
       }
@@ -517,7 +522,7 @@
       if (history.length === 0) {
         messagesContainer.innerHTML = `
           <div style="align-self: flex-start; max-width: 80%; background: #e9ecef; color: var(--text-dark); padding: 10px 14px; border-radius: 12px 12px 12px 0; margin-bottom: 8px;">
-            👋 您好！我是您的 PM 規格助理。我會協助您確認基因電路的各項關鍵規格。
+            ${uiText("👋 您好！我是您的 PM 規格助理。我會協助您確認基因電路的各項關鍵規格。", "👋 Hello! I am your PM specification assistant. I will help confirm the key requirements for your genetic circuit.")}
           </div>
         `;
       } else {
@@ -546,8 +551,8 @@
       if (pmStage === "completed" || !proposal || Object.keys(proposal).length === 0) {
         proposalContainer.innerHTML = `
           <div style="text-align: center; padding: 12px; color: var(--success); font-weight: 500;">
-            🎉 PM 引導規格優化已完成！<br>
-            <span style="font-size: 12.5px; font-weight: normal; color: var(--text-light); display: inline-block; margin-top: 4px;">請點擊下方「下一步」按鈕繼續設定進階選項。</span>
+            ${uiText("🎉 PM 引導規格優化已完成！", "🎉 PM-guided specification refinement is complete!")}<br>
+            <span style="font-size: 12.5px; font-weight: normal; color: var(--text-light); display: inline-block; margin-top: 4px;">${uiText("請點擊下方「下一步」按鈕繼續設定進階選項。", "Select Next below to continue to the advanced options.")}</span>
           </div>
         `;
         if (btnNext) btnNext.style.display = "inline-block";
@@ -557,9 +562,6 @@
           if (draft.structured_spec.chassis) {
             fields.host_organism.value = draft.structured_spec.chassis;
           }
-          if (draft.structured_spec.copy_number) {
-            fields.compute_budget.value = draft.structured_spec.copy_number;
-          }
         }
       } else {
         if (btnNext) btnNext.style.display = "none";
@@ -567,25 +569,25 @@
         proposalContainer.innerHTML = `
           <div style="display: flex; flex-direction: column; gap: 12px;">
             <div style="display: flex; align-items: center; gap: 6px; font-size: 13.5px; font-weight: bold; color: var(--text-dark);">
-              <span>💡</span> AI 推薦設定：${escapeHtml(proposal.missing_field)}
+              <span>💡</span> ${uiText("AI 推薦設定", "AI Recommendation")}: ${escapeHtml(proposal.missing_field)}
             </div>
             <div style="font-size: 13px; color: var(--text-light); line-height: 1.4;">
               ${escapeHtml(proposal.proposal_reason || proposal.description || proposal.ui_message || "")}
             </div>
             <div style="background: #f8fafc; border: 1px solid var(--line); border-radius: 6px; padding: 10px; font-size: 12.5px; font-family: monospace; word-break: break-all;">
-              <strong>推薦值：</strong> ${escapeHtml(JSON.stringify(proposal.proposed_value))}
+              <strong>${uiText("推薦值", "Recommended value")}:</strong> ${escapeHtml(JSON.stringify(proposal.proposed_value))}
             </div>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px;">
-              <button type="button" class="button" id="elicitation-agree-btn" style="padding: 8px 12px; font-size: 12.5px; background: var(--brand); color: white; border: none; cursor: pointer;">👍 同意並繼續</button>
-              <button type="button" class="button secondary" id="elicitation-custom-toggle-btn" style="padding: 8px 12px; font-size: 12.5px; cursor: pointer;">✏️ 自訂修改</button>
+              <button type="button" class="button" id="elicitation-agree-btn" style="padding: 8px 12px; font-size: 12.5px; background: var(--brand); color: white; border: none; cursor: pointer;">👍 ${uiText("同意並繼續", "Accept and Continue")}</button>
+              <button type="button" class="button secondary" id="elicitation-custom-toggle-btn" style="padding: 8px 12px; font-size: 12.5px; cursor: pointer;">✏️ ${uiText("自訂修改", "Customize")}</button>
             </div>
 
             <!-- Custom Input Area -->
             <div id="elicitation-custom-area" style="display: none; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 12px; margin-top: 6px;">
-              <label style="font-size: 12.5px; color: var(--text-dark);">自訂值 (請輸入文字或 JSON):
+              <label style="font-size: 12.5px; color: var(--text-dark);">${uiText("自訂值（請輸入文字或 JSON）", "Custom value (enter text or JSON)")}:
                 <input type="text" id="wizard-custom-input" style="width: 100%; font-size: 12.5px; padding: 6px 10px; margin-top: 4px;" value='${escapeHtml(typeof proposal.proposed_value === "string" ? proposal.proposed_value : JSON.stringify(proposal.proposed_value))}'>
               </label>
-              <button type="button" class="button" id="elicitation-custom-apply-btn" style="width: 100%; padding: 8px; font-size: 12.5px; background: var(--brand); color: white; border: none; cursor: pointer;">確認套用</button>
+              <button type="button" class="button" id="elicitation-custom-apply-btn" style="width: 100%; padding: 8px; font-size: 12.5px; background: var(--brand); color: white; border: none; cursor: pointer;">${uiText("確認套用", "Apply")}</button>
             </div>
           </div>
         `;
@@ -608,7 +610,8 @@
       // 3. Render Specs Preview
       const spec = draft.structured_spec || {};
       let specHtml = '<div style="display: flex; flex-direction: column; gap: 8px;">';
-      specHtml += `<div><strong>宿主生物 (Chassis):</strong> <span class="badge" style="background:#ecfdf3; color:#027a48; font-weight:bold; font-size:11.5px; padding:2px 6px; border-radius:4px;">${escapeHtml(spec.chassis || '未填寫')}</span></div>`;
+      const notProvided = uiText("未填寫", "Not provided");
+      specHtml += `<div><strong>${uiText("宿主生物", "Chassis")}:</strong> <span class="badge" style="background:#ecfdf3; color:#027a48; font-weight:bold; font-size:11.5px; padding:2px 6px; border-radius:4px;">${escapeHtml(spec.chassis || notProvided)}</span></div>`;
 
       if (Array.isArray(spec.inputs) && spec.inputs.length > 0) {
         const inputNames = spec.inputs.map(ip => {
@@ -617,11 +620,11 @@
           }
           return String(ip);
         }).join(', ');
-        specHtml += `<div><strong>輸入信號 (Inputs):</strong> <span class="badge" style="background:#eff8ff; color:#175cd3; font-size:11.5px; padding:2px 6px; border-radius:4px;">${escapeHtml(inputNames)}</span></div>`;
+        specHtml += `<div><strong>${uiText("輸入信號", "Inputs")}:</strong> <span class="badge" style="background:#eff8ff; color:#175cd3; font-size:11.5px; padding:2px 6px; border-radius:4px;">${escapeHtml(inputNames)}</span></div>`;
       } else if (spec.inputs) {
-        specHtml += `<div><strong>輸入信號 (Inputs):</strong> <span class="badge" style="background:#eff8ff; color:#175cd3; font-size:11.5px; padding:2px 6px; border-radius:4px;">${escapeHtml(String(spec.inputs))}</span></div>`;
+        specHtml += `<div><strong>${uiText("輸入信號", "Inputs")}:</strong> <span class="badge" style="background:#eff8ff; color:#175cd3; font-size:11.5px; padding:2px 6px; border-radius:4px;">${escapeHtml(String(spec.inputs))}</span></div>`;
       } else {
-        specHtml += `<div><strong>輸入信號 (Inputs):</strong> <span class="muted">未填寫</span></div>`;
+        specHtml += `<div><strong>${uiText("輸入信號", "Inputs")}:</strong> <span class="muted">${notProvided}</span></div>`;
       }
 
       if (Array.isArray(spec.outputs) && spec.outputs.length > 0) {
@@ -631,15 +634,15 @@
           }
           return String(op);
         }).join(', ');
-        specHtml += `<div><strong>輸出基因 (Outputs):</strong> <span class="badge" style="background:#fffaf0; color:#b54708; font-size:11.5px; padding:2px 6px; border-radius:4px;">${escapeHtml(outputNames)}</span></div>`;
+        specHtml += `<div><strong>${uiText("輸出基因", "Outputs")}:</strong> <span class="badge" style="background:#fffaf0; color:#b54708; font-size:11.5px; padding:2px 6px; border-radius:4px;">${escapeHtml(outputNames)}</span></div>`;
       } else if (spec.outputs) {
-        specHtml += `<div><strong>輸出基因 (Outputs):</strong> <span class="badge" style="background:#fffaf0; color:#b54708; font-size:11.5px; padding:2px 6px; border-radius:4px;">${escapeHtml(String(spec.outputs))}</span></div>`;
+        specHtml += `<div><strong>${uiText("輸出基因", "Outputs")}:</strong> <span class="badge" style="background:#fffaf0; color:#b54708; font-size:11.5px; padding:2px 6px; border-radius:4px;">${escapeHtml(String(spec.outputs))}</span></div>`;
       } else {
-        specHtml += `<div><strong>輸出基因 (Outputs):</strong> <span class="muted">未填寫</span></div>`;
+        specHtml += `<div><strong>${uiText("輸出基因", "Outputs")}:</strong> <span class="muted">${notProvided}</span></div>`;
       }
 
-      specHtml += `<div><strong>邏輯關係 (Logic):</strong> <code>${escapeHtml(spec.logic_relation || '未填寫')}</code></div>`;
-      specHtml += `<div><strong>質體拷貝數 (Copy):</strong> <code>${escapeHtml(spec.copy_number || '未填寫')}</code></div>`;
+      specHtml += `<div><strong>${uiText("邏輯關係", "Logic")}:</strong> <code>${escapeHtml(spec.logic_relation || notProvided)}</code></div>`;
+      specHtml += `<div><strong>${uiText("質體拷貝數", "Copy number")}:</strong> <code>${escapeHtml(spec.copy_number || notProvided)}</code></div>`;
       specHtml += '</div>';
       specsPreview.innerHTML = specHtml;
     };
@@ -649,7 +652,7 @@
       if (proposalContainer) {
         proposalContainer.innerHTML = `
           <div style="text-align: center; color: var(--muted); font-size: 13px; padding: 12px;">
-            PM Agent 正在評估規格設定，請稍候...
+            ${uiText("PM Agent 正在評估規格設定，請稍候...", "The PM Agent is evaluating the specification...")}
           </div>
         `;
       }
@@ -669,7 +672,7 @@
         triggerAutoSave();
       } catch (err) {
         console.error("Failed to submit response:", err);
-        alert("設定提交失敗，請檢查設定後重試。");
+        alert(uiText("設定提交失敗，請檢查設定後重試。", "Unable to submit the settings. Check them and try again."));
       }
     };
 
@@ -678,7 +681,7 @@
       if (proposalContainer) {
         proposalContainer.innerHTML = `
           <div style="text-align: center; color: var(--muted); font-size: 13px; padding: 12px;">
-            正在略過對話並套用預設值...
+            ${uiText("正在略過對話並套用預設值...", "Skipping the dialogue and applying defaults...")}
           </div>
         `;
       }
@@ -694,7 +697,7 @@
         triggerAutoSave();
       } catch (err) {
         console.error("Failed to skip elicitation:", err);
-        alert("略過引導對話失敗。");
+        alert(uiText("略過引導對話失敗。", "Unable to skip the guidance dialogue."));
       }
     };
 
@@ -734,7 +737,7 @@
 
     const saveDraft = async () => {
       if (!autosaveIndicator) return;
-      autosaveIndicator.textContent = "正在自動儲存草稿...";
+      autosaveIndicator.textContent = uiText("正在自動儲存草稿...", "Auto-saving draft...");
 
       const payload = {
         current_step: currentStep,
@@ -761,9 +764,9 @@
 
         const now = new Date();
         const timeString = now.toLocaleTimeString();
-        autosaveIndicator.textContent = `草稿已自動儲存於 ${timeString}`;
+        autosaveIndicator.textContent = `${uiText("草稿已自動儲存於", "Draft auto-saved at")} ${timeString}`;
       } catch (err) {
-        autosaveIndicator.textContent = "草稿自動儲存失敗";
+        autosaveIndicator.textContent = uiText("草稿自動儲存失敗", "Draft auto-save failed");
       }
     };
 
@@ -808,20 +811,20 @@
 
               recoveryBanner.style.display = "none";
               updateWizardUI();
-              if (autosaveIndicator) autosaveIndicator.textContent = "草稿已恢復";
+              if (autosaveIndicator) autosaveIndicator.textContent = uiText("草稿已恢復", "Draft restored");
             };
           }
 
           // Discard action
           if (btnDiscard) {
             btnDiscard.onclick = async () => {
-              if (confirm("您確定要捨棄此草稿並重新開始嗎？")) {
+              if (confirm(uiText("您確定要捨棄此草稿並重新開始嗎？", "Discard this draft and start over?"))) {
                 await fetch("/api/v1/designs/drafts/active", { method: "DELETE" });
                 recoveryBanner.style.display = "none";
                 form.reset();
                 currentStep = 1;
                 updateWizardUI();
-                if (autosaveIndicator) autosaveIndicator.textContent = "草稿已清空";
+                if (autosaveIndicator) autosaveIndicator.textContent = uiText("草稿已清空", "Draft cleared");
               }
             };
           }
@@ -843,7 +846,7 @@
         try {
           await navigator.clipboard.writeText(text);
           const originalText = button.innerHTML;
-          button.innerHTML = "✨ 已複製！";
+          button.innerHTML = uiText("✨ 已複製！", "✨ Copied!");
           button.classList.add("success");
           setTimeout(() => {
             button.innerHTML = originalText;
@@ -851,7 +854,7 @@
           }, 1500);
         } catch (err) {
           console.error("Failed to copy text:", err);
-          alert("複製失敗，請手動選取複製");
+          alert(uiText("複製失敗，請手動選取複製", "Copy failed. Select the content and copy it manually."));
         }
       });
     });
@@ -866,7 +869,7 @@
       const compareRadio = document.querySelector(".diff-radio-compare:checked");
 
       if (!baseRadio || !compareRadio) {
-        alert("請選擇基準版本 (Base) 與比對版本 (Compare)！");
+        alert(uiText("請選擇基準版本與比對版本！", "Select both a base revision and a comparison revision."));
         return;
       }
 
@@ -898,13 +901,13 @@
         if (diff.summary || diff.recommendation) {
           html += `
             <div style="background: #f8fafc; border: 1px solid var(--line); border-radius: 8px; padding: 14px; margin-bottom: 16px;">
-              ${diff.summary ? `<p style="margin: 0 0 8px 0; font-size: 13.5px; line-height: 1.5;"><strong>變更摘要：</strong>${escapeHtml(diff.summary)}</p>` : ""}
-              ${diff.recommendation ? `<p style="margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--brand);"><strong>最佳化建議：</strong>${escapeHtml(diff.recommendation)}</p>` : ""}
+              ${diff.summary ? `<p style="margin: 0 0 8px 0; font-size: 13.5px; line-height: 1.5;"><strong>${uiText("變更摘要", "Change summary")}:</strong>${escapeHtml(diff.summary)}</p>` : ""}
+              ${diff.recommendation ? `<p style="margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--brand);"><strong>${uiText("最佳化建議", "Optimization recommendation")}:</strong>${escapeHtml(diff.recommendation)}</p>` : ""}
             </div>
           `;
         }
 
-        html += `<h3 style="font-size: 14px; margin: 18px 0 8px 0; border-bottom: 1px solid var(--line); padding-bottom: 6px;">🧬 零件變更 (Part Changes)</h3>`;
+        html += `<h3 style="font-size: 14px; margin: 18px 0 8px 0; border-bottom: 1px solid var(--line); padding-bottom: 6px;">🧬 ${uiText("零件變更", "Part Changes")}</h3>`;
         if (diff.part_changes && diff.part_changes.length > 0) {
           html += `<div style="display:flex; flex-direction:column; gap:8px;">`;
           diff.part_changes.forEach(change => {
@@ -915,15 +918,15 @@
             if (change.change_type === "added") {
               badgeColor = "#027a48";
               bg = "#ecfdf3";
-              actionText = "新增零件";
+              actionText = uiText("新增零件", "Part added");
             } else if (change.change_type === "removed") {
               badgeColor = "#b42318";
               bg = "#fef3f2";
-              actionText = "移除零件";
+              actionText = uiText("移除零件", "Part removed");
             } else if (change.change_type === "modified") {
               badgeColor = "#b54708";
               bg = "#fffbeb";
-              actionText = "修改零件";
+              actionText = uiText("修改零件", "Part modified");
             }
 
             html += `
@@ -933,28 +936,28 @@
                   <strong style="color: #101828;">${escapeHtml(change.part_id)}</strong>
                 </div>
                 <div class="muted" style="font-size: 11.5px;">
-                  ${change.change_type === "modified" ? "序列或屬性已變更" : ""}
+                  ${change.change_type === "modified" ? uiText("序列或屬性已變更", "Sequence or attributes changed") : ""}
                 </div>
               </div>
             `;
           });
           html += `</div>`;
         } else {
-          html += `<p class="muted" style="font-size: 13px; margin: 0;">零件無任何異動。</p>`;
+          html += `<p class="muted" style="font-size: 13px; margin: 0;">${uiText("零件無任何異動。", "No part changes.")}</p>`;
         }
 
         const hasValidation = diff.validation_changes && diff.validation_changes.length > 0;
         const hasMetrics = diff.metric_changes && diff.metric_changes.length > 0;
 
         if (hasValidation || hasMetrics) {
-          html += `<h3 style="font-size: 14px; margin: 20px 0 8px 0; border-bottom: 1px solid var(--line); padding-bottom: 6px;">📈 指移與度量變更 (Metrics & Validation)</h3>`;
+          html += `<h3 style="font-size: 14px; margin: 20px 0 8px 0; border-bottom: 1px solid var(--line); padding-bottom: 6px;">📈 ${uiText("指標與度量變更", "Metrics and Validation")}</h3>`;
           html += `
             <table style="width:100%; border-collapse: collapse; font-size: 13px; text-align: left;">
               <thead>
                 <tr style="border-bottom: 1px solid var(--line); color: var(--muted);">
-                  <th style="padding: 6px 4px;">指標項目</th>
-                  <th style="padding: 6px 4px; text-align:right;">Rev ${escapeHtml(leftRev)} (Base)</th>
-                  <th style="padding: 6px 4px; text-align:right;">Rev ${escapeHtml(rightRev)} (Compare)</th>
+                  <th style="padding: 6px 4px;">${uiText("指標項目", "Metric")}</th>
+                  <th style="padding: 6px 4px; text-align:right;">${uiText("版本", "Rev")} ${escapeHtml(leftRev)} (${uiText("基準", "Base")})</th>
+                  <th style="padding: 6px 4px; text-align:right;">${uiText("版本", "Rev")} ${escapeHtml(rightRev)} (${uiText("比較", "Compare")})</th>
                 </tr>
               </thead>
               <tbody>
@@ -996,7 +999,7 @@
 
       } catch (err) {
         console.error("Failed to compare design revisions:", err);
-        placeholder.innerHTML = `<span style="color:#b42318;">❌ 比對失敗：請確認所選版本有效並重試。</span>`;
+        placeholder.innerHTML = `<span style="color:#b42318;">${uiText("❌ 比對失敗：請確認所選版本有效並重試。", "❌ Comparison failed. Confirm the selected revisions and try again.")}</span>`;
         placeholder.style.display = "flex";
       } finally {
         loading.style.display = "none";
@@ -1101,6 +1104,14 @@
     }
   };
 
+  const setupLocalizedConfirmations = () => {
+    document.querySelectorAll("form[data-clear-key-confirm]").forEach((form) => {
+      form.addEventListener("submit", (event) => {
+        if (!confirm(form.dataset.clearKeyConfirm)) event.preventDefault();
+      });
+    });
+  };
+
   checkAIStatus();
   setupSettingsTest();
   setupDesignWizard();
@@ -1109,4 +1120,5 @@
   setupNotifications();
   setupRevisionTimeline();
   setupViewModeToggle();
+  setupLocalizedConfirmations();
 })();

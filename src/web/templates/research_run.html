@@ -1,36 +1,36 @@
 {% extends "base.html" %}
-{% block title %}Research Run {{ run.run_id }}{% endblock %}
+{% block title %}{{ _tr('研究執行', 'Research Run') }} {{ run.run_id }}{% endblock %}
 {% block content %}
-<header class="page-header"><span class="eyebrow">Research run</span><h1>{{ run.run_id }}</h1><p class="muted">{{ run.status }}</p></header>
+<header class="page-header"><span class="eyebrow">{{ _tr('研究執行', 'Research Run') }}</span><h1>{{ run.run_id }}</h1><p class="muted">{{ _status_label(run.status) }}</p></header>
 {% if not terminal %}<div data-auto-refresh="true"></div>{% endif %}
 <section class="grid grid-3">
-  <article class="card"><span class="muted">Status</span><div class="metric compact">{{ run.status }}</div></article>
-  <article class="card"><span class="muted">Progress</span><div class="metric">{{ "%.0f"|format(run.progress * 100) }}%</div></article>
-  <article class="card"><span class="muted">Stage</span><div class="metric compact">{{ run.stage }}</div></article>
+  <article class="card"><span class="muted">{{ _tr('狀態', 'Status') }}</span><div class="metric compact">{{ _status_label(run.status) }}</div></article>
+  <article class="card"><span class="muted">{{ _tr('進度', 'Progress') }}</span><div class="metric">{{ "%.0f"|format(run.progress * 100) }}%</div></article>
+  <article class="card"><span class="muted">{{ _tr('階段', 'Stage') }}</span><div class="metric compact">{{ _status_label(run.stage) }}</div></article>
 </section>
 <div class="progress section-space"><span style="width:{{ run.progress * 100 }}%"></span></div>
 
 {% if result and result.status == "completed" %}
-<nav class="section-tabs"><a href="#summary">Summary</a><a href="#dimensions">Evaluation</a><a href="#reproducibility">Reproducibility</a><a href="#reports">Reports</a></nav>
+<nav class="section-tabs"><a href="#summary">{{ _tr('摘要', 'Summary') }}</a><a href="#dimensions">{{ _tr('評估', 'Evaluation') }}</a><a href="#reproducibility">{{ _tr('可重現性', 'Reproducibility') }}</a><a href="#reports">{{ _tr('報告', 'Reports') }}</a></nav>
 <section id="summary" class="grid grid-3 section-space">
-  <article class="card"><span class="muted">Score</span><div class="metric">{{ "%.3f"|format(result.evaluation.weighted_total_score) }}</div></article>
-  <article class="card"><span class="muted">Grade</span><div class="metric compact">{{ result.evaluation.grade }}</div></article>
-  <article class="card"><span class="muted">Simulation</span><div class="metric compact">{{ result.simulation_result.status }}</div></article>
+  <article class="card"><span class="muted">{{ _tr('分數', 'Score') }}</span><div class="metric">{{ "%.3f"|format(result.evaluation.weighted_total_score) }}</div></article>
+  <article class="card"><span class="muted">{{ _tr('等級', 'Grade') }}</span><div class="metric compact">{{ result.evaluation.grade }}</div></article>
+  <article class="card"><span class="muted">{{ _tr('模擬', 'Simulation') }}</span><div class="metric compact">{{ _status_label(result.simulation_result.status) }}</div></article>
 </section>
-<section id="dimensions" class="card section-space"><h2>Evaluation dimensions</h2>
+<section id="dimensions" class="card section-space"><h2>{{ _tr('評估維度', 'Evaluation dimensions') }}</h2>
 {% for key, value in result.evaluation.dimension_scores.items() %}
 <div class="score-row"><span>{{ key }}</span><div class="score-track"><span style="width:{{ value * 100 }}%"></span></div><strong>{{ "%.3f"|format(value) }}</strong></div>
 {% endfor %}</section>
-<section id="reproducibility" class="card section-space"><h2>Reproducibility</h2>
+<section id="reproducibility" class="card section-space"><h2>{{ _tr('可重現性', 'Reproducibility') }}</h2>
 <dl class="definition-list">
-<dt>Model</dt><dd>{{ result.simulation_result.model_id }} @ {{ result.simulation_result.model_version }}</dd>
-<dt>Configuration</dt><dd><code>{{ result.simulation_result.configuration_hash }}</code></dd>
-<dt>Parameters</dt><dd><code>{{ result.simulation_result.parameter_set_hash }}</code></dd>
-<dt>Scenarios</dt><dd><code>{{ result.simulation_result.scenario_set_hash }}</code></dd>
-<dt>Result</dt><dd><code>{{ result.simulation_result.result_hash }}</code></dd>
+<dt>{{ _tr('模型', 'Model') }}</dt><dd>{{ result.simulation_result.model_id }} @ {{ result.simulation_result.model_version }}</dd>
+<dt>{{ _tr('組態', 'Configuration') }}</dt><dd><code>{{ result.simulation_result.configuration_hash }}</code></dd>
+<dt>{{ _tr('參數', 'Parameters') }}</dt><dd><code>{{ result.simulation_result.parameter_set_hash }}</code></dd>
+<dt>{{ _tr('情境', 'Scenarios') }}</dt><dd><code>{{ result.simulation_result.scenario_set_hash }}</code></dd>
+<dt>{{ _tr('結果', 'Result') }}</dt><dd><code>{{ result.simulation_result.result_hash }}</code></dd>
 </dl></section>
-<section id="reports" class="card section-space"><h2>Reports</h2><div class="inline">
+<section id="reports" class="card section-space"><h2>{{ _tr('報告', 'Reports') }}</h2><div class="inline">
 {% for key, path in result.artifacts.items() %}<a class="button secondary" href="/api/v2/research/runs/{{ run.run_id }}/artifacts/{{ key }}">{{ key }}</a>{% endfor %}
-</div><p class="muted">Artifact paths are recorded in the result and run manifest.</p></section>
+</div><p class="muted">{{ _tr('成品路徑會記錄於結果與執行資訊清單中。', 'Artifact paths are recorded in the result and run manifest.') }}</p></section>
 {% elif result and result.error %}<div class="error-box section-space">{{ result.error }}</div>{% endif %}
 {% endblock %}

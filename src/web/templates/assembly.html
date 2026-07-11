@@ -1,65 +1,65 @@
 {% extends "base.html" %}
-{% block title %}Assembly Delivery{% endblock %}
+{% block title %}{{ _tr('裝配交付中心', 'Assembly Delivery') }}{% endblock %}
 {% block content %}
 <header class="page-header split-header">
   <div>
-    <span class="eyebrow">Experimental deliverables v1</span>
-    <h1>Assembly Delivery</h1>
-    <p class="muted">Move from registered backbones to validated assembly plans, reports, and downloadable lab handoff artifacts.</p>
+    <span class="eyebrow">{{ _tr('實驗交付物 v1', 'Experimental Deliverables v1') }}</span>
+    <h1>{{ _tr('裝配交付中心', 'Assembly Delivery') }}</h1>
+    <p class="muted">{{ _tr('從已註冊骨架建立經驗證的裝配計畫、報告與可下載的實驗交接成品。', 'Move from registered backbones to validated assembly plans, reports, and downloadable lab handoff artifacts.') }}</p>
   </div>
-  <a class="button" href="/web/assembly/new">Create deliverable</a>
+  <a class="button" href="/web/assembly/new">{{ _tr('建立交付物', 'Create Deliverable') }}</a>
 </header>
 
 <nav class="workspace-steps">
-  <a class="active" href="/web/assembly">Overview</a>
-  <a href="/web/assembly/backbones">Backbones</a>
-  <a href="/web/assembly/new">New deliverable</a>
-  <span>Report</span>
-  <span>Downloads</span>
+  <a class="active" href="/web/assembly">{{ _tr('總覽', 'Overview') }}</a>
+  <a href="/web/assembly/backbones">{{ _tr('骨架', 'Backbones') }}</a>
+  <a href="/web/assembly/new">{{ _tr('新交付物', 'New Deliverable') }}</a>
+  <span>{{ _tr('報告', 'Report') }}</span>
+  <span>{{ _tr('下載', 'Downloads') }}</span>
 </nav>
 
 <section class="grid grid-3 section-space">
   <article class="card">
-    <span class="muted">Registered backbones</span>
+    <span class="muted">{{ _tr('已註冊骨架', 'Registered Backbones') }}</span>
     <div class="metric">{{ backbones|length }}</div>
-    <a class="button secondary section-space" href="/web/assembly/backbones">Manage registry</a>
+    <a class="button secondary section-space" href="/web/assembly/backbones">{{ _tr('管理註冊庫', 'Manage Registry') }}</a>
   </article>
   <article class="card">
-    <span class="muted">DesignIR v2 designs</span>
+    <span class="muted">{{ _tr('DesignIR v2 設計', 'DesignIR v2 Designs') }}</span>
     <div class="metric">{{ designs|length }}</div>
-    <a class="button secondary section-space" href="/web/designs">Open library</a>
+    <a class="button secondary section-space" href="/web/designs">{{ _tr('開啟設計庫', 'Open Library') }}</a>
   </article>
   <article class="card">
-    <span class="muted">Next action</span>
-    <div class="metric compact">{{ "Ready" if designs and backbones else "Setup needed" }}</div>
+    <span class="muted">{{ _tr('下一步', 'Next Action') }}</span>
+    <div class="metric compact">{{ _tr('準備就緒', 'Ready') if designs and backbones else _tr('需要設定', 'Setup Needed') }}</div>
     <a class="button secondary section-space" href="{{ '/web/assembly/new' if designs and backbones else '/web/assembly/backbones' }}">
-      {{ "Start assembly" if designs and backbones else "Register backbone" }}
+      {{ _tr('開始裝配', 'Start Assembly') if designs and backbones else _tr('註冊骨架', 'Register Backbone') }}
     </a>
   </article>
 </section>
 
 <section class="grid grid-2 section-space">
   <article class="card">
-    <h2>Workflow</h2>
+    <h2>{{ _tr('工作流程', 'Workflow') }}</h2>
     <div class="timeline">
-      <div class="timeline-item"><div class="timeline-meta"><span>01</span><span>Backbone Registry</span></div><div class="timeline-message">Upload trusted GenBank backbones and define insertion regions.</div></div>
-      <div class="timeline-item"><div class="timeline-meta"><span>02</span><span>New Assembly Deliverable</span></div><div class="timeline-message">Select a design, backbone, insertion window, and assembly method.</div></div>
-      <div class="timeline-item"><div class="timeline-meta"><span>03</span><span>Assembly Report</span></div><div class="timeline-message">Review primer design, readiness, validation findings, and plasmid map.</div></div>
-      <div class="timeline-item"><div class="timeline-meta"><span>04</span><span>Artifact Downloads</span></div><div class="timeline-message">Download GenBank, CSV, JSON, report, and map files for handoff.</div></div>
+      <div class="timeline-item"><div class="timeline-meta"><span>01</span><span>{{ _tr('骨架註冊庫', 'Backbone Registry') }}</span></div><div class="timeline-message">{{ _tr('上傳可信任的 GenBank 骨架並定義插入區域。', 'Upload trusted GenBank backbones and define insertion regions.') }}</div></div>
+      <div class="timeline-item"><div class="timeline-meta"><span>02</span><span>{{ _tr('新裝配交付物', 'New Assembly Deliverable') }}</span></div><div class="timeline-message">{{ _tr('選擇設計、骨架、插入範圍與裝配方法。', 'Select a design, backbone, insertion window, and assembly method.') }}</div></div>
+      <div class="timeline-item"><div class="timeline-meta"><span>03</span><span>{{ _tr('裝配報告', 'Assembly Report') }}</span></div><div class="timeline-message">{{ _tr('檢視引子設計、就緒狀態、驗證結果與質體圖。', 'Review primer design, readiness, validation findings, and plasmid map.') }}</div></div>
+      <div class="timeline-item"><div class="timeline-meta"><span>04</span><span>{{ _tr('成品下載', 'Artifact Downloads') }}</span></div><div class="timeline-message">{{ _tr('下載 GenBank、CSV、JSON、報告與地圖檔案以供交接。', 'Download GenBank, CSV, JSON, report, and map files for handoff.') }}</div></div>
     </div>
   </article>
   <article class="card">
-    <h2>Readiness checks</h2>
+    <h2>{{ _tr('就緒狀態檢查', 'Readiness Checks') }}</h2>
     {% if not designs %}
-      <div class="warning-box">No DesignIR v2 records are available yet.</div>
+      <div class="warning-box">{{ _tr('目前沒有可用的 DesignIR v2 紀錄。', 'No DesignIR v2 records are available yet.') }}</div>
     {% endif %}
     {% if not backbones %}
-      <div class="warning-box">No backbone has been registered yet.</div>
+      <div class="warning-box">{{ _tr('目前尚未註冊任何骨架。', 'No backbone has been registered yet.') }}</div>
     {% endif %}
     {% if designs and backbones %}
-      <div class="status-badge status-ready">Designs and backbones are available for assembly planning.</div>
+      <div class="status-badge status-ready">{{ _tr('設計與骨架均已備妥，可進行裝配規劃。', 'Designs and backbones are available for assembly planning.') }}</div>
     {% endif %}
-    <p class="muted section-space">Computational deliverables remain screening artifacts; review sequences, reagent conditions, and experimental protocol before wet-lab use.</p>
+    <p class="muted section-space">{{ _tr('計算式交付物仍屬篩選成品；進行濕實驗前，請檢查序列、試劑條件與實驗流程。', 'Computational deliverables remain screening artifacts; review sequences, reagent conditions, and experimental protocol before wet-lab use.') }}</p>
   </article>
 </section>
 {% endblock %}

@@ -605,6 +605,125 @@ def design_detail(
     )
 
 
+def _codon_optimization_context(
+    design_id: str,
+    services: ApplicationServices,
+) -> dict[str, object]:
+    design = services.designs.get_v2(design_id)
+    if design is None:
+        raise HTTPException(status_code=404, detail="Design not found.")
+    analysis = services.sequence_quality.analyze(design_id)
+    profiles = [profile.to_dict() for profile in services.host_profiles.list()]
+    return {
+        "design": design,
+        "analysis": analysis,
+        "profiles": profiles,
+        "eligible_cds_count": sum(
+            1
+            for part in design.parts
+            if str(part.part_type or "").upper() == "CDS" and part.sequence
+        ),
+    }
+
+
+@router.get(
+    "/web/designs/{design_id}/optimize/codon",
+    response_class=HTMLResponse,
+)
+def codon_optimization_page(
+    design_id: str,
+    request: Request,
+    services: ApplicationServices = Depends(get_services),
+) -> HTMLResponse:
+    return _template(
+        request,
+        "codon_optimization.html",
+        **_codon_optimization_context(design_id, services),
+    )
+
+
+@router.post(
+    "/web/designs/{design_id}/optimize/codon",
+    response_class=HTMLResponse,
+)
+def create_codon_optimization_revision(
+    design_id: str,
+    request: Request,
+    host_profile_id: Annotated[str, Form()] = "ecoli_k12_default",
+    confirm: Annotated[str | None, Form()] = None,
+    confirm_design_id: Annotated[str, Form()] = "",
+    services: ApplicationServices = Depends(get_services),
+) -> Response:
+    context = _codon_optimization_context(design_id, services)
+    if confirm != "on":
+        return _template(
+            request,
+            "codon_optimization.html",
+            **context,
+            selected_host_profile_id=host_profile_id,
+            error_message=_localized(
+                request,
+                "請勾選確認方塊後再建立最佳化 revision。",
+                "Confirm the checkbox before creating an optimized revision.",
+            ),
+            status_code=422,
+        )
+    if confirm_design_id.strip() != design_id:
+        return _template(
+            request,
+            "codon_optimization.html",
+            **context,
+            selected_host_profile_id=host_profile_id,
+            error_message=_localized(
+                request,
+                "確認用的設計 ID 不相符。",
+                "The confirmation design ID does not match.",
+            ),
+            status_code=403,
+        )
+    try:
+        result = services.sequence_quality.create_optimized_revision(
+            design_id,
+            {
+                "host_profile_id": host_profile_id,
+                "objective": "codon_optimization",
+                "created_by": "html_codon_optimizer",
+            },
+        )
+    except ValueError:
+        return _template(
+            request,
+            "codon_optimization.html",
+            **context,
+            selected_host_profile_id=host_profile_id,
+            error_message=_localized(
+                request,
+                "此設計目前沒有可進行保守密碼子最佳化的 CDS。",
+                "This design has no CDS eligible for conservative codon optimization.",
+            ),
+            status_code=400,
+        )
+    if not result.get("ok"):
+        return _template(
+            request,
+            "codon_optimization.html",
+            **context,
+            selected_host_profile_id=host_profile_id,
+            optimization=result,
+            error_message=_localized(
+                request,
+                "安全檢查阻止了 revision 建立；原設計未變更。",
+                "Safety checks blocked revision creation; the original design was unchanged.",
+            ),
+            status_code=409,
+        )
+    revision_number = result["design"]["revision"]["revision_number"]
+    return RedirectResponse(
+        f"/web/designs/{design_id}?rev={revision_number}#revisions",
+        status_code=303,
+    )
+
+
 @router.get("/web/research", response_class=HTMLResponse)
 def research_workspace(
     request: Request,
@@ -849,18 +968,28 @@ def start_run(
     host_organism: Annotated[str, Form()] = "Escherichia coli",
     compute_budget: Annotated[int, Form()] = 6,
     model_name: Annotated[str, Form()] = "",
+    api_base: Annotated[str, Form()] = "",
     enable_rag: Annotated[str | None, Form()] = None,
     enable_ode: Annotated[str | None, Form()] = None,
+    enable_skill_extraction: Annotated[str | None, Form()] = None,
     services: ApplicationServices = Depends(get_services),
 ) -> RedirectResponse:
+    settings = services.settings.get_settings_masked()
+    if not settings.get("model_credentials_configured"):
+        return RedirectResponse(
+            "/web/settings?credentials_required=1",
+            status_code=303,
+        )
     result = services.runs.start(
         {
             "user_intent": user_intent,
             "host_organism": host_organism,
             "compute_budget": compute_budget,
             "model_name": model_name or None,
+            "api_base": api_base or None,
             "enable_rag": enable_rag == "on",
             "enable_ode": enable_ode == "on",
+            "enable_skill_extraction": enable_skill_extraction == "on",
         }
     )
     if result.get("status") == "error":
@@ -1040,18 +1169,122 @@ GLOSSARY = {
 }
 
 
+def _request_language(request: Request) -> str:
+    lang = request.query_params.get("lang") or request.cookies.get("lang") or "zh-Hant"
+    return lang if lang in {"zh-Hant", "en"} else "zh-Hant"
+
+
+def _localized(request: Request, zh_hant: str, english: str) -> str:
+    return english if _request_language(request) == "en" else zh_hant
+
+
 def _template(
     request: Request,
     name: str,
     **context: object,
 ) -> Response:
-    lang = request.query_params.get("lang") or request.cookies.get("lang") or "zh-Hant"
-    if lang not in ["zh-Hant", "en"]:
-        lang = "zh-Hant"
+    lang = _request_language(request)
+    response_status_code = int(context.pop("status_code", 200))
 
     def _t(text: str) -> str:
         if lang == "en":
             return GLOSSARY.get(text, text)
+        return text
+
+    def _tr(zh_hant: str, english: str) -> str:
+        return english if lang == "en" else zh_hant
+
+    status_labels = {
+        "queued": ("排隊中", "Queued"),
+        "running": ("執行中", "Running"),
+        "starting": ("啟動中", "Starting"),
+        "simulation": ("模擬中", "Simulation"),
+        "evaluation": ("評估中", "Evaluation"),
+        "reporting": ("產生報告中", "Reporting"),
+        "needs_human_input": ("等待人工回覆", "Awaiting human input"),
+        "completed": ("已完成", "Completed"),
+        "failed": ("失敗", "Failed"),
+        "error": ("錯誤", "Error"),
+        "cancelled": ("已取消", "Cancelled"),
+        "ready": ("就緒", "Ready"),
+        "primer_ready": ("引子已就緒", "Primer ready"),
+        "blocked": ("受阻", "Blocked"),
+        "preview": ("預覽", "Preview"),
+    }
+    job_kind_labels = {
+        "design": ("設計", "Design"),
+        "research": ("研究", "Research"),
+    }
+    enum_labels = {
+        **status_labels,
+        "concentration": ("濃度狀態模型", "Concentration state model"),
+        "unknown": ("未知", "Unknown"),
+        "low": ("低", "Low"),
+        "medium": ("中", "Medium"),
+        "high": ("高", "High"),
+        "pcr": ("PCR 擴增", "PCR"),
+        "direct_synthesis": ("直接合成", "Direct synthesis"),
+        "forward": ("正向", "Forward"),
+        "reverse": ("反向", "Reverse"),
+        "gibson": ("Gibson 組裝", "Gibson assembly"),
+        "golden_gate": ("Golden Gate 組裝", "Golden Gate assembly"),
+        "restriction_cloning": ("限制酶選殖", "Restriction cloning"),
+        "mapped": ("已映射", "Mapped"),
+        "mapping_failed": ("映射失敗", "Mapping failed"),
+        "simulated": ("已模擬", "Simulated"),
+        "disabled": ("未啟用", "Disabled"),
+        "provisional": ("暫定結果", "Provisional"),
+        "fallback": ("備援結果", "Fallback"),
+        "incomplete": ("不完整", "Incomplete"),
+        "pass": ("通過", "Pass"),
+        "fail": ("未通過", "Fail"),
+        "functional": ("功能正確性", "Functional"),
+        "kinetic": ("動力學", "Kinetic"),
+        "static_plausibility": ("靜態合理性", "Static plausibility"),
+        "metabolic_burden": ("代謝負擔", "Metabolic burden"),
+        "robustness": ("穩健性", "Robustness"),
+        "orthogonality": ("正交性", "Orthogonality"),
+        "cello_assignment": ("Cello 元件指派", "Cello assignment"),
+        "toxicity": ("毒性", "Toxicity"),
+        "semantic_faithfulness": ("語意忠實度", "Semantic faithfulness"),
+    }
+
+    def _localized_label(value: object, labels: dict[str, tuple[str, str]]) -> str:
+        normalized = str(value or "")
+        lookup_key = normalized.lower()
+        zh_hant, english = labels.get(
+            lookup_key,
+            (normalized.replace("_", " "), normalized.replace("_", " ").title()),
+        )
+        return english if lang == "en" else zh_hant
+
+    def _candidate_limit_label(value: object) -> str:
+        text = str(value or "")
+        if lang != "en":
+            return text
+        exact = {
+            "Cello 映射失敗 (UCF 限制不匹配或無可用邏輯閘)": (
+                "Cello mapping failed (UCF constraints did not match or no logic gate was available)"
+            ),
+            "無明顯限制因素": "No obvious limiting factor",
+        }
+        if text in exact:
+            return exact[text]
+        match = re.fullmatch(r"(.+) 表現較差 \(([^)]+)\)", text)
+        if match:
+            return f"{match.group(1)} underperforms ({match.group(2)})"
+        return text
+
+    dynamic_copy = {
+        "Synthetic, deterministic fixtures for validating score direction, evidence sensitivity, and comparison/report infrastructure.": (
+            "用於驗證分數方向、證據敏感度，以及比較與報告基礎設施的合成確定性測試資料。"
+        ),
+    }
+
+    def _domain_text(value: object) -> str:
+        text = str(value or "")
+        if lang == "zh-Hant":
+            return dynamic_copy.get(text, text)
         return text
 
     from api.dependencies import get_services
@@ -1066,7 +1299,7 @@ def _template(
         all_runs = services.runs.list(limit=100).get("runs", [])
         running_jobs = [
             r for r in all_runs
-            if r.get("status") not in ["completed", "failed", "cancelled"]
+            if r.get("status") not in TERMINAL_RUN_STATUSES
         ]
     except Exception:
         pass
@@ -1097,10 +1330,17 @@ def _template(
     response = templates.TemplateResponse(
         request=request,
         name=name,
+        status_code=response_status_code,
         context={
             "active_path": request.url.path,
             "lang": lang,
             "_t": _t,
+            "_tr": _tr,
+            "_status_label": lambda value: _localized_label(value, status_labels),
+            "_job_kind_label": lambda value: _localized_label(value, job_kind_labels),
+            "_enum_label": lambda value: _localized_label(value, enum_labels),
+            "_candidate_limit_label": _candidate_limit_label,
+            "_domain_text": _domain_text,
             "unread_notifications": unread_notifications,
             "running_jobs": running_jobs,
             "settings": settings,
@@ -1817,6 +2057,9 @@ def web_settings_page(
         "settings.html",
         settings=settings,
         cello_status=cello_status,
+        credentials_required=(
+            request.query_params.get("credentials_required") == "1"
+        ),
     )
 
 
@@ -1868,7 +2111,7 @@ def web_save_settings(
         "settings.html",
         settings=settings,
         cello_status=cello_status,
-        success_msg="設定儲存成功！",
+        success_msg=_localized(request, "設定儲存成功！", "Settings saved successfully."),
     )
 
 
@@ -1902,7 +2145,7 @@ def web_clear_settings_api_key(
         "settings.html",
         settings=settings,
         cello_status=cello_status,
-        success_msg="金鑰已清除！",
+        success_msg=_localized(request, "金鑰已清除！", "API key cleared."),
     )
 
 
@@ -2270,15 +2513,33 @@ def web_run_retry(
         raise HTTPException(status_code=404, detail="Run not found.")
 
     req = status.get("request") or {}
-    user_intent = req.get("user_intent") or status.get("user_intent") or "Retry run"
-    host_organism = req.get("host_organism") or status.get("host_organism") or "E. coli"
-    compute_budget = req.get("compute_budget") or status.get("compute_budget") or 5
+    retry_request = {
+        "user_intent": (
+            req.get("user_intent") or status.get("user_intent") or "Retry run"
+        ),
+        "host_organism": (
+            req.get("host_organism")
+            or status.get("host_organism")
+            or "Escherichia coli"
+        ),
+        "compute_budget": (
+            req.get("compute_budget") or status.get("compute_budget") or 6
+        ),
+    }
+    for key in (
+        "model_name",
+        "api_base",
+        "enable_rag",
+        "enable_ode",
+        "enable_skill_extraction",
+        "monte_carlo_samples",
+        "cello_command",
+        "ucf_path",
+    ):
+        if key in req:
+            retry_request[key] = req[key]
 
-    new_run = services.runs.start({
-        "user_intent": user_intent,
-        "host_organism": host_organism,
-        "compute_budget": compute_budget,
-    })
+    new_run = services.runs.start(retry_request)
     new_run_id = new_run["run_id"]
     return RedirectResponse(f"/web/runs/{new_run_id}", status_code=303)
 

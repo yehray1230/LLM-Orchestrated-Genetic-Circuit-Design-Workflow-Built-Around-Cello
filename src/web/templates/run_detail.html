@@ -53,7 +53,7 @@
     <div class="error-box section-space" style="background: #fef3f2; border: 1px solid #fee4e2; color: #b42318; padding: 18px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
       <div>
         <h3 style="margin: 0; color: #912018;">⚠️ 設計搜尋失敗</h3>
-        <p style="margin: 6px 0 0 0; font-size: 13.5px; white-space: pre-wrap; font-family: monospace; background: #fff5f5; padding: 10px; border-radius: 4px; border: 1px solid #fecdca;">{{ run.error or (run.summary and run.summary.get('last_error')) or "執行期間遭遇不可恢復的錯誤，請檢查您的模型設定或 API 金鑰。" }}</p>
+        <p style="margin: 6px 0 0 0; font-size: 13.5px;">執行期間遭遇錯誤。請檢查模型設定與 API Key 後再重試；詳細診斷資訊保留於伺服器日誌。</p>
       </div>
       <a class="button" href="/web/new-design" style="background: #b42318; border-color: #b42318; color: white;">重試新設計</a>
     </div>
@@ -163,9 +163,12 @@
         <article class="card" style="margin: 0;">
           <h2>當前狀態反饋 (Status Feedback)</h2>
           <div style="font-size: 13.5px; line-height: 1.5; color: #475569;">
-            {% if run.status == 'completed' %}
+            {% if run.status == 'completed' and result and result.get('design_id') %}
               <strong>AI 搜尋圓滿結束：</strong><br>
               設計已成功完成並產出了符合規格的候選拓樸方案。已為您生成完整的 DNA 元件序列與 BoM 材料清單。您可在上方點擊「檢視設計規格」進行查看。
+            {% elif run.status == 'completed' %}
+              <strong>候選搜尋已完成：</strong><br>
+              系統已產出候選拓樸，但尚未建立正式設計、DNA 序列或 BoM。請先前往候選工作台評估並提升一個候選方案。
             {% elif run.status == 'running' %}
               <strong>AI 探索執行中：</strong><br>
               Orchestrator 正在調研各種可能的電路門拓樸組合，並對每一個分支使用物理 Cello 對應與模擬分析進行檢定（當前步驟：{{ run.stage or '探測分支評估' }}）。若遭遇設計阻礙或瓶頸，將會於左側即時通知您。

@@ -181,7 +181,7 @@ def test_research_workspace_pages_and_form(tmp_path: Path) -> None:
     app.dependency_overrides[get_services] = lambda: services
     try:
         with TestClient(app) as client:
-            page = client.get("/web/research")
+            page = client.get("/web/research?lang=en")
             compare = client.get("/web/research/compare")
             started = client.post(
                 "/web/research/runs",
@@ -203,6 +203,7 @@ def test_research_workspace_pages_and_form(tmp_path: Path) -> None:
             run_id = started.headers["location"].rsplit("/", 1)[-1]
             _wait(services, run_id)
             detail = client.get(started.headers["location"])
+            detail_zh = client.get(f"{started.headers['location']}?lang=zh-Hant")
     finally:
         app.dependency_overrides.clear()
 
@@ -211,6 +212,8 @@ def test_research_workspace_pages_and_form(tmp_path: Path) -> None:
     assert compare.status_code == 200
     assert started.status_code == 303
     assert "Evaluation dimensions" in detail.text
+    assert "評估維度" in detail_zh.text
+    assert "Evaluation dimensions" not in detail_zh.text
 
 
 def test_repository_factory_defaults_to_sqlite(

@@ -138,6 +138,7 @@ def test_html_assembly_workspace_renders_report_and_downloads(
     app.dependency_overrides[get_services] = lambda: services
     try:
         with TestClient(app) as client:
+            client.cookies.set("lang", "en")
             legacy = client.get(
                 "/web/assembly",
                 params={"deliverable_id": result["deliverable_id"]},
@@ -149,6 +150,13 @@ def test_html_assembly_workspace_renders_report_and_downloads(
             downloads = client.get(
                 "/web/assembly/deliverables/"
                 f"{result['deliverable_id']}/downloads",
+            )
+            page_zh = client.get(
+                f"/web/assembly/deliverables/{result['deliverable_id']}?lang=zh-Hant",
+            )
+            downloads_zh = client.get(
+                "/web/assembly/deliverables/"
+                f"{result['deliverable_id']}/downloads?lang=zh-Hant",
             )
             download = client.get(
                 "/web/assembly/deliverables/"
@@ -165,7 +173,12 @@ def test_html_assembly_workspace_renders_report_and_downloads(
     assert "Assembly report" in page.text
     assert "Fragment and primer table" in page.text
     assert result["deliverable_id"] in page.text
+    assert "裝配報告" in page_zh.text
+    assert "片段與引子表" in page_zh.text
+    assert "Assembly report" not in page_zh.text
     assert downloads.status_code == 200
     assert "Download deliverables" in downloads.text
+    assert "下載交付物" in downloads_zh.text
+    assert "Download deliverables" not in downloads_zh.text
     assert download.status_code == 200
     assert "LOCUS" in download.text
