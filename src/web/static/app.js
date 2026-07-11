@@ -562,9 +562,6 @@
           if (draft.structured_spec.chassis) {
             fields.host_organism.value = draft.structured_spec.chassis;
           }
-          if (draft.structured_spec.copy_number) {
-            fields.compute_budget.value = draft.structured_spec.copy_number;
-          }
         }
       } else {
         if (btnNext) btnNext.style.display = "none";

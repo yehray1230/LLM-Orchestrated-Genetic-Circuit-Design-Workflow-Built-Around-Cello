@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}{{ _tr('密碼子最佳化', 'Codon Optimization') }} · {{ design.name }}{% endblock %}
+{% block content %}
+<header class="page-header split-header">
+  <div>
+    <span class="eyebrow">{{ _tr('保守序列最佳化', 'Conservative sequence optimization') }}</span>
+    <h1>{{ _tr('密碼子最佳化', 'Codon Optimization') }}</h1>
+    <p class="muted">{{ design.name }} · <code>{{ design.design_id }}</code> · Revision {{ design.revision.revision_number }}</p>
+  </div>
+  <a class="button secondary" href="/web/designs/{{ design.design_id }}#optimization">{{ _tr('返回設計', 'Back to Design') }}</a>
+</header>
+
+<div class="warning-box section-space">
+  <strong>{{ _tr('計算篩選邊界：', 'Computational-screening boundary:') }}</strong>
+  {{ _tr('此流程只建立保留蛋白質序列的同義密碼子 revision，結果不是體內表現保證，也不會自動修改 ODE 動力學。', 'This flow creates only a synonymous-codon revision that preserves the protein sequence. It does not guarantee in-vivo expression and does not automatically change ODE kinetics.') }}
+</div>
+
+{% if error_message %}
+<div class="error-box section-space" style="padding:16px;">{{ error_message }}</div>
+{% endif %}
+
+{% if optimization %}
+<article class="card section-space">
+  <h2>{{ _tr('安全檢查結果', 'Safety Check Result') }}</h2>
+  <p><span class="status-badge status-warning">{{ optimization.status }}</span></p>
+  {% if optimization.optimization and optimization.optimization.results %}
+  <ul>
+    {% for item in optimization.optimization.results %}
+    <li><code>{{ item.part_id }}</code> — {{ item.status }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</article>
+{% endif %}
+
+<section class="grid grid-3 section-space">
+  <article class="card"><span class="muted">{{ _tr('序列分析狀態', 'Sequence status') }}</span><div class="metric compact">{{ analysis.status }}</div></article>
+  <article class="card"><span class="muted">{{ _tr('有序列元件', 'Sequenced parts') }}</span><div class="metric compact">{{ analysis.summary.part_count }}</div></article>
+  <article class="card"><span class="muted">{{ _tr('可最佳化 CDS', 'Eligible CDS') }}</span><div class="metric compact">{{ eligible_cds_count }}</div></article>
+</section>
+
+<article class="card section-space">
+  <h2>{{ _tr('目前序列分析', 'Current Sequence Analysis') }}</h2>
+  {% if analysis.results %}
+  <div style="overflow-x:auto;">
+    <table>
+      <thead><tr><th>{{ _tr('元件', 'Part') }}</th><th>{{ _tr('類型', 'Type') }}</th><th>{{ _tr('狀態', 'Status') }}</th><th>bp</th><th>GC%</th><th>{{ _tr('問題數', 'Issues') }}</th></tr></thead>
+      <tbody>
+      {% for item in analysis.results %}
+        <tr>
+          <td><code>{{ item.sequence_id }}</code></td>
+          <td>{{ item.part_type }}</td>
+          <td><span class="status-badge">{{ item.status }}</span></td>
+          <td>{{ item.length_bp }}</td>
+          <td>{{ "%.1f"|format(item.gc_percent) if item.gc_percent is not none else "-" }}</td>
+          <td>{{ item.issues|length }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted">{{ _tr('此設計沒有可分析的 DNA 序列。', 'This design has no DNA sequences to analyze.') }}</p>
+  {% endif %}
+</article>
+
+<article class="card section-space">
+  <h2>{{ _tr('建立最佳化 revision', 'Create Optimized Revision') }}</h2>
+  <p class="muted">{{ _tr('系統會對所有具序列的 CDS 產生同義密碼子版本，通過蛋白質保留與禁用 motif 檢查後，才建立新的不可變 revision。', 'All sequenced CDS parts will receive synonymous-codon candidates. A new immutable revision is created only after protein-preservation and forbidden-motif checks pass.') }}</p>
+  {% if eligible_cds_count > 0 %}
+  <form method="post" action="/web/designs/{{ design.design_id }}/optimize/codon">
+    <label>{{ _tr('宿主參考設定', 'Host Profile') }}
+      <select name="host_profile_id">
+        {% for profile in profiles %}
+        <option value="{{ profile.profile_id }}" {% if (selected_host_profile_id or 'ecoli_k12_default') == profile.profile_id %}selected{% endif %}>{{ profile.name }} · {{ profile.host_organism }} · {{ profile.evidence_level }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label style="flex-direction:row; align-items:flex-start; gap:8px; margin-top:16px;">
+      <input type="checkbox" name="confirm" value="on" required>
+      <span>{{ _tr('我了解這是計算篩選，並確認要建立新的 sequence-optimization revision。', 'I understand this is computational screening and confirm creation of a new sequence-optimization revision.') }}</span>
+    </label>
+    <label style="margin-top:12px;">{{ _tr('輸入設計 ID 以確認', 'Enter the design ID to confirm') }}
+      <input name="confirm_design_id" required autocomplete="off" placeholder="{{ design.design_id }}">
+    </label>
+    <button class="button" type="submit" style="margin-top:16px;">{{ _tr('建立最佳化 revision', 'Create Optimized Revision') }}</button>
+  </form>
+  {% else %}
+  <div class="warning-box">{{ _tr('沒有具 DNA 序列的 CDS；目前不能建立最佳化 revision。', 'No CDS has a DNA sequence, so an optimized revision cannot be created.') }}</div>
+  {% endif %}
+</article>
+{% endblock %}

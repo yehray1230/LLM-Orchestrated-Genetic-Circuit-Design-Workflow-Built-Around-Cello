@@ -6,6 +6,13 @@
   <p class="muted">{{ _tr('在此設定您個人的 LiteLLM / OpenAI 相容金鑰與模型。一般設定與 API Key 分開保存；儲存方式會依目前平台顯示於下方。', 'Configure your personal LiteLLM or OpenAI-compatible key and model. General settings and the API key are stored separately; the active storage method is shown below.') }}</p>
 </header>
 
+{% if credentials_required %}
+<div class="warning-box" style="margin-bottom: 18px; background: #fff4e5; color: #9a3412; border: 1px solid #fdba74;">
+  <strong>{{ _tr('需要模型憑證才能啟動設計。', 'Model credentials are required to start a design.') }}</strong>
+  {{ _tr('儲存 API Key 後，請返回「新增設計」繼續已保留的草稿。', 'Save an API key, then return to New Design to continue the preserved draft.') }}
+</div>
+{% endif %}
+
 {% if success_msg %}
 <div class="warning-box" style="margin-bottom: 18px; background: #ecfdf3; color: #027a48; border: 1px solid #d0f5e3;">
   {{ success_msg }}

@@ -6,7 +6,14 @@
   <p class="muted">{{ _tr('透過四步驟設計精靈，配置您的基因電路規格並啟動自動化設計流程。', 'Use the four-step wizard to configure your genetic-circuit specification and start the automated design workflow.') }}</p>
 </header>
 
-<div id="draft-recovery-banner" class="warning-box" style="margin-bottom: 18px; display: none; background: #fffbeb; color: #b54708; border: 1px solid #fed7aa; display: flex; justify-content: space-between; align-items: center; padding: 12px 16px;">
+{% if not settings.model_credentials_configured %}
+<div class="warning-box" style="margin-bottom: 18px; background: #fff4e5; color: #9a3412; border: 1px solid #fdba74; display: flex; justify-content: space-between; align-items: center; gap: 16px;">
+  <span>⚠️ {{ _tr('啟動 AI 設計前必須先設定可用的模型 API Key。您的草稿會保留，完成設定後可回來繼續。', 'Configure a working model API key before starting AI design. Your draft will be preserved so you can continue after setup.') }}</span>
+  <a class="button" href="/web/settings?credentials_required=1">{{ _tr('前往模型設定', 'Open Model Settings') }}</a>
+</div>
+{% endif %}
+
+<div id="draft-recovery-banner" class="warning-box" style="margin-bottom: 18px; display: none; background: #fffbeb; color: #b54708; border: 1px solid #fed7aa; justify-content: space-between; align-items: center; padding: 12px 16px;">
   <span>⚠️ {{ _tr('偵測到上次未完成的設計草稿（最後儲存於', 'An unfinished design draft was found (last saved at') }} <span id="draft-saved-time">-</span>{{ _tr('）。', '). ') }}{{ _tr('是否恢復進度？', 'Restore it?') }}</span>
   <div style="display: flex; gap: 8px;">
     <button class="button" id="btn-restore-draft" style="padding: 6px 12px; font-size: 13px;">{{ _tr('恢復草稿', 'Restore Draft') }}</button>
@@ -156,7 +163,7 @@
       <div class="inline" style="gap: 8px;">
         <button class="button secondary" type="button" id="btn-wizard-prev" style="display: none;">{{ _tr('上一步', 'Previous') }}</button>
         <button class="button" type="button" id="btn-wizard-next">{{ _tr('下一步', 'Next') }}</button>
-        <button class="button" type="submit" id="btn-wizard-submit" style="display: none;">{{ _tr('啟動背景設計', 'Start Background Design') }}</button>
+        <button class="button" type="submit" id="btn-wizard-submit" style="display: none;" {% if not settings.model_credentials_configured %}disabled aria-disabled="true" title="{{ _tr('請先設定模型 API Key', 'Configure a model API key first') }}"{% endif %}>{{ _tr('啟動背景設計', 'Start Background Design') }}</button>
       </div>
     </div>
   </form>

@@ -90,6 +90,9 @@ class SettingsService:
     def get_settings_masked(self) -> dict[str, Any]:
         settings = self.load_settings()
         key = settings.get("api_key", "").strip()
+        system_key_configured = bool(
+            os.getenv("LITELLM_API_KEY") or os.getenv("OPENAI_API_KEY")
+        )
         if key:
             settings["api_key"] = (
                 f"{key[:4]}...{key[-4:]}" if len(key) > 8 else "sk-..."
@@ -97,6 +100,10 @@ class SettingsService:
         else:
             settings["api_key"] = ""
         settings["api_key_configured"] = bool(key)
+        settings["model_credentials_configured"] = bool(key) or system_key_configured
+        settings["model_credentials_mode"] = (
+            "byok" if key else ("system_default" if system_key_configured else "none")
+        )
         settings["credential_storage"] = self.storage_status()
         return settings
 

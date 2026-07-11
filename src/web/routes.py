@@ -605,6 +605,125 @@ def design_detail(
     )
 
 
+def _codon_optimization_context(
+    design_id: str,
+    services: ApplicationServices,
+) -> dict[str, object]:
+    design = services.designs.get_v2(design_id)
+    if design is None:
+        raise HTTPException(status_code=404, detail="Design not found.")
+    analysis = services.sequence_quality.analyze(design_id)
+    profiles = [profile.to_dict() for profile in services.host_profiles.list()]
+    return {
+        "design": design,
+        "analysis": analysis,
+        "profiles": profiles,
+        "eligible_cds_count": sum(
+            1
+            for part in design.parts
+            if str(part.part_type or "").upper() == "CDS" and part.sequence
+        ),
+    }
+
+
+@router.get(
+    "/web/designs/{design_id}/optimize/codon",
+    response_class=HTMLResponse,
+)
+def codon_optimization_page(
+    design_id: str,
+    request: Request,
+    services: ApplicationServices = Depends(get_services),
+) -> HTMLResponse:
+    return _template(
+        request,
+        "codon_optimization.html",
+        **_codon_optimization_context(design_id, services),
+    )
+
+
+@router.post(
+    "/web/designs/{design_id}/optimize/codon",
+    response_class=HTMLResponse,
+)
+def create_codon_optimization_revision(
+    design_id: str,
+    request: Request,
+    host_profile_id: Annotated[str, Form()] = "ecoli_k12_default",
+    confirm: Annotated[str | None, Form()] = None,
+    confirm_design_id: Annotated[str, Form()] = "",
+    services: ApplicationServices = Depends(get_services),
+) -> Response:
+    context = _codon_optimization_context(design_id, services)
+    if confirm != "on":
+        return _template(
+            request,
+            "codon_optimization.html",
+            **context,
+            selected_host_profile_id=host_profile_id,
+            error_message=_localized(
+                request,
+                "請勾選確認方塊後再建立最佳化 revision。",
+                "Confirm the checkbox before creating an optimized revision.",
+            ),
+            status_code=422,
+        )
+    if confirm_design_id.strip() != design_id:
+        return _template(
+            request,
+            "codon_optimization.html",
+            **context,
+            selected_host_profile_id=host_profile_id,
+            error_message=_localized(
+                request,
+                "確認用的設計 ID 不相符。",
+                "The confirmation design ID does not match.",
+            ),
+            status_code=403,
+        )
+    try:
+        result = services.sequence_quality.create_optimized_revision(
+            design_id,
+            {
+                "host_profile_id": host_profile_id,
+                "objective": "codon_optimization",
+                "created_by": "html_codon_optimizer",
+            },
+        )
+    except ValueError:
+        return _template(
+            request,
+            "codon_optimization.html",
+            **context,
+            selected_host_profile_id=host_profile_id,
+            error_message=_localized(
+                request,
+                "此設計目前沒有可進行保守密碼子最佳化的 CDS。",
+                "This design has no CDS eligible for conservative codon optimization.",
+            ),
+            status_code=400,
+        )
+    if not result.get("ok"):
+        return _template(
+            request,
+            "codon_optimization.html",
+            **context,
+            selected_host_profile_id=host_profile_id,
+            optimization=result,
+            error_message=_localized(
+                request,
+                "安全檢查阻止了 revision 建立；原設計未變更。",
+                "Safety checks blocked revision creation; the original design was unchanged.",
+            ),
+            status_code=409,
+        )
+    revision_number = result["design"]["revision"]["revision_number"]
+    return RedirectResponse(
+        f"/web/designs/{design_id}?rev={revision_number}#revisions",
+        status_code=303,
+    )
+
+
 @router.get("/web/research", response_class=HTMLResponse)
 def research_workspace(
     request: Request,
@@ -849,18 +968,28 @@ def start_run(
     host_organism: Annotated[str, Form()] = "Escherichia coli",
     compute_budget: Annotated[int, Form()] = 6,
     model_name: Annotated[str, Form()] = "",
+    api_base: Annotated[str, Form()] = "",
     enable_rag: Annotated[str | None, Form()] = None,
     enable_ode: Annotated[str | None, Form()] = None,
+    enable_skill_extraction: Annotated[str | None, Form()] = None,
     services: ApplicationServices = Depends(get_services),
 ) -> RedirectResponse:
+    settings = services.settings.get_settings_masked()
+    if not settings.get("model_credentials_configured"):
+        return RedirectResponse(
+            "/web/settings?credentials_required=1",
+            status_code=303,
+        )
     result = services.runs.start(
         {
             "user_intent": user_intent,
             "host_organism": host_organism,
             "compute_budget": compute_budget,
             "model_name": model_name or None,
+            "api_base": api_base or None,
             "enable_rag": enable_rag == "on",
             "enable_ode": enable_ode == "on",
+            "enable_skill_extraction": enable_skill_extraction == "on",
         }
     )
     if result.get("status") == "error":
@@ -1055,6 +1184,7 @@ def _template(
     **context: object,
 ) -> Response:
     lang = _request_language(request)
+    response_status_code = int(context.pop("status_code", 200))
 
     def _t(text: str) -> str:
         if lang == "en":
@@ -1169,7 +1299,7 @@ def _template(
         all_runs = services.runs.list(limit=100).get("runs", [])
         running_jobs = [
             r for r in all_runs
-            if r.get("status") not in ["completed", "failed", "cancelled"]
+            if r.get("status") not in TERMINAL_RUN_STATUSES
         ]
     except Exception:
         pass
@@ -1200,6 +1330,7 @@ def _template(
     response = templates.TemplateResponse(
         request=request,
         name=name,
+        status_code=response_status_code,
         context={
             "active_path": request.url.path,
             "lang": lang,
@@ -1926,6 +2057,9 @@ def web_settings_page(
         "settings.html",
         settings=settings,
         cello_status=cello_status,
+        credentials_required=(
+            request.query_params.get("credentials_required") == "1"
+        ),
     )
 
 
@@ -2379,15 +2513,33 @@ def web_run_retry(
         raise HTTPException(status_code=404, detail="Run not found.")
 
     req = status.get("request") or {}
-    user_intent = req.get("user_intent") or status.get("user_intent") or "Retry run"
-    host_organism = req.get("host_organism") or status.get("host_organism") or "E. coli"
-    compute_budget = req.get("compute_budget") or status.get("compute_budget") or 5
+    retry_request = {
+        "user_intent": (
+            req.get("user_intent") or status.get("user_intent") or "Retry run"
+        ),
+        "host_organism": (
+            req.get("host_organism")
+            or status.get("host_organism")
+            or "Escherichia coli"
+        ),
+        "compute_budget": (
+            req.get("compute_budget") or status.get("compute_budget") or 6
+        ),
+    }
+    for key in (
+        "model_name",
+        "api_base",
+        "enable_rag",
+        "enable_ode",
+        "enable_skill_extraction",
+        "monte_carlo_samples",
+        "cello_command",
+        "ucf_path",
+    ):
+        if key in req:
+            retry_request[key] = req[key]
 
-    new_run = services.runs.start({
-        "user_intent": user_intent,
-        "host_organism": host_organism,
-        "compute_budget": compute_budget,
-    })
+    new_run = services.runs.start(retry_request)
     new_run_id = new_run["run_id"]
     return RedirectResponse(f"/web/runs/{new_run_id}", status_code=303)
 

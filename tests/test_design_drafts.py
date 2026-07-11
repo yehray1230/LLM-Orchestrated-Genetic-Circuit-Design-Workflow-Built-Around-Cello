@@ -110,7 +110,12 @@ def test_design_draft_api_endpoints(client):
     assert response.json()["data"] is None
 
 
-def test_design_draft_cleared_on_run_start(client, test_services):
+def test_design_draft_cleared_on_run_start(client, test_services, monkeypatch):
+    monkeypatch.setattr(
+        test_services.settings,
+        "get_settings_masked",
+        lambda: {"model_credentials_configured": True},
+    )
     # Save draft
     test_services.design_drafts.save({
         "user_intent": "Draft Intent",

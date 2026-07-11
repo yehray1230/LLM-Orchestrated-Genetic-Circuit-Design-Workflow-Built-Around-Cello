@@ -525,22 +525,26 @@
     <h2>最佳化工作區</h2>
     <p>此設計可進行參數最佳化。選擇一個最佳化策略以改善電路效能。</p>
     <div class="grid grid-2" style="margin-top:16px;">
-      <a class="download-card" href="/web/designs/{{ design.design_id }}/optimize/codon?rev={{ viewed_rev }}" style="text-decoration:none;">
+      <a class="download-card" href="/web/designs/{{ design.design_id }}/optimize/codon" style="text-decoration:none;">
         <strong>密碼子最佳化</strong>
         <span>針對目標宿主進行密碼子使用頻率優化，提升蛋白質表達量。</span>
+        <span class="muted">開啟分析與 revision 確認流程</span>
       </a>
-      <a class="download-card" href="/web/designs/{{ design.design_id }}/optimize/rbs?rev={{ viewed_rev }}" style="text-decoration:none;">
+      <div class="download-card" aria-disabled="true" style="opacity:0.65;">
         <strong>RBS 強度調控</strong>
         <span>調整核糖體結合位點序列，精確控制翻譯起始速率。</span>
-      </a>
-      <a class="download-card" href="/web/designs/{{ design.design_id }}/optimize/promoter?rev={{ viewed_rev }}" style="text-decoration:none;">
+        <span class="muted">HTML 工作流程尚未提供</span>
+      </div>
+      <div class="download-card" aria-disabled="true" style="opacity:0.65;">
         <strong>啟動子工程</strong>
         <span>篩選或設計啟動子變體，調整基因表達水平與動態範圍。</span>
-      </a>
-      <a class="download-card" href="/web/designs/{{ design.design_id }}/optimize/stability?rev={{ viewed_rev }}" style="text-decoration:none;">
+        <span class="muted">HTML 工作流程尚未提供</span>
+      </div>
+      <div class="download-card" aria-disabled="true" style="opacity:0.65;">
         <strong>遺傳穩定性分析</strong>
         <span>評估並改善電路在多代培養中的結構與功能穩定性。</span>
-      </a>
+        <span class="muted">HTML 工作流程尚未提供</span>
+      </div>
     </div>
   </section>
 
