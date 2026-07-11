@@ -8,6 +8,17 @@ The simulator is designed for early computational triage. It helps compare candi
 
 模擬器旨在進行早期的計算篩選。它有助於比較候選調節電路的拓撲結構、檢測明顯的動態失效，並為 Reflexion 迴圈提供訊號。它並非旨在作為一個完整的宿主細胞模型，或對活體內（in vivo）表達進行定量預測。
 
+The terminology and boundaries in this document are informed by published work
+on Cello design automation, stochastic chemical simulation, resource
+competition, and SBOL data exchange [1-4]. The equations, parameter defaults,
+score weights, and readiness labels in this repository are nevertheless
+project-specific implementations unless a section explicitly states otherwise.
+They have not been calibrated against a wet-lab dataset.
+
+本文件的術語與邊界參考 Cello 設計自動化、隨機化學模擬、資源競爭與 SBOL
+資料交換的公開文獻 [1-4]。然而，除非段落另有明示，本專案中的方程式實作、
+預設參數、評分權重與 readiness 標籤均為專案特定設計，尚未以濕實驗資料集校準。
+
 ## 1. Modeling Purpose/建模目的
 
 The model is used to answer limited design-screening questions:
@@ -447,87 +458,10 @@ The new synonymous codon-optimization, host profiling, and experimental calibrat
 
 新增的同義密碼子優化、宿主設定檔與實驗校準層引入了具有特定假設的額外計算模型：
 
-- **Synonymous CDS Replacement**: Assumes synonymous codon replacements preserve the primary protein structure and translated folding rate. Mature dynamic maturation delay rates are kept constant.
-- detailed codon-pair bias, translation initiation context, or ribosome traffic (synonymous E. coli codon replacement is now supported at the sequence level, but not dynamically simulated in ODEs);
-  詳細的密碼子對偏好、翻譯起始上下文或核糖體交通（目前已在序列層級支援大腸桿菌同義密碼子替換，但尚未在 ODE 中進行動態模擬）；
-- detailed protein folding pathways, chaperones, degradation tags, or active/inactive maturation states (modeled via a simplified first-order maturation rate delay);
-  詳細的蛋白質折疊路徑、分子伴侶、降解標籤或活性/非活性成熟狀態（目前透過簡化的一階成熟速率延遲進行建模）；
-- inducer transport, ligand binding, or environmental dynamics;
-  誘導物轉運、配體結合或環境動力學；
-- experimentally calibrated toxicity and noise distributions.
-  經實驗校準的毒性與雜訊分布。
-
-These omissions are intentional for the current prototype. The model is kept small enough to run inside an iterative search loop.
-
-對於目前的原型，這些省略是刻意為之的。模型保持足夠小的規模，以便在迭代搜尋迴圈中運行。
-
-## 12. Evidence Needed for Stronger Biological Claims/做出更強生物學宣稱所需的證據
-
-To move from computational candidate ranking toward stronger biological claims, future versions should add:
-
-為了從計算候選方案排序邁向更強的生物學宣稱，未來的版本應增加：
-
-- real Cello execution with appropriate UCF files and mapped part assignments;
-  使用適當的 UCF 文件和映射的元件分配進行真實的 Cello 執行；
-- sequence-level checks for promoters, RBSs, coding regions, terminators, and cloning constraints;
-  針對啟動子、RBS、編碼區、終止子與克隆約束的序列級檢查；
-- host-specific parameter calibration from literature or experiments;
-  來自文獻或實驗的宿主特異性參數校準；
-- experimentally calibrated plasmid copy-number and growth-dilution dynamics;
-  經實驗校準的質體複製數與生長稀釋動力學；
-- experimental burden-growth feedback and toxicity calibration;
-  實驗性負載-生長反饋與毒性校準；
-- experimentally measured ON/OFF ratios, response times, noise, burden, and growth effects;
-  經實驗測量的 ON/OFF 比率、響應時間、雜訊、負載與生長效應；
-- comparison against known measured genetic circuits;
-  與已知經測量的基因電路進行對比；
-- validation of score weights against empirical outcomes.
-  根據經驗結果驗證評分權重。
-
-Until those steps are added, the appropriate claim is:
-
-在增加這些步驟之前，合適的宣稱為：
-
-> The model provides simplified screening evidence for computational candidate designs.
-> 該模型為計算候選設計提供簡化的篩選證據。
-
-It should not be described as:
-
-它不應被描述為：
-
-> A quantitative predictor of complete, buildable, experimentally validated genetic circuits.
-> 完整、可構建且經過實驗驗證 of 基因電路的定量預測器。
-## 13. Relationship Between DesignIR and the ODE Model (2026-06-06)
-## 13. DesignIR 與 ODE 模型的關係（2026-06-06）
-
-The new part, revision, comparison, and export layers do not expand the biological scope of the ODE model.
-
-新增的元件、版本、比較與匯出層不會擴張 ODE 模型的生物學範圍。
-
-- `DesignIR` provides a richer representation of candidate parts and constructs.
-- `DesignIR` 提供較完整的候選元件與 construct 表示。
-- Part replacement changes stored assignment and sequence metadata, but the current ODE simulator does not automatically derive calibrated kinetic parameters from those sequences.
-- 元件替換會改變保存的 assignment 與 sequence metadata，但目前 ODE simulator 不會自動從序列推導經校準的動力學參數。
-- `DesignDiff` can display score differences, but those scores remain based on the existing benchmark and simulation assumptions.
-- `DesignDiff` 可以顯示分數差異，但這些分數仍基於既有 benchmark 與模擬假設。
-- BOM, GenBank, and SBOL3 are representations of current data; they do not add biological mechanisms or improve parameter calibration.
-- BOM、GenBank 與 SBOL3 是目前資料的表示，不會增加生物機制或改善參數校準。
-
-Therefore, a sequence-backed export should not be interpreted as a sequence-aware ODE prediction. Stronger coupling would require part-specific response functions, promoter/RBS models, degradation parameters, copy-number context, and calibrated host data.
-
-因此，具有序列的匯出不應解讀為 sequence-aware ODE 預測。更強的耦合需要元件特定 response function、promoter/RBS 模型、降解參數、copy-number 情境與經校準的宿主資料。
-
-## 14. Sequence and Host Optimization Assumptions (2026-06-16)
-## 14. 序列與宿主優化假設（2026-06-16）
-
-The new synonymous codon-optimization, host profiling, and experimental calibration layers introduce additional computational models with specific assumptions:
-
-新增的同義密碼子優化、宿主設定檔與實驗校準層引入了具有特定假設的額外計算模型：
-
-- **Synonymous CDS Replacement**: Assumes synonymous codon replacements preserve the primary protein structure and translated folding rate. Mature dynamic maturation delay rates are kept constant.
-  **同義 CDS 替換**：假設同義密碼子替換保留了主要蛋白質結構與翻譯折疊速率。成熟的動態成熟延遲速率保持不變。
-- **Motif Avoidance**: Assumes configured forbidden restriction/Type IIS sites can be resolved synonomously without affecting translation efficiency.
-  **基序避免**：假設已配置的禁用限制酶切位點/Type IIS 位點可以被同義解決，而不影響翻譯效率。
+- **Synonymous CDS Replacement**: Verifies preservation of the translated amino-acid sequence. It does not establish unchanged translation rate, folding, expression, stability, or function. The ODE maturation-delay parameters remain unchanged because the current model does not derive them from synonymous codon choices.
+  **同義 CDS 替換**：只驗證翻譯後胺基酸序列保持不變；不代表翻譯速率、折疊、表達量、穩定性或功能不變。由於目前模型不會由同義密碼子選擇推導成熟延遲參數，ODE 參數維持原值。
+- **Motif Avoidance**: Attempts synonymous removal of configured restriction/Type IIS sites. Passing this check does not demonstrate unchanged translation efficiency or biological function.
+  **基序避免**：嘗試以同義替換移除設定的限制酶切／Type IIS 位點；通過檢查不代表翻譯效率或生物學功能保持不變。
 - **Candidate Ranking Strategies**: Matches E. coli candidates under high-expression, low-burden, and balanced strategies to fixed copy-number classes, promoter strengths, and RBS strengths. Biases (expression/burden/stability) are static scores and do not dynamically simulate cellular trajectories.
   **候選方案排序策略**：將在高表達、低負載與平衡策略下的大腸桿菌候選方案與固定的複製數類別、啟動子強度及 RBS 強度相匹配。偏置分數（表達量/負載/穩定性）是靜態分數，不會動態模擬細胞軌跡。
 - **Calibration Model Independence**: Experimental calibration summaries evaluate dataset coverage and average performance; they do not calibrate parameters dynamically in the ODE simulation.
@@ -548,3 +482,17 @@ To maintain rigorous academic boundary limits, the following biophysical assumpt
   **確定性連續極限與化學主方程式**：連續的 ODE 模型假設了高分子數的熱力學極限。雖然 Gillespie 隨機稽核作為一個有限的數值檢查器被提供，但它僅用於辨識低分子量限制下（如低拷貝質體或弱表達）的隨機絕滅或不穩定性；它並非對化學主方程（CME）的完整求解，也不代表對細胞間異質性或分配噪聲的全面建模。
 - **Metabolic Burden Proxy Limits**: The synthetic metabolic burden metric ($burden\_nM$) represents a coarse-grained concentration proxy of synthetic components rather than a dynamic coupling to internal host pathways, dynamic ribosomal/RNAP synthesis feedback, growth rate decay dynamics, or cellular stress responses.
   **代謝負載代理指標限制**：合成代謝負載指標（$burden\_nM$）僅代表合成組件的粗粒度濃度代理值，並非與宿主內源代謝途徑、動態核糖體/RNAP 合成反饋、生長速率衰減動力學或細胞應激反應的動態耦合。
+
+## References
+
+1. Nielsen, A. A. K. et al. “Genetic circuit design automation.” *Science*
+   352, aac7341 (2016). https://doi.org/10.1126/science.aac7341
+2. Gillespie, D. T. “Exact stochastic simulation of coupled chemical
+   reactions.” *The Journal of Physical Chemistry* 81, 2340-2361 (1977).
+   https://doi.org/10.1021/j100540a008
+3. Frei, T. et al. “Predicting composition of genetic circuits with resource
+   competition: demand and sensitivity.” *ACS Synthetic Biology* 10,
+   3330-3342 (2021). https://doi.org/10.1021/acssynbio.1c00281
+4. Baig, H. et al. “Synthetic biology open language (SBOL) version 3.0.0.”
+   *Journal of Integrative Bioinformatics* 17 (2020).
+   https://doi.org/10.1515/jib-2020-0017

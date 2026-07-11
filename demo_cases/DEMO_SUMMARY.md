@@ -7,18 +7,17 @@ Update it after each case is run.
 
 | Case | Intent | Status | Cello mode | Score | Readiness | Main blocker | Report |
 | --- | --- | --- | --- | ---: | --- | --- | --- |
-| 01 | `A AND NOT B -> GFP` | baseline captured | not_run / not_mapped | 0.85 | primer_ready | no external Cello or wet-lab validation | [case_01_a_and_not_b_gfp.md](case_01_a_and_not_b_gfp.md) |
+| 01 | `A AND NOT B -> GFP` | baseline captured | not_run / not_mapped | 0.85 heuristic | primer-planning gate passed; no primers generated | no external Cello, concrete backbone, primer design, or wet-lab validation | [case_01_a_and_not_b_gfp.md](case_01_a_and_not_b_gfp.md) |
 | 02 | `A OR B -> reporter` | draft | pending |  | pending | pending | [case_02_a_or_b_reporter.md](case_02_a_or_b_reporter.md) |
 | 03 | `NOT A -> GFP` | draft | pending |  | pending | pending | [case_03_not_a_gfp.md](case_03_not_a_gfp.md) |
 
 ## Cold Outreach Readiness
 
-For first-wave cold outreach, Case 01 is the flagship demo. The current baseline
-packet is:
-
-```text
-outputs/demo_baseline/demo_baseline_cc928f18c446/demo_baseline_summary.md
-```
+For first-wave cold outreach, Case 01 is the flagship demo. The public,
+sanitized evidence snapshot is
+[`docs/evidence/case_01/`](../docs/evidence/case_01/README.md). The full local
+packet is regenerated under `outputs/demo_baseline/` with the command recorded
+in that snapshot.
 
 This baseline supports research-preview outreach, but not biological claims.
 It uses direct topology simulation and explicitly does not claim external Cello
@@ -55,4 +54,3 @@ Use these points when presenting the result:
 - [ ] Every report includes benchmark and readiness evidence or explains why it is missing.
 - [ ] Every report includes limitations and next checks.
 - [ ] This summary can be used as a short briefing for a supervisor or collaborator.
-

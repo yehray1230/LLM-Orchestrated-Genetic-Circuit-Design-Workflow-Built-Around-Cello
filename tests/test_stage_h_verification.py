@@ -24,8 +24,8 @@ def test_documentation_references_are_updated():
     """Verify that documentation files reference Streamlit as legacy/maintenance-only and HTML as primary."""
     doc_checks = {
         "README.md": [
-            "FastAPI/OpenAPI, server-rendered research workspace, MCP tools, and legacy Streamlit interface (maintenance-only)",
-            "Legacy Streamlit interface (maintenance-only)"
+            "FastAPI/OpenAPI, HTML workspace, MCP tools, maintenance-only Streamlit UI",
+            "maintenance-only Streamlit UI"
         ],
         "QUICKSTART.md": [
             "FastAPI / Web Workspace (預設主介面 / Default Interface)",
@@ -38,7 +38,7 @@ def test_documentation_references_are_updated():
             "This interface has entered maintenance-only mode"
         ],
         "docs/architecture.md": [
-            "The server-rendered HTML interface (FastAPI `/web` workspace) is the default user interface, while the legacy Streamlit interface in [app.py](app.py) remains for maintenance-only backup",
+            "The server-rendered HTML interface (FastAPI `/web` workspace) is the default user interface, while the legacy Streamlit interface in [app.py](../app.py) remains for maintenance-only backup",
             "Legacy Streamlit UI (maintenance-only)"
         ],
         "docs/ai_reviewer_guide.md": [

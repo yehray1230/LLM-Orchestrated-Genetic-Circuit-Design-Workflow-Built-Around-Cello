@@ -25,6 +25,7 @@ PROJECT_PROFILE.md
 .ode_cache/
 chroma_db/
 outputs/
+/.pnpm-store/
 常用指令.txt
 
 # IDE/editor files

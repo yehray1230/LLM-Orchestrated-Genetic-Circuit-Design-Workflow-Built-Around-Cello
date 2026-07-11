@@ -1,20 +1,21 @@
-# 關於專案與開發動機 (About the Project & Motivation)
+# 問題背景、原型定位與研究動機 (Problem Context, Prototype Positioning, and Motivation)
 
-本文件將專案開發者的個人動機、專案的戰略定位以及未來的合作與發展規劃整合在一起，為研究夥伴與評審提供完整的專案脈絡。
+本文件說明此原型試圖處理的問題、工作假設、目前可檢視的實作，以及適合由不同領域共同檢驗的開放問題。
 
-This document consolidates the developer's personal motivation, strategic profile, and future collaboration plans to provide a comprehensive context for research partners and reviewers.
+This document explains the problem, working hypothesis, inspectable prototype,
+and open questions that may benefit from review across several disciplines.
 
 ---
 
 ## 1. 這是一個什麼專案？ (What is this project?)
 
-這是一個**基於大語言模型（LLM）編排、圍繞 Cello 構建的計算輔助基因電路設計工作流**。
+這是一個探索「證據感知 AI 輔助基因電路設計」的初步研究原型。其價值應由問題定義、可檢視實作、現有證據與未解問題判斷，而非由個人作者敘事或功能數量判斷。
 
 其核心功能是：
 1. **自然語言翻譯**：將使用者輸入的自然語言調節邏輯意圖（例如：「僅在輸入 A 存在且輸入 B 不存在時激活 GFP」），翻譯為結構化的布林邏輯、真值表預期與相容於 Cello 的組合邏輯 Verilog 代碼。
-2. **確定性與物理模擬評估**：調用外部或模擬的 Cello 映射工具進行基因元件分配，並結合資源感知（Resource-aware）的常微分方程（ODE）動態模擬，估算基因電路在宿主細胞內的動態表現、資源佔用率與微擾魯棒性。
+2. **確定性與簡化模型評估**：區分外部或 mock Cello 結果，並以資源感知 ODE、擾動與其他計算檢查提供比較視角；這些結果不是對宿主細胞真實動態的校準預測。
 3. **多智能體自我修復（Reflexion Loop）**：利用多個協同運作的 AI 智能體（PM, Builder, Translator, Critic, Consolidator）對設計方案進行自我審查與反覆迭代修復，抓出邏輯不匹配、動態邊際不足或序列特徵瑕疵等失敗模式。
-4. **標準化學術匯出**：生成帶有完整註記的標準生物學文件（如 SBOL 3.0 與 GenBank 檔案）、BOM 清單以及組裝規劃數據，供濕實驗室研究人員檢視。
+4. **可追溯表示與交換**：生成 SBOL3 Turtle、GenBank、BOM 與組裝規劃表示，供後續檢視；檔案生成不代表生物有效性或第三方相容性認證。
 
 > [!IMPORTANT]
 > **生物學宣稱邊界 (Biological Claim Boundary)**：本專案提供的是**計算層面的設計輔助與候選篩選**，而非實驗驗證。高基準分數僅代表在目前簡化模擬假設下設計合理，並不保證活體內（in vivo）的真實可構建性與功能性。
@@ -23,9 +24,9 @@ This document consolidates the developer's personal motivation, strategic profil
 
 ## 2. 為什麼它會存在？ (Why does it exist?)
 
-本專案起源於 2026 年初，由**國立成功大學生命科學系的大學部學生自主發起與開發，是一項獨立的研究原型**。
+此 repository 起源於一個問題構想：當 AI 能生成流暢但未必可靠的生物設計時，能否建立一套工作流，讓系統主動暴露假設、證據缺口與下一步驗證需求？目前內容是該構想經 AI 輔助工程反覆實作與檢查後的初步原型，不宣稱個人獨立完成，也不宣稱已取得獨立科學驗證。
 
-### 開發動機與背景 (Developer's Motivation)
+### 問題動機與背景 (Problem Motivation)
 
 本專案的核心存在動機可歸納為以下三點：
 
@@ -40,15 +41,15 @@ This document consolidates the developer's personal motivation, strategic profil
 
 ---
 
-## 3. 目前已經完成了什麼？ (What has already been accomplished?)
+## 3. 目前原型包含什麼？ (What does the current prototype contain?)
 
-目前系統已建立了完整的端到端計算工作流，主要成果包括：
+目前 repository 包含一組可檢視的端到端計算路徑；下列項目是 preview implementation，不是學術或生物學完成度宣稱：
 * **多智能體協同架構**：實作了包含專案經理（PM）、構建者（Builder）、翻譯者（Translator）、評論者（Critic）與整合者（Consolidator）的 Reflexion 迴圈，可完成從語意理解到 Verilog 生成與錯誤修復的完整流程。
 * **Cello 映射與邊界處理**：整合了 Cello 映射包裝器（CelloWrapper），能區分「真實外部 Cello 對接」與用於流程測試的「模擬（Mock）Cello 映射」，明示元件分配的來源與不確定性。
 * **資源感知 ODE 模擬器**：實作了簡化的 ODE 動態模擬，將游離核糖體與 RNAP 資源爭奪（Metabolic Burden）納入考量，並支持 C-terminal 活性降解標籤（LVA/LAV/ASV）與降解常數的耦合。
 * **基準評估與 Readiness 分數系統**：設計了 `research-v1.8@1.8.0` 加權評分標準，評估維度涵蓋邏輯功能、動態邊際、 robustness（Monte Carlo 對數常態複製數微擾）、代謝負載與序列品質等；並建立了 Readiness 等級（從概念到序列優化）。
 * **序列級品質控制與密碼子優化**：利用 Biopython 與 pydna 檢測同聚物、重複序列、限制酶切位點（如 Golden Gate 過渡位點與 Gibson 組裝 overlap $T_m$ 預估），並針對大腸桿菌（E. coli）進行同義密碼子優化（Codon Optimization）。
-* **標準生物資訊格式匯出**：實作了標準 **SBOL 3.0** 與 **GenBank (`.gb`)** 文件生成器，確保計算產出能與 SnapGene 等主流生物學軟體互操作。
+* **標準生物資訊格式匯出**：實作了 **SBOL 3 Turtle** 與 **GenBank (`.gb`)** 文件生成器，並以 repository 內的語法、解析與 round-trip regression checks 驗證目前契約。這不等同於已完成 SnapGene 或其他第三方工具的廣泛相容性認證。
 * **互動式 Demo 介面**：開發了 Web 應用，讓研究人員能直觀檢視智能體對話、評分報告與模擬動態曲線。
 
 ---
@@ -100,7 +101,7 @@ This document consolidates the developer's personal motivation, strategic profil
 ## 6. 目前暫不尋求的機會 (What we are NOT currently seeking)
 
 為維持專案的研究聚焦度，以下類型的機會目前**不在**優先考慮範圍之內：
-* **商業化融資或創業投資（Venture Funding）**：本專案是一項學術導向的自主研究原型，當前目標是學術交流與同儕審查，暫不考慮商業推廣或產品化。
+* **商業化融資或創業投資（Venture Funding）**：目前定位是問題導向、AI 輔助的研究原型，目標是取得方法、證據與邊界方面的回饋，暫不以商業推廣或產品化為主軸。
 * **臨床、醫療或高規格法規驗證（Clinical/Regulatory Validation）**：系統尚未具備，亦無意圖在現階段解決複雜宿主相容性、生物安全法規、倫理審查或臨床安全等應用層面問題。
 * **單純的高通量生物資訊管道（Bioinformatics Pipeline）優化**：本專案聚焦於「智能體編排與設計輔助工作流」，而非開發超大規模的高通量純序列分析或基因組組裝基礎設施。
 * **無數據支持的直接濕實驗委託**：我們暫不尋求要求系統「保證設計成功率」的濕實驗室合作，除非該合作伴隨著共同開發、參數校準與數據回饋的學術共識。
