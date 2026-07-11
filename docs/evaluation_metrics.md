@@ -92,9 +92,9 @@ These metrics do not validate biological function. A high score means that a can
 ## 1. Score Summary
 ## 1. 分數摘要
 
-Candidate evaluation is implemented in [benchmark_suite/benchmark_controller.py](benchmark_suite/benchmark_controller.py). The main entry point is:
+Candidate evaluation is implemented in [benchmark_suite/benchmark_controller.py](../benchmark_suite/benchmark_controller.py). The main entry point is:
 
-候選方案的評估實作於 [benchmark_suite/benchmark_controller.py](benchmark_suite/benchmark_controller.py)。主要進入點為：
+候選方案的評估實作於 [benchmark_suite/benchmark_controller.py](../benchmark_suite/benchmark_controller.py)。主要進入點為：
 
 ```python
 evaluate_candidate(candidate)
@@ -159,9 +159,9 @@ Grades are assigned as:
 ## 2. Functional Score
 ## 2. 功能性分數
 
-Implemented in [benchmark_suite/functional_scorer.py](benchmark_suite/functional_scorer.py).
+Implemented in [benchmark_suite/functional_scorer.py](../benchmark_suite/functional_scorer.py).
 
-實作於 [benchmark_suite/functional_scorer.py](benchmark_suite/functional_scorer.py)。
+實作於 [benchmark_suite/functional_scorer.py](../benchmark_suite/functional_scorer.py)。
 
 The functional score checks whether the candidate appears to implement the intended Boolean behavior and whether available expression values show useful ON/OFF separation.
 
@@ -252,9 +252,9 @@ UI 與 MCP adapter 也可能輸出分數解釋、決策紀錄、Cello 來源警�
 ## 3. Kinetic and Robustness Scores
 ## 3. 動力學與魯棒性分數
 
-Implemented in [benchmark_suite/kinetic_scorer.py](benchmark_suite/kinetic_scorer.py) and [tools/ode_simulator.py](tools/ode_simulator.py).
+Implemented in [benchmark_suite/kinetic_scorer.py](../benchmark_suite/kinetic_scorer.py) and [src/tools/ode_simulator.py](../src/tools/ode_simulator.py).
 
-實作於 [benchmark_suite/kinetic_scorer.py](benchmark_suite/kinetic_scorer.py) 與 [tools/ode_simulator.py](tools/ode_simulator.py)。
+實作於 [benchmark_suite/kinetic_scorer.py](../benchmark_suite/kinetic_scorer.py) 與 [src/tools/ode_simulator.py](../src/tools/ode_simulator.py)。
 
 The kinetic scorer uses a noisy ODE response simulation when the candidate has simulation-relevant inputs such as:
 
@@ -355,9 +355,9 @@ Interpretation: kinetic and robustness scores are useful for identifying obvious
 ## 4. ODE Simulation Metrics
 ## 4. ODE 模擬指標
 
-Implemented in [tools/ode_simulator.py](tools/ode_simulator.py).
+Implemented in [src/tools/ode_simulator.py](../src/tools/ode_simulator.py).
 
-實作於 [tools/ode_simulator.py](tools/ode_simulator.py)。
+實作於 [src/tools/ode_simulator.py](../src/tools/ode_simulator.py)。
 
 The ODE simulator uses a reduced resource-aware model. For a candidate topology, it tracks:
 
@@ -469,9 +469,9 @@ The stochastic audit additionally reports `simulation_status`, `completed_run_co
 ## 5. Static Plausibility Score
 ## 5. 靜態合理性分數
 
-Implemented in [benchmark_suite/static_plausibility_evaluator.py](benchmark_suite/static_plausibility_evaluator.py).
+Implemented in [benchmark_suite/static_plausibility_evaluator.py](../benchmark_suite/static_plausibility_evaluator.py).
 
-實作於 [benchmark_suite/static_plausibility_evaluator.py](benchmark_suite/static_plausibility_evaluator.py)。
+實作於 [benchmark_suite/static_plausibility_evaluator.py](../benchmark_suite/static_plausibility_evaluator.py)。
 
 This evaluator checks whether a candidate has simple structural warning signs:
 
@@ -541,9 +541,9 @@ Interpretation: this is a lightweight structural check. It can penalize obvious 
 ## 6. Metabolic Burden Score
 ## 6. 代謝負載分數
 
-Implemented in [benchmark_suite/metabolic_scorer.py](benchmark_suite/metabolic_scorer.py).
+Implemented in [benchmark_suite/metabolic_scorer.py](../benchmark_suite/metabolic_scorer.py).
 
-實作於 [benchmark_suite/metabolic_scorer.py](benchmark_suite/metabolic_scorer.py)。
+實作於 [benchmark_suite/metabolic_scorer.py](../benchmark_suite/metabolic_scorer.py)。
 
 This evaluator currently uses logic-gate complexity as a proxy for burden. It counts Verilog primitive gates:
 
@@ -607,9 +607,9 @@ Interpretation: this is not a direct metabolic model. It is a design-complexity 
 ## 7. Temporal Score
 ## 7. 時序分數
 
-Implemented in [benchmark_suite/temporal_scorer.py](benchmark_suite/temporal_scorer.py).
+Implemented in [benchmark_suite/temporal_scorer.py](../benchmark_suite/temporal_scorer.py).
 
-實作於 [benchmark_suite/temporal_scorer.py](benchmark_suite/temporal_scorer.py)。
+實作於 [benchmark_suite/temporal_scorer.py](../benchmark_suite/temporal_scorer.py)。
 
 The temporal score estimates whether the candidate response is fast enough relative to a target rise time.
 
@@ -691,9 +691,9 @@ Interpretation: the temporal score is a weak signal unless it is backed by expli
 ## 8. Cello Constraint, Orthogonality, and Assignment Scores
 ## 8. Cello 約束、正交性與分配分數
 
-Implemented in [benchmark_suite/cello_constraint_evaluator.py](benchmark_suite/cello_constraint_evaluator.py) and [tools/cello_wrapper.py](tools/cello_wrapper.py).
+Implemented in [benchmark_suite/cello_constraint_evaluator.py](../benchmark_suite/cello_constraint_evaluator.py) and [src/tools/cello_wrapper.py](../src/tools/cello_wrapper.py).
 
-實作於 [benchmark_suite/cello_constraint_evaluator.py](benchmark_suite/cello_constraint_evaluator.py) 與 [tools/cello_wrapper.py](tools/cello_wrapper.py)。
+實作於 [benchmark_suite/cello_constraint_evaluator.py](../benchmark_suite/cello_constraint_evaluator.py) 與 [src/tools/cello_wrapper.py](../src/tools/cello_wrapper.py)。
 
 The Cello constraint evaluator extracts signals from:
 
@@ -787,9 +787,9 @@ The benchmark controller does not directly weight `cello_constraint_score`. Inst
 
 基準控制器不直接對 `cello_constraint_score` 進行加權。相反，它分別對提取的 `orthogonality`（正交性）和 `cello_assignment`（Cello 分配）子項進行加權。
 
-Important: when no external Cello command is configured, [tools/cello_wrapper.py](tools/cello_wrapper.py) returns mock topology data with:
+Important: when no external Cello command is configured, [src/tools/cello_wrapper.py](../src/tools/cello_wrapper.py) returns mock topology data with:
 
-重要提示：當未配置外部 Cello 指令時，[tools/cello_wrapper.py](tools/cello_wrapper.py) 將返回模擬的拓撲數據，其屬性為：
+重要提示：當未配置外部 Cello 指令時，[src/tools/cello_wrapper.py](../src/tools/cello_wrapper.py) 將返回模擬的拓撲數據，其屬性為：
 
 ```text
 mapping_status = "unmapped"
@@ -804,9 +804,9 @@ Mock-mode results should not be described as successful Cello mapping.
 ## 9. Semantic Faithfulness
 ## 9. 語義忠實性
 
-Implemented in [benchmark_suite/semantic_evaluator.py](benchmark_suite/semantic_evaluator.py) and integrated into the `research-v1.8` scoring profile.
+Implemented in [benchmark_suite/semantic_evaluator.py](../benchmark_suite/semantic_evaluator.py) and integrated into the `research-v1.8` scoring profile.
 
-實作於 [benchmark_suite/semantic_evaluator.py](benchmark_suite/semantic_evaluator.py)，並已整合至 `research-v1.8` 分數權重設定檔中。
+實作於 [benchmark_suite/semantic_evaluator.py](../benchmark_suite/semantic_evaluator.py)，並已整合至 `research-v1.8` 分數權重設定檔中。
 
 The semantic evaluator can use an LLM to compare the original natural-language request with generated Verilog and return:
 
@@ -838,9 +838,9 @@ Semantic faithfulness is integrated in the `research-v1.8` scoring profile with 
 ## 10. Critic Thresholds
 ## 10. Critic 閾值
 
-Implemented in [agents/critic_agent.py](agents/critic_agent.py).
+Implemented in [src/agents/critic_agent.py](../src/agents/critic_agent.py).
 
-實作於 [agents/critic_agent.py](agents/critic_agent.py)。
+實作於 [src/agents/critic_agent.py](../src/agents/critic_agent.py)。
 
 The Critic uses benchmark outputs to decide whether a candidate should be approved, repaired, or rejected. Current thresholds include:
 

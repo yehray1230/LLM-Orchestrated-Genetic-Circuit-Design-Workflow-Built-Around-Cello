@@ -1,36 +1,52 @@
-# LLM-Orchestrated Genetic Circuit Design Workflow
+# Evidence-Aware Genetic Circuit Design Research Prototype
 
-This repository is a research prototype for translating natural-language
-regulatory-logic intent into computational genetic-circuit design candidates.
-It combines LLM-based agents, Cello-compatible logic translation, simplified
-ODE simulation, benchmark scoring, and explicit limitation reporting.
+AI systems can generate fluent genetic-circuit descriptions, but fluency is not
+evidence of logical consistency, biological plausibility, buildability, or
+experimental function.
 
-Short version:
+This repository explores a working hypothesis:
 
-> The system generates, evaluates, and critiques computational candidate
-> designs for regulatory logic circuits. It is not a complete plasmid-design
-> platform and does not claim wet-lab validation.
+> AI-assisted biological design should be treated as an evidence-aware
+> evaluation process, not only as a generation task.
 
-## Project Status
+The current prototype translates regulatory-logic intent into computational
+candidates, subjects them to deterministic checks and simplified models,
+records missing evidence, and routes weak candidates toward critique or
+revision. It is an exploratory, AI-assisted implementation of that idea—not a
+virtual cell, a complete biological CAD platform, or an experimentally
+validated circuit-design system.
 
-Current stage: `0.x research preview`.
+## The Problem
 
-The project is suitable for:
+Natural-language and LLM-generated biological designs can be persuasive while
+silently crossing several abstraction boundaries:
 
-- demonstrating a natural-language-to-circuit-design workflow;
-- exploring multi-agent design, critique, and repair loops;
-- producing traceable computational design artifacts;
-- comparing candidates with simplified simulation and heuristic evaluation;
-- discussing how AI-assisted design tools should expose biological uncertainty.
+- a coherent sentence is not a valid logic specification;
+- valid Verilog is not a biological part assignment;
+- a mapped or exported representation is not a buildable construct;
+- a completed simulation is not calibrated in vivo prediction;
+- a high heuristic score is not experimental evidence.
 
-It should not be read as:
+The project asks how a design workflow can preserve user intent while making
+these boundaries, assumptions, failure modes, and next evidence requirements
+visible.
 
-- a finished synthetic-biology CAD tool;
-- a validated biological design platform;
-- a replacement for Cello setup, expert review, or wet-lab characterization;
-- evidence that generated circuits will work experimentally.
+## Working Hypothesis
 
-## What The System Does
+A useful AI-assisted scientific workflow should combine generative components
+with deterministic checks, explicit evidence classes, provenance, and honest
+failure states. Its output should be a reviewable candidate and an account of
+what supports it—not a confident-looking final answer.
+
+This prototype therefore separates:
+
+- LLM-dependent interpretation, proposal, translation, and critique;
+- deterministic logic, schema, sequence, simulation, and export checks;
+- mock, failed, and external Cello outcomes;
+- computational scores from assembly and experimental readiness;
+- available evidence from missing or inapplicable evidence.
+
+## What the Prototype Tests
 
 Given a request such as:
 
@@ -40,137 +56,142 @@ Activate GFP only when input A is present and input B is absent.
 
 the workflow can produce and inspect:
 
-- a structured interpretation of the design intent;
-- Boolean logic and truth-table expectations;
-- Cello-compatible combinational Verilog;
-- optional Cello mapping metadata when an external Cello setup is configured;
-- mock Cello topology output for workflow testing when Cello is not configured;
-- simplified resource-aware ODE simulation outputs;
-- benchmark and readiness-style scores;
-- critique messages that identify weak logic, mapping, simulation, or evidence;
-- export-oriented artifacts such as BOM CSV, GenBank, and SBOL3 representations
-  when enough sequence evidence is available.
+- a structured interpretation and truth-table expectation;
+- Boolean logic and Cello-compatible combinational Verilog;
+- explicit mock-versus-external Cello provenance;
+- simplified resource-aware ODE, stochastic, temporal, and perturbation paths;
+- versioned heuristic scoring and staged readiness reports;
+- Critic feedback and repair provenance;
+- sequence, host, assembly, BOM, GenBank, and SBOL3 planning artifacts when
+  required evidence is available.
 
-## Implemented Preview Capabilities
+The implementation is a test bed for asking whether those layers can make
+uncertainty and unsupported assumptions easier to inspect.
 
-The repository currently contains these reviewable computational paths:
+## Current Evidence
 
-| Area | Implemented preview capability | Evidence boundary |
-| --- | --- | --- |
-| Design intake | Natural-language elicitation, structured specifications, guided JSON/GenBank imports, DesignIR revisions, comparisons, and part-replacement checks | Imported or generated records still require expert review |
-| Circuit execution | Synchronous evaluation plus persistent asynchronous runs, progress events, feedback/resume, artifacts, and HTML run monitoring | Run completion does not imply biological validity |
-| Simulation | Resource-aware ODE screening, temporal inputs, parameter sweeps, simplified bifurcation reports, Monte Carlo perturbation, stochastic SSA, retroactivity, operon coupling/polarity, and heuristic RBS-blocking warnings | Models are simplified and mostly uncalibrated |
-| Evaluation and repair | Versioned scoring profiles, benchmark datasets, readiness domains, Critic routing, validated best-candidate self-healing, and repair provenance | Scores rank implemented checks; they are not success probabilities |
-| Sequence and host | Sequence QC, synonymous E. coli codon revisions, CAI/rare-codon reporting, host profiles, host ranking, calibration snapshots, and optimization workflow orchestration | Host compatibility and expression are not experimentally guaranteed |
-| Assembly and exchange | Backbone registry, plasmid/assembly planning, conservative deliverable packages, BOM, GenBank, and SBOL3 representations | Outputs are planning artifacts, not executable wet-lab protocols |
-| Interfaces | FastAPI/OpenAPI, server-rendered research workspace, MCP tools, and legacy Streamlit interface (maintenance-only) | Optional external tools may fall back or remain unavailable |
+The repository includes deterministic regression coverage, versioned scoring
+profiles, content-addressed benchmark metadata, explicit claim-boundary
+policies, and a sanitized public snapshot for the fixed Case 01 demonstration.
 
-The detailed contracts and caveats live in
-[`WORKFLOW.md`](docs/workflow.md), [`EVALUATION_METRICS.md`](docs/evaluation_metrics.md),
-[`MODEL_ASSUMPTIONS.md`](docs/model_assumptions.md), and
-[`LIMITATION.md`](docs/limitations.md).
+- [Case 01 public evidence](docs/evidence/case_01/README.md)
+- [Demo summary](demo_cases/DEMO_SUMMARY.md)
+- [Evaluation metrics](docs/evaluation_metrics.md)
+- [Model assumptions](docs/model_assumptions.md)
+- [MVP verification plan and execution record](docs/developer/MVP_TEST_PLAN.md)
 
-## Biological Claim Boundary
+The bundled `research_smoke_v1` benchmark contains synthetic infrastructure
+fixtures, not measured circuits. Current evidence supports software and
+computational-screening claims only.
 
-The project can support computational design assistance:
+## Evidence and Biological Boundaries
 
-- translating regulatory-logic intent into candidate circuit representations;
-- checking logic consistency and Cello-compatible syntax;
-- ranking candidates under implemented scoring assumptions;
-- exposing uncertainty, missing evidence, and likely failure modes;
-- evaluating sequence-level constraints when sequence data is available;
-- generating conservative assembly or optimization proposals in supported paths.
+The project can support:
 
-The project cannot currently claim:
+- computational representation of regulatory-logic intent;
+- logic and syntax consistency checks;
+- comparisons under named computational assumptions;
+- identification of missing evidence and likely failure modes;
+- conservative sequence, host, assembly, and exchange-format review paths.
+
+It cannot currently claim:
 
 - experimentally validated genetic logic gates;
-- guaranteed biological buildability;
-- complete plasmid design from user intent alone;
+- guaranteed biological buildability or complete plasmid design;
 - calibrated in vivo expression prediction;
 - reliable host compatibility, biosafety, or regulatory compliance;
-- automatic selection of experimentally characterized parts without supplied
-  evidence;
-- automatic wet-lab protocol generation or expert-ready experimental approval.
+- automatic selection of characterized parts without supplied evidence;
+- wet-lab-ready primers, protocols, or expert approval.
 
-The safest presentation wording is:
+The detailed claim policy is in [Project Limitations](docs/limitations.md).
 
-> This is an LLM-orchestrated computational design-assistance workflow built
-> around Cello that translates natural-language regulatory logic intent into
-> candidate genetic-circuit representations, then ranks and critiques those
-> candidates using simplified simulation and heuristic evaluation.
+## Implemented Preview Surface
+
+| Area | Reviewable computational path | Evidence boundary |
+| --- | --- | --- |
+| Design intake | Natural-language elicitation, structured specifications, imports, revisions, comparisons, replacement checks | Generated or imported records require review |
+| Circuit execution | Synchronous and persistent runs, events, feedback/resume, artifacts, monitoring | Run completion does not imply biological validity |
+| Simulation | Resource-aware ODE, temporal inputs, sweeps, simplified bifurcation reports, perturbation, bounded SSA, retroactivity, operon and RBS heuristics | Models are simplified and mostly uncalibrated |
+| Evaluation and repair | Versioned profiles, datasets, readiness domains, Critic routing, constrained repair provenance | Scores rank implemented checks; they are not probabilities |
+| Sequence and host | Sequence QC, synonymous revisions, CAI/rare-codon reporting, host profiles and ranking | Expression and compatibility are not guaranteed |
+| Assembly and exchange | Backbone registry, planning, deliverable packages, BOM, GenBank, SBOL3 | Planning and exchange artifacts are not protocols |
+| Interfaces | FastAPI/OpenAPI, HTML workspace, MCP tools, maintenance-only Streamlit UI | Optional external services may be unavailable |
+
+## Research Direction: Multi-Layer Resource Accounting
+
+One future direction is a layered mathematical representation across the
+central-dogma information flow:
+
+```text
+DNA copy-number and promoter context
+  -> transcriptional demand and RNAP allocation
+  -> RNA production, accessibility, and degradation
+  -> translational demand and ribosome allocation
+  -> protein maturation and degradation
+  -> circuit output, burden, and growth-dilution feedback
+```
+
+The goal is not to reproduce a real cell or construct a whole-cell digital
+twin. The model would provide a diagnostic lens for identifying assumed
+resource bottlenecks, comparing candidates under explicit assumptions,
+exposing missing parameters, and recommending the next evidence needed for a
+stronger interpretation.
+
+See the [future roadmap](docs/future_roadmap.md) for this and other open research
+questions.
 
 ## Workflow Snapshot
 
 ```text
 Natural-language intent
-  -> PM agent structured specification
-  -> Builder agent logic proposal
-  -> Translator agent Cello-compatible Verilog
-  -> Cello wrapper real-or-mock mapping boundary
-  -> Data and parameter attachment
-  -> ODE simulation and benchmark evaluation
-  -> Critic-driven repair or consolidation
-  -> Reviewable design artifacts and reports
+  -> structured specification
+  -> candidate logic and Verilog
+  -> external-or-mock Cello boundary
+  -> data and parameter attachment
+  -> simplified simulation and evaluation
+  -> critique, repair, or consolidation
+  -> reviewable artifacts plus explicit limitations
 ```
 
-The main orchestration path is implemented in
-[`workflows/reflexion_controller.py`](workflows/reflexion_controller.py).
+The main orchestration path is
+[`src/workflows/reflexion_controller.py`](src/workflows/reflexion_controller.py).
+
+## Read This Repository by Interest
+
+Different readers need different evidence first. The audience guides change
+emphasis and reading order, but never change the underlying claim boundaries.
+
+| Interest | Start here |
+| --- | --- |
+| Synthetic biology or wet lab | [Synthetic biology guide](docs/audiences/synthetic_biology.md) |
+| Mathematical or systems modeling | [Mathematical modeling guide](docs/audiences/mathematical_modeling.md) |
+| AI4Science or agent systems | [AI4Science and agents guide](docs/audiences/ai4science_agents.md) |
+| Bio-CAD, APIs, or interoperability | [Bio-CAD and interoperability guide](docs/audiences/bio_cad_interoperability.md) |
+| Potential collaborators or reviewers | [Collaboration and review guide](docs/audiences/potential_collaborators.md) |
+
+AI assistants should begin with [`llms.txt`](llms.txt), which provides the same
+audience-aware routing while preserving a universal project identity.
 
 ## Repository Guide
 
-Start here:
-
 | File | Purpose |
 | --- | --- |
-| [`docs/about.md`](docs/about.md) | Project introduction, personal motivation, and strategic profile. |
-| [`QUICKSTART.md`](QUICKSTART.md) | How to install, test, and run the local demo interfaces. |
-| [`docs/limitations.md`](docs/limitations.md) | Detailed current capabilities, non-goals, and safe claims. |
-| [`docs/architecture.md`](docs/architecture.md) | System components and agent responsibilities. |
-| [`docs/workflow.md`](docs/workflow.md) | Reflexion workflow details and execution flow. |
-| [`docs/model_assumptions.md`](docs/model_assumptions.md) | ODE model scope, assumptions, and missing biological mechanisms. |
-| [`docs/evaluation_metrics.md`](docs/evaluation_metrics.md) | Benchmark dimensions, scoring behavior, and interpretation. |
-| [`docs/ai_reviewer_guide.md`](docs/ai_reviewer_guide.md) | AI-agent reading guide for quickly judging project scope, architecture, and fit. |
-| [`docs/future_roadmap.md`](docs/future_roadmap.md) | Longer-term research directions beyond the current preview. |
-| [`docs/developer/demo_checklist.md`](docs/developer/demo_checklist.md) | Checklist for a stable reproducible demo. |
+| [Quickstart](QUICKSTART.md) | Install, test, and run the local interfaces |
+| [Limitations](docs/limitations.md) | Safe claims, non-goals, evidence requirements |
+| [Architecture](docs/architecture.md) | Components and responsibilities |
+| [Workflow](docs/workflow.md) | Execution, repair, mock, and fallback behavior |
+| [Model assumptions](docs/model_assumptions.md) | Equations, parameters, and missing mechanisms |
+| [Evaluation metrics](docs/evaluation_metrics.md) | Scores, versions, and interpretation |
+| [AI reviewer guide](docs/ai_reviewer_guide.md) | Repository review protocol |
+| [Future roadmap](docs/future_roadmap.md) | Open research and engineering directions |
 
-Code areas:
+## Development Provenance
 
-| Path | Role |
-| --- | --- |
-| [`agents/`](agents) | PM, Builder, Translator, Critic, DataMiner, Consolidator, and SkillExtractor agents. |
-| [`workflows/`](workflows) | Multi-agent orchestration and repair loop. |
-| [`tools/`](tools) | Cello wrapper, ODE simulator, part library, sequence analysis, and related utilities. |
-| [`benchmark_suite/`](benchmark_suite) | Candidate scoring, benchmark profiles, and evaluation reports. |
-| [`schemas/`](schemas) | Design, simulation, readiness, sequence, and API data models. |
-| [`api/`](api) | FastAPI routes and service entry points. |
-| [`web/`](web) | HTML research workspace. |
-| [`app.py`](app.py) | Legacy Streamlit interface (maintenance-only). |
-| [`exporters/`](exporters) | BOM, GenBank, SBOL3, assembly, and report exporters. |
-| [`tests/`](tests) | Regression and workflow tests. |
+This repository should not be interpreted as a claim of solo implementation or
+independent scientific validation. It is a concept-driven, AI-assisted research
+prototype developed through iterative specification, generated and revised
+code, deterministic tests, document review, and explicit claim-boundary work.
 
-## Demo Positioning
-
-For a short research conversation or cold email, present the project as a
-working research prototype with explicit boundaries:
-
-- It demonstrates an end-to-end computational workflow.
-- It separates mock Cello output from externally mapped Cello output.
-- It treats ODE and benchmark results as screening evidence, not biological
-  proof.
-- It makes missing evidence and next checks visible.
-- It is designed to invite feedback from synthetic-biology and computational
-  biology researchers.
-
-## Future Work
-
-The current preview already includes conservative SBOL3/GenBank representations,
-host-profile screening, layout checks, heuristic RNA-folding warnings, and
-resource-aware deterministic/stochastic simulation paths. These remain
-computational screening features rather than experimentally validated models.
-
-Future work focuses on benchmark calibration, wet-lab data fitting, validated
-host-specific parameter sets, external thermodynamic/CRN tool integration,
-richer spatial and biophysical models, and CRISPRi/CRISPRa-oriented extensions.
-
-Those are future research directions. They should not be interpreted as current
-validated capabilities. See [`docs/future_roadmap.md`](docs/future_roadmap.md).
+The appropriate basis for evaluating it is the clarity of the problem, the
+inspectability of the implementation, the available evidence, and the honesty
+of its unresolved questions—not an authorship narrative.

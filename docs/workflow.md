@@ -161,9 +161,9 @@ The main function is:
 run_reflexion_workflow(...)
 ```
 
-defined in [workflows/reflexion_controller.py](workflows/reflexion_controller.py).
+defined in [src/workflows/reflexion_controller.py](../src/workflows/reflexion_controller.py).
 
-定義於 [workflows/reflexion_controller.py](workflows/reflexion_controller.py)。
+定義於 [src/workflows/reflexion_controller.py](../src/workflows/reflexion_controller.py)。
 
 A typical run proceeds as follows:
 
@@ -282,7 +282,6 @@ These outputs are intended for inspection and iteration. They are not equivalent
 ## 8. 如何解讀結果
 
 ### `weighted_total_score`
-### `weighted_total_score`
 
 The weighted total ranks candidates under the implemented benchmark. It is not an experimental validation score.
 
@@ -293,13 +292,11 @@ See [evaluation_metrics.md](evaluation_metrics.md) for formulas.
 公式請參見 [evaluation_metrics.md](evaluation_metrics.md)。
 
 ### `component_scores`
-### `component_scores`
 
 Always inspect component scores rather than relying only on the total. A candidate can have an acceptable total while still having a weak Cello assignment, poor robustness, or fallback-only evidence.
 
 請務必檢查各子項分數，而不要僅僅依賴總分。一個候選方案可能擁有可以接受的總分，但卻同時存在 weak Cello 分配、魯棒性差或僅有回退（fallback）證據的問題。
 
-### `grade`
 ### `grade`
 
 Current grade thresholds are:
@@ -316,7 +313,6 @@ Current grade thresholds are:
 
 `Excellent`（優秀）代表在目前的計算檢查下表現優異，不代表經過實驗驗證。
 
-### `ode_status`
 ### `ode_status`
 
 `ode_status = "simulated"` means numerical simulation completed under the simplified ODE assumptions.
@@ -338,7 +334,6 @@ See [model_assumptions.md](model_assumptions.md).
 
 請參見 [model_assumptions.md](model_assumptions.md)。
 
-### `cello_buildable`
 ### `cello_buildable`
 
 `cello_buildable = true` means the current Cello-related evaluator interpreted available mapping evidence as buildable.
@@ -363,7 +358,6 @@ Do not describe mock-mode output as real Cello success.
 請勿將模擬模式的輸出描述為真實的 Cello 成功。
 
 ### `critic_feedbacks`
-### `critic_feedbacks`
 
 Critic feedback is a routing and repair signal. It may include LLM-generated reasoning plus deterministic guardrails from benchmark thresholds.
 
@@ -373,7 +367,6 @@ It should not be treated as expert biological review.
 
 它不應被視為專家生物學審查。
 
-### `failed_attempts`
 ### `failed_attempts`
 
 Failed attempts are useful because they show how the Reflexion loop explored and rejected candidates. They may include:

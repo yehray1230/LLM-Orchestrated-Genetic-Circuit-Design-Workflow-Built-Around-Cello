@@ -1,17 +1,26 @@
-# Future Outlook: Upgrading the Multi-Agent Genetic Circuit Design Framework to an Academic-Grade Tool
-# 未來展望：將多智能體基因電路設計框架升級為學術級工具之路線圖
+# Future Research Directions for Evidence-Aware Genetic Circuit Design
+# 證據感知基因電路設計的未來研究方向
 
-This document outlines the strategic roadmap and future enhancements required to transform the current research prototype into a rigorous, peer-reviewed academic design tool for synthetic biology.
+This document records open research and engineering directions for testing the
+evidence-aware design hypothesis more rigorously. It is not a claim that every
+listed integration is necessary, feasible, or sufficient to create an academic
+or biologically predictive tool.
 
-本文件概述了將目前的「多智能體基因電路設計研究原型」提升為「同儕審查級學術設計工具」所需的未來開發與優化項目。
+本文件記錄如何更嚴謹地檢驗「證據感知設計」假設的開放研究與工程方向；並不宣稱
+所有列出的整合都必須、可行，或足以讓原型成為學術級或具生物預測能力的工具。
 
 ---
 
 ## 1. Executive Summary / 執行摘要
 
-The current framework successfully orchestrates LLMs and deterministic computational modules (Reflexion loop, ODE simulations, sequence quality checks) to translate natural language into genetic circuit candidates. 
+The current prototype connects LLM-dependent and deterministic computational
+modules to produce reviewable candidate representations. Existing evidence
+primarily supports software-contract and computational-screening claims.
 
-To meet the high standards of academic publication and utility for wet-lab scientists, future development must focus on **experimental calibration**, **biophysical context modeling**, **robustness characterization**, and **interoperability with standard biological formats**.
+The most important research gaps concern **experimental calibration**,
+**biophysical context modeling**, **robustness characterization**,
+**interoperability**, and whether the workflow communicates uncertainty in a
+way that matches expert reasoning.
 
 ### Current implementation boundary (2026-06-27)
 
@@ -22,7 +31,9 @@ Several roadmap themes now have conservative preview implementations, but the ac
 - GenBank import/export and SBOL3 Turtle export/optional semantic validation are implemented; universal bidirectional SBOL/GenBank/SBML conversion is not.
 - Local heuristic RNA-folding/RBS-accessibility warnings are implemented; ViennaRNA/NUPACK-equivalent thermodynamic validation and codon-pair/tRNA-aware expression prediction are not.
 - Stochastic SSA, retroactivity, operon coupling/polarity, versioned biophysical scoring, and validated best-candidate self-healing are implemented as computational screening paths; none are wet-lab calibrated predictors.
-- The current cross-phase integration candidate passes 311 local tests and Ruff as of 2026-06-27; fixed five-case benchmark evidence, CI review, and commit-level review remain pending.
+- Regression and release evidence must be interpreted from the current commit
+  and evidence package; historical test counts are not a standing scientific
+  validation claim.
 
 This boundary takes precedence over older checklist labels such as `[Implemented]` when those labels appear to imply a broader capability.
 
@@ -75,6 +86,13 @@ A genetic circuit's performance is heavily influenced by the spatial layout of t
 *   **Host-Circuit Metabolic Burden & Growth Coupling (代謝負荷與宿主生長耦合模擬)**
     *   Model the competition for free ribosomes and RNAP between the synthetic circuit and the host genome. Update the ODE model to dynamically scale the dilution rate based on metabolic burden.
     *   模擬外源電路與宿主基因組對游離核糖體與 RNAP 的爭奪，動態更新 ODE 模型以呈現由於代謝負荷（Burden）導致的生長減緩與蛋白質稀釋率反饋。
+*   **Multi-Layer Central-Dogma Resource Accounting (中心法則多層資源核算模型)**
+    *   Connect DNA copy-number and promoter context, transcriptional demand and RNAP allocation, RNA production/accessibility/degradation, translational demand and ribosome allocation, protein maturation/degradation, and growth-dilution feedback in a layered mathematical representation.
+    *   Report which layer, assumption, or missing parameter dominates a candidate's result, and distinguish observed inputs from defaults and inferred quantities.
+    *   Treat the model as a diagnostic and comparative lens. It is not intended to reproduce a real cell, construct a whole-cell model, or create a biological digital twin.
+    *   將 DNA copy number 與 promoter context、轉錄需求與 RNAP 分配、RNA 生成／可及性／降解、轉譯需求與 ribosome 分配、蛋白質成熟／降解，以及生長稀釋回饋連接成分層數學表示。
+    *   報告哪一層、哪項假設或哪個缺失參數主導候選結果，並區分實際輸入、預設值與推導量。
+    *   此模型定位為診斷與比較視角，不以重現真實細胞、建立 whole-cell model 或生物數位分身為目標。
 *   **Dynamic Temporal Input Profiles (多狀態與時序輸入模擬)**
     *   Enable users to define multi-stage, dynamic input profiles over time (e.g., pulsatile or step inputs of inducers).
     *   Evaluate system kinetics under transitions, identifying delay times, overshoot, and bi-stable latching behavior.
