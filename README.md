@@ -183,6 +183,7 @@ audience-aware routing while preserving a universal project identity.
 | [Model assumptions](docs/model_assumptions.md) | Equations, parameters, and missing mechanisms |
 | [Evaluation metrics](docs/evaluation_metrics.md) | Scores, versions, and interpretation |
 | [AI reviewer guide](docs/ai_reviewer_guide.md) | Repository review protocol |
+| [Evidence capture guide (Traditional Chinese)](docs/evidence_capture_guide_zh-Hant.md) | Real-run screenshots, recording script, metadata, and claim boundaries |
 | [Future roadmap](docs/future_roadmap.md) | Open research and engineering directions |
 
 ## Development Provenance

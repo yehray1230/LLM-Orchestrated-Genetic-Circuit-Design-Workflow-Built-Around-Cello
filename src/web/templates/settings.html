@@ -68,6 +68,15 @@
       </div>
 
       <div class="grid grid-2" style="margin-top: 12px;">
+        <label>{{ _tr('預設輸入感測器檔案', 'Default Input Sensor Path') }}
+          <input name="sensor_path" id="setting-sensor-path" value="{{ settings.sensor_path }}" placeholder="C:/cello-run/input/Eco1C1G1T1.input.json">
+        </label>
+        <label>{{ _tr('預設輸出裝置檔案', 'Default Output Device Path') }}
+          <input name="device_path" id="setting-device-path" value="{{ settings.device_path }}" placeholder="C:/cello-run/input/Eco1C1G1T1.output.json">
+        </label>
+      </div>
+
+      <div class="grid grid-2" style="margin-top: 12px;">
         <label>{{ _tr('預設宿主生物體', 'Default Host Organism') }}
           <select name="default_host" id="setting-default-host">
             <option value="Escherichia coli" {% if settings.default_host == 'Escherichia coli' %}selected{% endif %}>Escherichia coli{{ _tr('（大腸桿菌）', '') }}</option>
@@ -98,6 +107,17 @@
             <div><strong>{{ _tr('Cello 版本：', 'Cello Version:') }}</strong> <code>{{ cello_status.version }}</code></div>
           {% endif %}
           <div><strong>{{ _tr('適配器名稱：', 'Adapter Name:') }}</strong> <code>{{ cello_status.adapter_name or "cello_wrapper" }}</code></div>
+          {% if cello_status.configuration %}
+            <div style="margin-top: 8px; border-top: 1px dashed var(--line); padding-top: 8px;">
+              <strong>{{ _tr('執行鏈配置：', 'Runtime configuration:') }}</strong>
+              <ul style="margin: 4px 0 0 0; padding-left: 18px;">
+                <li>{{ _tr('Cello 指令', 'Cello command') }}: {{ 'configured' if cello_status.configuration.command_configured else 'missing' }}</li>
+                <li>UCF: {{ 'ready' if cello_status.configuration.ucf_exists else ('path missing' if not cello_status.configuration.ucf_configured else 'file not found') }}</li>
+                <li>{{ _tr('輸入感測器', 'Input sensor') }}: {{ 'ready' if cello_status.configuration.sensor_exists else ('path missing' if not cello_status.configuration.sensor_configured else 'file not found') }}</li>
+                <li>{{ _tr('輸出裝置', 'Output device') }}: {{ 'ready' if cello_status.configuration.device_exists else ('path missing' if not cello_status.configuration.device_configured else 'file not found') }}</li>
+              </ul>
+            </div>
+          {% endif %}
           {% if cello_status.warnings %}
             <div style="margin-top: 8px; border-top: 1px dashed var(--line); padding-top: 8px; color: #c92a2a;">
               <strong>{{ _tr('健康檢查警告：', 'Health Check Warnings:') }}</strong>

@@ -33,6 +33,7 @@ SUMMARY_TOPOLOGY_KEYS = (
     "metrics_cv",
     "orthogonality_score",
     "cello_assignment_score",
+    "cello_assignment_raw_score",
     "cello_buildable",
     "toxicity",
     "toxicity_score",

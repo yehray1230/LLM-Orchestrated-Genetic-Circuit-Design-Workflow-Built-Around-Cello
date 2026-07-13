@@ -234,6 +234,8 @@ def test_settings_service_cello_fields(tmp_path: Path):
     settings = service.load_settings()
     assert settings["cello_command"] == ""
     assert settings["ucf_path"] == ""
+    assert settings["sensor_path"] == ""
+    assert settings["device_path"] == ""
     assert settings["default_host"] == "Escherichia coli"
     assert settings["default_compute_budget"] == 6
 
@@ -241,6 +243,8 @@ def test_settings_service_cello_fields(tmp_path: Path):
     service.save_settings({
         "cello_command": "docker run cello",
         "ucf_path": "/path/to/ucf",
+        "sensor_path": "/path/to/input.json",
+        "device_path": "/path/to/output.json",
         "default_host": "Saccharomyces cerevisiae",
         "default_compute_budget": 12,
     })
@@ -248,6 +252,8 @@ def test_settings_service_cello_fields(tmp_path: Path):
     loaded = service.load_settings()
     assert loaded["cello_command"] == "docker run cello"
     assert loaded["ucf_path"] == "/path/to/ucf"
+    assert loaded["sensor_path"] == "/path/to/input.json"
+    assert loaded["device_path"] == "/path/to/output.json"
     assert loaded["default_host"] == "Saccharomyces cerevisiae"
     assert loaded["default_compute_budget"] == 12
 
@@ -271,6 +277,8 @@ def test_web_settings_page_post_success(client, test_services):
             "api_base": "http://my-endpoint",
             "cello_command": "docker run -v C:\\ucf:/data cello",
             "ucf_path": "C:\\ucf\\Eco1C1G1T1.UCF.json",
+            "sensor_path": "C:\\ucf\\Eco1C1G1T1.input.json",
+            "device_path": "C:\\ucf\\Eco1C1G1T1.output.json",
             "default_host": "Bacillus subtilis",
             "default_compute_budget": "15"
         }
@@ -287,6 +295,8 @@ def test_web_settings_page_post_success(client, test_services):
     assert settings["model_name"] == "custom-llm"
     assert settings["cello_command"] == "docker run -v C:\\ucf:/data cello"
     assert settings["ucf_path"] == "C:\\ucf\\Eco1C1G1T1.UCF.json"
+    assert settings["sensor_path"] == "C:\\ucf\\Eco1C1G1T1.input.json"
+    assert settings["device_path"] == "C:\\ucf\\Eco1C1G1T1.output.json"
     assert settings["default_host"] == "Bacillus subtilis"
     assert settings["default_compute_budget"] == 15
 
@@ -312,6 +322,24 @@ def test_web_settings_success_messages_follow_selected_language(client):
     assert "設定儲存成功！" not in resp.text
 
 
+def test_web_settings_accepts_omitted_optional_fields(client, test_services):
+    resp = client.post(
+        "/web/settings",
+        data={
+            "provider": "Gemini",
+            "model_name": "gemini/gemini-2.5-flash",
+        },
+    )
+
+    assert resp.status_code == 200
+    settings = test_services.settings.load_settings()
+    assert settings["api_base"] == ""
+    assert settings["cello_command"] == ""
+    assert settings["ucf_path"] == ""
+    assert settings["sensor_path"] == ""
+    assert settings["device_path"] == ""
+
+
 def test_web_settings_delete_api_key(client, test_services):
     test_services.settings.save_settings({"api_key": "storedkey"})
 
@@ -326,6 +354,8 @@ def test_settings_run_service_cello_injection(test_services):
     test_services.settings.save_settings({
         "cello_command": "stored-cello-cmd",
         "ucf_path": "stored-ucf-path",
+        "sensor_path": "stored-sensor-path",
+        "device_path": "stored-device-path",
         "default_host": "Bacillus subtilis",
         "default_compute_budget": 18
     })
@@ -339,5 +369,7 @@ def test_settings_run_service_cello_injection(test_services):
         kwargs = mock_start.call_args[1]
         assert kwargs["cello_command"] == "stored-cello-cmd"
         assert kwargs["ucf_path"] == "stored-ucf-path"
+        assert kwargs["sensor_path"] == "stored-sensor-path"
+        assert kwargs["device_path"] == "stored-device-path"
         assert kwargs["host_organism"] == "Bacillus subtilis"
         assert kwargs["compute_budget"] == 18

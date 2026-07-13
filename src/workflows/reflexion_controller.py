@@ -5,6 +5,7 @@ from typing import Any, Callable
 
 from benchmark_suite.benchmark_controller import evaluate_candidate
 from schemas.state import DesignState, SearchNode
+from tools.topology_selection import select_best_topology, topology_selection_key
 
 # Assuming agent imports are handled by an app or factory,
 # but we will define the workflow loop here.
@@ -340,12 +341,8 @@ def run_reflexion_workflow(
             _apply_weighted_benchmark(topo)
 
         # Evaluate Best Topology inside the node
-        best_topo = None
-        best_score = -9999.0
-        for topo in node.candidate_topologies:
-            if topo.get("score", -9999) > best_score:
-                best_score = topo.get("score", -9999)
-                best_topo = topo
+        best_topo = select_best_topology(node.candidate_topologies)
+        best_score = float(best_topo.get("score", -9999.0)) if best_topo else -9999.0
 
         node.best_topology = best_topo
         node.score = best_score
@@ -369,12 +366,8 @@ def run_reflexion_workflow(
                 for topo in node.candidate_topologies:
                     _apply_weighted_benchmark(topo)
 
-                best_topo = None
-                best_score = -9999.0
-                for topo in node.candidate_topologies:
-                    if topo.get("score", -9999) > best_score:
-                        best_score = topo.get("score", -9999)
-                        best_topo = topo
+                best_topo = select_best_topology(node.candidate_topologies)
+                best_score = float(best_topo.get("score", -9999.0)) if best_topo else -9999.0
                 node.best_topology = best_topo
                 node.score = best_score
                 node.sync_evaluation_metrics(best_topo)
@@ -511,10 +504,11 @@ def run_reflexion_workflow(
             return _extract_skill_memory(state, skill_extractor)
         logging.warning("Workflow paused before approval. Best topology remains available as fallback.")
         best_node = None
-        highest_score = -float('inf')
+        highest_key = (0, -float("inf"))
         for nid, n in state.tree_nodes.items():
-            if n.score > highest_score and n.best_topology:
-                highest_score = n.score
+            selection_key = topology_selection_key(n.best_topology)
+            if n.best_topology and selection_key > highest_key:
+                highest_key = selection_key
                 best_node = n
         if best_node and best_node.best_topology:
             state.best_topology = best_node.best_topology
