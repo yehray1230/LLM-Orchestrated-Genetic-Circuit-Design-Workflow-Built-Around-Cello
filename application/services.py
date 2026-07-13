@@ -1455,6 +1455,8 @@ class RunService:
         req_base = _optional_string(request.get("api_base"))
         req_cello_cmd = _optional_string(request.get("cello_command"))
         req_ucf_path = _optional_string(request.get("ucf_path"))
+        req_sensor_path = _optional_string(request.get("sensor_path"))
+        req_device_path = _optional_string(request.get("device_path"))
         req_host = _optional_string(request.get("host_organism"))
         req_budget = request.get("compute_budget")
 
@@ -1475,6 +1477,8 @@ class RunService:
             "api_base": req_base,
             "cello_command": req_cello_cmd,
             "ucf_path": req_ucf_path,
+            "sensor_path": req_sensor_path,
+            "device_path": req_device_path,
             "run_store": self.run_store,
         }
 
@@ -1490,6 +1494,10 @@ class RunService:
                 kwargs["cello_command"] = raw_settings["cello_command"]
             if not req_ucf_path and raw_settings.get("ucf_path"):
                 kwargs["ucf_path"] = raw_settings["ucf_path"]
+            if not req_sensor_path and raw_settings.get("sensor_path"):
+                kwargs["sensor_path"] = raw_settings["sensor_path"]
+            if not req_device_path and raw_settings.get("device_path"):
+                kwargs["device_path"] = raw_settings["device_path"]
             if not req_host and raw_settings.get("default_host"):
                 kwargs["host_organism"] = raw_settings["default_host"]
             if req_budget is None and raw_settings.get("default_compute_budget"):

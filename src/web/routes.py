@@ -59,7 +59,12 @@ def dashboard(
     from tools.tool_adapters import CelloLogicSynthesisAdapter
     settings = services.settings.get_settings_masked()
     cello_cmd = settings.get("cello_command") or None
-    wrapper = CelloWrapper(cello_command=cello_cmd)
+    wrapper = CelloWrapper(
+        cello_command=cello_cmd,
+        ucf_path=settings.get("ucf_path") or None,
+        sensor_path=settings.get("sensor_path") or None,
+        device_path=settings.get("device_path") or None,
+    )
     adapter = CelloLogicSynthesisAdapter(wrapper=wrapper)
     try:
         cello_status = adapter.available().to_dict()
@@ -1315,7 +1320,12 @@ def _template(
         from tools.cello_wrapper import CelloWrapper
         from tools.tool_adapters import CelloLogicSynthesisAdapter
         cello_cmd = settings.get("cello_command") or None
-        wrapper = CelloWrapper(cello_command=cello_cmd)
+        wrapper = CelloWrapper(
+            cello_command=cello_cmd,
+            ucf_path=settings.get("ucf_path") or None,
+            sensor_path=settings.get("sensor_path") or None,
+            device_path=settings.get("device_path") or None,
+        )
         adapter = CelloLogicSynthesisAdapter(wrapper=wrapper)
         cello_status = adapter.available().to_dict()
     except Exception as e:
@@ -2028,6 +2038,27 @@ def share_summary(
 # Settings, Candidates, Decision History, and Simulation routes
 # ==============================================================================
 
+def _with_cello_configuration_status(
+    settings: dict[str, Any], cello_status: dict[str, Any]
+) -> dict[str, Any]:
+    paths = {
+        "ucf": str(settings.get("ucf_path") or "").strip(),
+        "sensor": str(settings.get("sensor_path") or "").strip(),
+        "device": str(settings.get("device_path") or "").strip(),
+    }
+    cello_status["configuration"] = {
+        "command_configured": bool(str(settings.get("cello_command") or "").strip()),
+        **{
+            f"{name}_configured": bool(path)
+            for name, path in paths.items()
+        },
+        **{
+            f"{name}_exists": bool(path) and Path(path).is_file()
+            for name, path in paths.items()
+        },
+    }
+    return cello_status
+
 @router.get("/web/settings", response_class=HTMLResponse)
 def web_settings_page(
     request: Request,
@@ -2039,7 +2070,12 @@ def web_settings_page(
     settings = services.settings.get_settings_masked()
 
     cello_cmd = settings.get("cello_command") or None
-    wrapper = CelloWrapper(cello_command=cello_cmd)
+    wrapper = CelloWrapper(
+        cello_command=cello_cmd,
+        ucf_path=settings.get("ucf_path") or None,
+        sensor_path=settings.get("sensor_path") or None,
+        device_path=settings.get("device_path") or None,
+    )
     adapter = CelloLogicSynthesisAdapter(wrapper=wrapper)
     try:
         cello_status = adapter.available().to_dict()
@@ -2051,6 +2087,7 @@ def web_settings_page(
             "fallback_used": True,
             "warnings": [{"category": "ERROR", "message": str(e)}]
         }
+    cello_status = _with_cello_configuration_status(settings, cello_status)
 
     return _template(
         request,
@@ -2068,11 +2105,13 @@ def web_save_settings(
     request: Request,
     provider: Annotated[str, Form()],
     model_name: Annotated[str, Form()],
-    api_key: Annotated[str, Form()],
-    api_base: Annotated[str, Form()],
-    cello_command: Annotated[str, Form()],
-    ucf_path: Annotated[str, Form()],
-    default_host: Annotated[str, Form()],
+    api_key: Annotated[str, Form()] = "",
+    api_base: Annotated[str, Form()] = "",
+    cello_command: Annotated[str, Form()] = "",
+    ucf_path: Annotated[str, Form()] = "",
+    sensor_path: Annotated[str, Form()] = "",
+    device_path: Annotated[str, Form()] = "",
+    default_host: Annotated[str, Form()] = "Escherichia coli",
     default_compute_budget: Annotated[int, Form()] = 6,
     services: ApplicationServices = Depends(get_services),
 ) -> HTMLResponse:
@@ -2086,6 +2125,8 @@ def web_save_settings(
         "api_base": api_base.strip(),
         "cello_command": cello_command.strip(),
         "ucf_path": ucf_path.strip(),
+        "sensor_path": sensor_path.strip(),
+        "device_path": device_path.strip(),
         "default_host": default_host.strip(),
         "default_compute_budget": default_compute_budget,
     }
@@ -2093,7 +2134,12 @@ def web_save_settings(
     settings = services.settings.get_settings_masked()
 
     cello_cmd = settings.get("cello_command") or None
-    wrapper = CelloWrapper(cello_command=cello_cmd)
+    wrapper = CelloWrapper(
+        cello_command=cello_cmd,
+        ucf_path=settings.get("ucf_path") or None,
+        sensor_path=settings.get("sensor_path") or None,
+        device_path=settings.get("device_path") or None,
+    )
     adapter = CelloLogicSynthesisAdapter(wrapper=wrapper)
     try:
         cello_status = adapter.available().to_dict()
@@ -2105,6 +2151,7 @@ def web_save_settings(
             "fallback_used": True,
             "warnings": [{"category": "ERROR", "message": str(e)}]
         }
+    cello_status = _with_cello_configuration_status(settings, cello_status)
 
     return _template(
         request,
@@ -2127,7 +2174,12 @@ def web_clear_settings_api_key(
     settings = services.settings.get_settings_masked()
 
     cello_cmd = settings.get("cello_command") or None
-    wrapper = CelloWrapper(cello_command=cello_cmd)
+    wrapper = CelloWrapper(
+        cello_command=cello_cmd,
+        ucf_path=settings.get("ucf_path") or None,
+        sensor_path=settings.get("sensor_path") or None,
+        device_path=settings.get("device_path") or None,
+    )
     adapter = CelloLogicSynthesisAdapter(wrapper=wrapper)
     try:
         cello_status = adapter.available().to_dict()
@@ -2139,6 +2191,7 @@ def web_clear_settings_api_key(
             "fallback_used": True,
             "warnings": [{"category": "ERROR", "message": str(e)}]
         }
+    cello_status = _with_cello_configuration_status(settings, cello_status)
 
     return _template(
         request,

@@ -24,6 +24,7 @@ from tools.cello_wrapper import CelloWrapper
 from tools.ode_simulator import BatchODESimulator
 from tools.part_library import PartLibrary
 from tools.tool_adapters import inspect_capabilities
+from tools.topology_selection import select_best_topology
 from exporters.bom_exporter import export_bom_csv
 from exporters.genbank_exporter import export_genbank
 from exporters.sbol3_exporter import export_sbol3_turtle
@@ -50,6 +51,8 @@ class WorkflowOptions:
     output_dir: str | None = None
     cello_command: str | None = None
     ucf_path: str | None = None
+    sensor_path: str | None = None
+    device_path: str | None = None
     model_name: str | None = None
     api_base: str | None = None
     api_key: str | None = None
@@ -98,6 +101,8 @@ def design_circuit_quick(
     output_dir: str | None = None,
     cello_command: str | None = None,
     ucf_path: str | None = None,
+    sensor_path: str | None = None,
+    device_path: str | None = None,
     progress_callback=None,
     initial_state: DesignState | None = None,
 ) -> dict[str, Any]:
@@ -120,6 +125,8 @@ def design_circuit_quick(
         output_dir=output_dir,
         cello_command=cello_command,
         ucf_path=ucf_path,
+        sensor_path=sensor_path,
+        device_path=device_path,
         model_name=model_name,
         api_base=api_base,
         api_key=api_key,
@@ -171,6 +178,8 @@ def design_circuit_quick(
             cello_wrapper=CelloWrapper(
                 cello_command=options.cello_command,
                 ucf_path=options.ucf_path,
+                sensor_path=options.sensor_path,
+                device_path=options.device_path,
                 artifact_dir=Path(options.output_dir) / "cello_artifacts" if options.output_dir else None,
             ),
             batch_ode_simulator=batch_ode_simulator,
@@ -210,6 +219,8 @@ def start_design_run(
     output_dir: str | None = None,
     cello_command: str | None = None,
     ucf_path: str | None = None,
+    sensor_path: str | None = None,
+    device_path: str | None = None,
     run_store: RunStore | None = None,
 ) -> dict[str, Any]:
     user_intent = str(user_intent or "").strip()
@@ -236,6 +247,8 @@ def start_design_run(
         "output_dir": output_dir,
         "cello_command": cello_command,
         "ucf_path": ucf_path,
+        "sensor_path": sensor_path,
+        "device_path": device_path,
     }
     selected_store = run_store or DEFAULT_RUN_STORE
     run_id = f"run_{uuid.uuid4().hex[:12]}"
@@ -254,6 +267,8 @@ def start_design_run(
             output_dir=output_dir,
             cello_command=cello_command,
             ucf_path=ucf_path,
+            sensor_path=sensor_path,
+            device_path=device_path,
             progress_callback=lambda stage, status, progress, message, details=None: selected_store.append_event(
                 run_id, stage, status, progress, message, details
             ),
@@ -921,7 +936,7 @@ def evaluate_verilog(
         )
         for topology in node.candidate_topologies:
             topology.update(evaluate_candidate(topology))
-        best_topology = max(node.candidate_topologies, key=lambda item: float(item.get("score", -9999)), default=None)
+        best_topology = select_best_topology(node.candidate_topologies)
         node.best_topology = best_topology
         node.sync_evaluation_metrics(best_topology)
         state.best_topology = best_topology

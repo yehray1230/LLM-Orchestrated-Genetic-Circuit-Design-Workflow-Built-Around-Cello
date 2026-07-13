@@ -15,8 +15,9 @@ from benchmark_suite.static_plausibility_evaluator import score_static_plausibil
 from benchmark_suite.temporal_scorer import score_temporal
 from oracle_evaluator import export_best_verilog
 from schemas.state import DesignState, SearchNode
-from tools.cello_wrapper import CelloWrapper, _truncate_error_log
+from tools.cello_wrapper import CelloWrapper, _split_command_string, _truncate_error_log
 from tools.skill_retriever import SkillRetriever
+from tools.topology_selection import select_best_topology
 from vector_db import InMemoryVectorDB
 
 
@@ -382,6 +383,23 @@ def test_cello_constraint_evaluator_penalizes_crosstalk_and_missing_gates() -> N
     assert result["cello_assignment_score"] == 0.0
 
 
+def test_cello_constraint_evaluator_uses_final_simulated_annealing_score() -> None:
+    result = evaluate_cello_constraints(
+        {
+            "mapping_status": "mapped",
+            "cello_buildable": True,
+            "cello_stdout": (
+                "INFO SimulatedAnnealing - Score: 0.00\n"
+                "INFO SimulatedAnnealing - Score: 164.90\n"
+                "INFO SimulatedAnnealing - Score: 328.29\n"
+            ),
+        }
+    )
+
+    assert result["raw_assignment_score"] == 328.29
+    assert result["cello_assignment_score"] == 1.0
+
+
 def test_metabolic_scorer_counts_instantiated_logic_gates() -> None:
     verilog = """
     module c(input A, input B, output Y);
@@ -549,6 +567,65 @@ def test_cello_wrapper_external_success_marks_topology_buildable() -> None:
     assert topology["cello_assignment_score"] == 0.92
     assert topology["orthogonality_score"] == 1.0
     assert topology["toxicity"] == 0.08
+
+
+def test_cello_command_string_preserves_windows_paths_and_quoted_arguments() -> None:
+    command = (
+        r'C:\Users\tester\AppData\Local\Programs\Podman\podman.exe '
+        r'run --name "cello mapping"'
+    )
+
+    assert _split_command_string(command, windows=True) == [
+        r"C:\Users\tester\AppData\Local\Programs\Podman\podman.exe",
+        "run",
+        "--name",
+        "cello mapping",
+    ]
+
+
+def test_cello_command_expands_candidate_filename_for_each_index(tmp_path: Path) -> None:
+    wrapper = CelloWrapper(
+        cello_command=["cello", "/root/input/{candidate_filename}", "{index}"],
+    )
+    temp_path = tmp_path / "input"
+    output_dir = temp_path / "output"
+    netlist_path = temp_path / "candidate_2.v"
+
+    command = wrapper._build_command(2, temp_path, netlist_path, output_dir)
+
+    assert command == ["cello", "/root/input/candidate_2.v", "2"]
+
+
+def test_best_topology_prefers_verified_mapping_over_higher_failed_score() -> None:
+    mapped = {
+        "score": 0.55,
+        "cello_mode": "external",
+        "mapping_status": "mapped",
+        "cello_claim_level": "externally_mapped",
+        "cello_buildable": True,
+    }
+    mapping_failed = {
+        "score": 0.95,
+        "cello_mode": "external",
+        "mapping_status": "MAPPING_FAILED",
+        "cello_claim_level": "external_mapping_failed",
+        "cello_buildable": False,
+    }
+
+    assert select_best_topology([mapping_failed, mapped]) is mapped
+
+
+def test_best_topology_uses_score_between_verified_mappings() -> None:
+    lower = {
+        "score": 0.65,
+        "cello_mode": "external",
+        "mapping_status": "mapped",
+        "cello_claim_level": "externally_mapped",
+        "cello_buildable": True,
+    }
+    higher = {**lower, "score": 0.81}
+
+    assert select_best_topology([lower, higher]) is higher
 
 
 def test_cello_wrapper_persists_output_directory_manifest(tmp_path: Path) -> None:

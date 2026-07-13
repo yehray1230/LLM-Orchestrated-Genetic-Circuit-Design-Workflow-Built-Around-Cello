@@ -15,6 +15,10 @@ ASSIGNMENT_PATTERNS = (
     re.compile(r"\b(?:gate\s+)?assignment\s+score\b\s*[:=]\s*([-+]?\d+(?:\.\d+)?)", re.IGNORECASE),
     re.compile(r"\bgate\s+score\b\s*[:=]\s*([-+]?\d+(?:\.\d+)?)", re.IGNORECASE),
     re.compile(r"\bcello\s+score\b\s*[:=]\s*([-+]?\d+(?:\.\d+)?)", re.IGNORECASE),
+    re.compile(
+        r"\bsimulatedannealing\b[^\r\n]*?\bscore\b\s*[:=]\s*([-+]?\d+(?:\.\d+)?)",
+        re.IGNORECASE,
+    ),
 )
 TOXICITY_PATTERNS = (
     re.compile(r"\btoxicity\b\s*[:=]\s*([-+]?\d+(?:\.\d+)?)", re.IGNORECASE),
@@ -37,7 +41,7 @@ def evaluate_cello_constraints(candidate: dict[str, Any]) -> dict[str, Any]:
 
     assignment_score = _first_number_from_reports(report_objects, ("gate_assignment_score", "assignment_score", "score"))
     if assignment_score is None:
-        assignment_score = _first_regex_number(report_text, ASSIGNMENT_PATTERNS)
+        assignment_score = _last_regex_number(report_text, ASSIGNMENT_PATTERNS)
 
     toxicity = _first_number_from_reports(report_objects, ("toxicity", "toxicity_score"))
     if toxicity is None:
@@ -182,6 +186,14 @@ def _first_regex_number(text: str, patterns: tuple[re.Pattern[str], ...]) -> flo
         match = pattern.search(text)
         if match:
             return _try_float(match.group(1))
+    return None
+
+
+def _last_regex_number(text: str, patterns: tuple[re.Pattern[str], ...]) -> float | None:
+    for pattern in patterns:
+        matches = list(pattern.finditer(text))
+        if matches:
+            return _try_float(matches[-1].group(1))
     return None
 
 
