@@ -114,6 +114,8 @@ def _summary_markdown(state: Any) -> str:
         f"- Mapping status: {best.get('mapping_status', '')}",
         f"- Cello mode: {best.get('cello_mode', '')}",
         f"- Cello claim level: {best.get('cello_claim_level', '')}",
+        f"- Cello assignment score (normalized): {best.get('cello_assignment_score', '')}",
+        f"- Cello assignment score (raw): {best.get('cello_assignment_raw_score', '')}",
         f"- Cello warning: {best.get('cello_warning', '')}",
         f"- ODE status: {best.get('ode_status', '')}",
         f"- Critic feedback: {state.latest_critic_feedback}",

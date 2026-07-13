@@ -227,6 +227,8 @@ class RunStartRequest(BaseModel):
     api_base: str | None = Field(default=None, max_length=2048)
     cello_command: str | None = Field(default=None, max_length=4000)
     ucf_path: str | None = Field(default=None, max_length=2048)
+    sensor_path: str | None = Field(default=None, max_length=2048)
+    device_path: str | None = Field(default=None, max_length=2048)
 
 
 class RunFeedbackRequest(BaseModel):
@@ -296,6 +298,12 @@ class SettingsUpdateRequest(BaseModel):
     model_name: str = Field(default="gpt-5.4-mini", max_length=256)
     api_key: str = Field(default="", max_length=2048)
     api_base: str = Field(default="", max_length=2048)
+    cello_command: str = Field(default="", max_length=4000)
+    ucf_path: str = Field(default="", max_length=2048)
+    sensor_path: str = Field(default="", max_length=2048)
+    device_path: str = Field(default="", max_length=2048)
+    default_host: str = Field(default="Escherichia coli", max_length=512)
+    default_compute_budget: int = Field(default=6, ge=1, le=100)
 
 
 class SettingsTestRequest(BaseModel):

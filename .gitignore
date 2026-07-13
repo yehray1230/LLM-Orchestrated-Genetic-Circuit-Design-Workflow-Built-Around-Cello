@@ -18,6 +18,7 @@ ENV/
 # Local app/runtime state
 .streamlit/secrets.toml
 .codex/
+contexts/
 local_plans_private/
 PROJECT_PROFILE.md
 # Non-sensitive summaries for @-mention context live in local_plans_context/.
@@ -29,6 +30,9 @@ outputs/
 常用指令.txt
 
 # IDE/editor files
+# Separate local website repository; do not add it as an accidental gitlink.
+/research-preview-site/
+
 .idea/
 .vs/
 .vscode/

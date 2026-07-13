@@ -16,6 +16,8 @@ DEFAULT_SETTINGS = {
     "api_base": "",
     "cello_command": "",
     "ucf_path": "",
+    "sensor_path": "",
+    "device_path": "",
     "default_host": "Escherichia coli",
     "default_compute_budget": 6,
 }
@@ -70,6 +72,8 @@ class SettingsService:
             "api_base": str(settings.get("api_base") or "").strip(),
             "cello_command": str(settings.get("cello_command") or "").strip(),
             "ucf_path": str(settings.get("ucf_path") or "").strip(),
+            "sensor_path": str(settings.get("sensor_path") or "").strip(),
+            "device_path": str(settings.get("device_path") or "").strip(),
             "default_host": str(settings.get("default_host") or "Escherichia coli").strip(),
             "default_compute_budget": int(settings.get("default_compute_budget") or 6),
         }

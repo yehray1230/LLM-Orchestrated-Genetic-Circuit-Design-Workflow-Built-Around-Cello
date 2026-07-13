@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import mimetypes
+import os
 import shlex
 import shutil
 import subprocess
@@ -16,6 +17,21 @@ from benchmark_suite.cello_constraint_evaluator import evaluate_cello_constraint
 from schemas.state import DesignState
 from tools.cello_artifact_parser import CelloV2JsonParser
 from tools.part_library import PartLibrary
+
+
+def _split_command_string(command: str, *, windows: bool | None = None) -> list[str]:
+    """Split a configured command without treating Windows backslashes as escapes."""
+    use_windows_rules = os.name == "nt" if windows is None else windows
+    if not use_windows_rules:
+        return shlex.split(command)
+
+    parts = shlex.split(command, posix=False)
+    return [
+        part[1:-1]
+        if len(part) >= 2 and part[0] == part[-1] and part[0] in {'"', "'"}
+        else part
+        for part in parts
+    ]
 
 
 class CelloWrapper:
@@ -337,7 +353,10 @@ class CelloWrapper:
         netlist_path: Path,
         output_dir: Path,
     ) -> list[str]:
-        command = shlex.split(self.cello_command) if isinstance(self.cello_command, str) else list(self.cello_command or [])
+        if isinstance(self.cello_command, str):
+            command = _split_command_string(self.cello_command)
+        else:
+            command = list(self.cello_command or [])
         
         wsl_temp_dir = _to_wsl_path(temp_path)
         wsl_output_dir = _to_wsl_path(output_dir)
@@ -367,6 +386,7 @@ class CelloWrapper:
                 .replace("{wsl_device_path}", wsl_device)
                 .replace("{temp_dir}", str(temp_path))
                 .replace("{wsl_temp_dir}", wsl_temp_dir)
+                .replace("{candidate_filename}", netlist_path.name)
                 .replace("{index}", str(index))
             )
             expanded.append(val)
@@ -461,6 +481,7 @@ def _topology_cello_metrics(topology: dict[str, Any]) -> dict[str, Any]:
     return {
         "orthogonality_score": metrics["orthogonality_score"],
         "cello_assignment_score": metrics["cello_assignment_score"],
+        "cello_assignment_raw_score": metrics["raw_assignment_score"],
         "cello_buildable": metrics["cello_buildable"],
         "toxicity": metrics["toxicity"],
         "toxicity_score": metrics["toxicity_score"],

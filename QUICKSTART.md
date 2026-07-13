@@ -42,6 +42,19 @@ All tests pass, and no unexpected warning appears during the main suite.
 Use this interface for the server-rendered workspace, persistent runs, API
 inspection, imports, benchmarks, and design-library flows.
 
+### One-click launch on Windows
+
+Double-click `Start Web Workspace.cmd` in the project root. The launcher checks
+the local virtual environment and port, starts the API, waits for its health
+check, and then opens `http://127.0.0.1:8000/web` in the default browser.
+
+Keep the launcher window open while using the workspace. Press `Ctrl+C` in that
+window to stop the local server. If port 8000 belongs to an already-running
+instance of this project, the launcher reuses it; if another application owns
+the port, it stops with an explanatory error instead of opening the wrong page.
+
+### Manual launch
+
 ```powershell
 .\venv\Scripts\uvicorn.exe api.main:app --reload --host 127.0.0.1 --port 8000
 ```
