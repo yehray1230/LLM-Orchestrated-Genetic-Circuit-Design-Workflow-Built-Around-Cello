@@ -20,8 +20,8 @@ ENV/
 .codex/
 contexts/
 local_plans_private/
+local_plans_context/
 PROJECT_PROFILE.md
-# Non-sensitive summaries for @-mention context live in local_plans_context/.
 .llm_cache/
 .ode_cache/
 chroma_db/
