@@ -17,13 +17,16 @@ and open questions that may benefit from review across several disciplines.
 
 ## 1. 這是一個什麼專案？ (What is this project?)
 
-這是一個探索「證據感知 AI 輔助基因電路設計」的初步研究原型。其價值應由問題定義、可檢視實作、現有證據與未解問題判斷，而非由個人作者敘事或功能數量判斷。
+這是一個探索「證據治理型 AI 輔助基因電路設計」的初步研究原型。它研究的不只是 AI 能否產生候選設計，而是每項可公開結論能否攜帶一個可由人員與機器共同檢查的「證據與權利包絡」：具名證據、來源與版本、生物情境、授權狀態、主張邊界，以及仍缺少的驗證。其價值應由問題定義、可檢視實作、現有證據與未解問題判斷，而非由個人作者敘事或功能數量判斷。
+
+自然語言輸入、多智能體協作與 Cello 相容輸出是工作流的組成部分，但不是本專案唯一或主要的差異化主張。核心研究方向是：能否在候選產生之上加入可重現的證據治理層，使系統不只輸出設計，也能說明哪些主張受到支持、依據為何、使用權利是否明確，以及下一步需要取得什麼證據。
 
 其核心功能是：
 1. **自然語言翻譯**：將使用者輸入的自然語言調節邏輯意圖（例如：「僅在輸入 A 存在且輸入 B 不存在時激活 GFP」），翻譯為結構化的布林邏輯、真值表預期與相容於 Cello 的組合邏輯 Verilog 代碼。
 2. **確定性與簡化模型評估**：區分外部或 mock Cello 結果，並以資源感知 ODE、擾動與其他計算檢查提供比較視角；這些結果不是對宿主細胞真實動態的校準預測。
 3. **多智能體自我修復（Reflexion Loop）**：利用多個協同運作的 AI 智能體（PM, Builder, Translator, Critic, Consolidator）對設計方案進行自我審查與反覆迭代修復，抓出邏輯不匹配、動態邊際不足或序列特徵瑕疵等失敗模式。
 4. **可追溯表示與交換**：生成 SBOL3 Turtle、GenBank、BOM 與組裝規劃表示，供後續檢視；檔案生成不代表生物有效性或第三方相容性認證。
+5. **證據與主張治理**：以機器可讀的 Evidence Bill of Materials（E-BOM）連結公開主張與具名證據，記錄生物情境與授權狀態，並以確定性規則將主張判定為 `supported`、`limited`、`unsupported` 或 `blocked`。缺少實驗證據表示尚未受到支持，不表示實驗已經失敗。
 
 > [!IMPORTANT]
 > **生物學宣稱邊界 (Biological Claim Boundary)**：本專案提供的是**計算層面的設計輔助與候選篩選**，而非實驗驗證。高基準分數僅代表在目前簡化模擬假設下設計合理，並不保證活體內（in vivo）的真實可構建性與功能性。
@@ -33,6 +36,8 @@ and open questions that may benefit from review across several disciplines.
 ## 2. 為什麼它會存在？ (Why does it exist?)
 
 此 repository 起源於一個問題構想：當 AI 能生成流暢但未必可靠的生物設計時，能否建立一套工作流，讓系統主動暴露假設、證據缺口與下一步驗證需求？目前內容是該構想經 AI 輔助工程反覆實作與檢查後的初步原型，不宣稱個人獨立完成，也不宣稱已取得獨立科學驗證。
+
+相較於主要處理邏輯合成的 Cello，以及以自然語言降低 Cello 使用門檻的 CELLM，本專案目前較可辯護的定位不是宣稱產生更好的生物電路，而是探索如何讓 AI 輸出的主張具有可追溯證據、明確權利狀態與可執行的限制條件。詳細且保守的比較方式見[競爭定位與比較範圍](competitive_landscape.md)。
 
 ### 問題動機與背景 (Problem Motivation)
 
@@ -3191,6 +3196,12 @@ language regulatory-logic requests into candidate genetic-circuit
 representations, then evaluate those candidates with deterministic checks,
 simplified simulation, benchmark scoring, and explicit critique.
 
+Its most defensible differentiation is not natural-language generation or
+multi-agent orchestration alone. Review it as an evidence-governed workflow in
+which reportable claims can be linked to named evidence, biological context,
+provenance, and rights metadata, then resolved by deterministic claim and
+license gates.
+
 ## What The Project Is
 
 Core purpose:
@@ -3252,18 +3263,24 @@ Read these first:
 1. [`README.md`](../README.md): short public-facing overview.
 2. [`limitations.md`](limitations.md): current capabilities, non-goals, and safe
    wording.
-3. [`demo_cases/DEMO_SUMMARY.md`](../demo_cases/DEMO_SUMMARY.md): fixed demo-case
+3. [`evidence_governance_spec.md`](evidence_governance_spec.md): E-BOM and
+   deterministic claim/license decisions.
+4. [`evidence/case_01/evidence_manifest.json`](evidence/case_01/evidence_manifest.json):
+   machine-readable public claim-to-evidence example.
+5. [`competitive_landscape.md`](competitive_landscape.md): conservative,
+   source-backed positioning relative to Cello and CELLM.
+6. [`demo_cases/DEMO_SUMMARY.md`](../demo_cases/DEMO_SUMMARY.md): fixed demo-case
    storyline.
-4. [`demo_checklist.md`](developer/demo_checklist.md): what a reproducible demo should
+7. [`demo_checklist.md`](developer/demo_checklist.md): what a reproducible demo should
    show.
-5. [`architecture.md`](architecture.md): component map and agent
+8. [`architecture.md`](architecture.md): component map and agent
    responsibilities.
-6. [`workflow.md`](workflow.md): multi-agent Reflexion execution flow.
-7. [`evaluation_metrics.md`](evaluation_metrics.md): scoring dimensions and
+9. [`workflow.md`](workflow.md): multi-agent Reflexion execution flow.
+10. [`evaluation_metrics.md`](evaluation_metrics.md): scoring dimensions and
    interpretation.
-8. [`model_assumptions.md`](model_assumptions.md): ODE model scope and
+11. [`model_assumptions.md`](model_assumptions.md): ODE model scope and
    biological limitations.
-9. [`future_roadmap.md`](future_roadmap.md): future work, not current claims.
+12. [`future_roadmap.md`](future_roadmap.md): future work, not current claims.
 
 Use [`QUICKSTART.md`](../QUICKSTART.md) only when you need to run the project
 locally. It contains installation and execution details that are intentionally
@@ -3320,6 +3337,34 @@ When evaluating the project, separate these categories:
   repository materials should be treated as no unless explicit external
   evidence is provided.
 
+## Evidence-Governance Verification
+
+Do not accept `evidence-aware` as a positioning phrase without checking its
+implemented trail. The one-minute path from the repository root is:
+
+```powershell
+.\venv\Scripts\python.exe -m src.scripts.verify_evidence_manifest
+```
+
+A `PASS` means that the recorded decisions reproduce from the E-BOM inputs; it
+does not mean that every claim is supported. For a manual review of at least one
+public claim:
+
+1. Open [`evidence/case_01/evidence_manifest.json`](evidence/case_01/evidence_manifest.json)
+   and identify the stable `claim_id`.
+2. Follow its claim-evidence link to the named evidence records.
+3. Inspect source, version, hash when present, biological context, intended
+   use, and `license_status`.
+4. Confirm the nested license decision and its machine-readable reason codes.
+5. Confirm that the final result is one of `supported`, `limited`,
+   `unsupported`, or `blocked` under the documented deterministic rules.
+6. Verify that missing experimental evidence produces `unsupported`, not an
+   assertion that wet-lab testing failed.
+
+This verifies traceability and decision behavior; it does not establish that
+the biological design is experimentally valid or that a legal professional has
+reviewed every third-party right.
+
 ## Fit Assessment For A Lab Or Collaborator
 
 This project is likely relevant if the recipient works on:
@@ -3366,11 +3411,13 @@ finished biological-design platform.
 Identify:
 1. what the system currently does;
 2. what biological claims it can and cannot make;
-3. how the multi-agent workflow is structured;
-4. how Cello-compatible output, mock Cello output, simulation, benchmark
+3. how an E-BOM links claims to evidence, biological context, and rights status;
+4. whether claim and license decisions can be reproduced from the public case;
+5. how the multi-agent workflow is structured;
+6. how Cello-compatible output, mock Cello output, simulation, benchmark
    scoring, and readiness reports differ;
-5. which files best demonstrate the project to a potential lab contact;
-6. what evidence would be needed for stronger biological claims.
+7. which files best demonstrate the project to a potential lab contact;
+8. what evidence would be needed for stronger biological claims.
 
 Keep the distinction between computational candidate generation and wet-lab
 validation explicit throughout the review.
@@ -3634,14 +3681,15 @@ biological validity or external certification.
 
 This repository offers a concrete object for discussing what evidence-aware
 AI-assisted biological design should require. It is intended to invite scrutiny
-of the problem, assumptions, evidence architecture, and unresolved questions—not
-endorsement of a finished platform.
+of the problem, assumptions, evidence architecture, rights metadata, and
+unresolved questions—not endorsement of a finished platform.
 
 ## The central research question
 
-How can an AI-assisted design workflow preserve intent, expose unsupported
-assumptions, distinguish computational from experimental evidence, and identify
-the next validation needed?
+How can an AI-assisted design workflow preserve intent while carrying an
+auditable claim envelope across generation, evaluation, and export—linking each
+reportable statement to evidence, biological context, provenance, rights
+status, and the next validation needed?
 
 ## What currently exists
 
@@ -3649,6 +3697,8 @@ the next validation needed?
 - deterministic and heuristic computational checks;
 - explicit mock, external, missing, and blocked evidence states;
 - versioned reports, provenance, and a fixed public evidence snapshot;
+- a machine-readable Evidence Bill of Materials (E-BOM);
+- deterministic claim and license gates with reviewable reason codes;
 - documented biological and modeling limitations.
 
 ## What remains unresolved
@@ -3659,22 +3709,29 @@ the next validation needed?
 - whether the scoring and readiness language matches expert reasoning;
 - whether multi-layer resource accounting improves diagnosis;
 - how uncertainty should be presented to different users.
+- whether rights metadata is expressive enough for UCFs, part libraries,
+  sequence records, and experimental evidence without implying legal review.
 
 ## Contribution surfaces by expertise
 
-- synthetic biology: biological failure modes and experimental evidence;
+- synthetic biology: biological failure modes and evidence thresholds for
+  specific claims;
 - mathematical modeling: equations, calibration, sensitivity, identifiability;
-- AI4Science: agent evaluation, abstention, and comparative baselines;
-- Bio-CAD: provenance, standards, APIs, and interoperability;
+- AI4Science: claim calibration, abstention, and comparative baselines;
+- Bio-CAD: E-BOM provenance, standards, APIs, and interoperability;
 - human-computer interaction: safe presentation of uncertainty and readiness.
+- open-source and data governance: rights vocabulary, attribution boundaries,
+  and review workflows for external software and biological data.
 
 ## Start with these files
 
 1. [README](../../README.md)
 2. [Project limitations](../limitations.md)
-3. [Public evidence](../evidence/case_01/README.md)
-4. The audience guide closest to the reviewer's expertise
-5. [Future roadmap](../future_roadmap.md)
+3. [Evidence Governance and E-BOM Specification](../evidence_governance_spec.md)
+4. [Public evidence](../evidence/case_01/README.md)
+5. [Positioning and comparison landscape](../competitive_landscape.md)
+6. The audience guide closest to the reviewer's expertise
+7. [Future roadmap](../future_roadmap.md)
 
 ## Claims the assistant must not make
 
