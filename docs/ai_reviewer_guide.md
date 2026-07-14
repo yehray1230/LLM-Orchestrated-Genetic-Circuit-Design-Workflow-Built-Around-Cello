@@ -16,6 +16,12 @@ language regulatory-logic requests into candidate genetic-circuit
 representations, then evaluate those candidates with deterministic checks,
 simplified simulation, benchmark scoring, and explicit critique.
 
+Its most defensible differentiation is not natural-language generation or
+multi-agent orchestration alone. Review it as an evidence-governed workflow in
+which reportable claims can be linked to named evidence, biological context,
+provenance, and rights metadata, then resolved by deterministic claim and
+license gates.
+
 ## What The Project Is
 
 Core purpose:
@@ -77,18 +83,24 @@ Read these first:
 1. [`README.md`](../README.md): short public-facing overview.
 2. [`limitations.md`](limitations.md): current capabilities, non-goals, and safe
    wording.
-3. [`demo_cases/DEMO_SUMMARY.md`](../demo_cases/DEMO_SUMMARY.md): fixed demo-case
+3. [`evidence_governance_spec.md`](evidence_governance_spec.md): E-BOM and
+   deterministic claim/license decisions.
+4. [`evidence/case_01/evidence_manifest.json`](evidence/case_01/evidence_manifest.json):
+   machine-readable public claim-to-evidence example.
+5. [`competitive_landscape.md`](competitive_landscape.md): conservative,
+   source-backed positioning relative to Cello and CELLM.
+6. [`demo_cases/DEMO_SUMMARY.md`](../demo_cases/DEMO_SUMMARY.md): fixed demo-case
    storyline.
-4. [`demo_checklist.md`](developer/demo_checklist.md): what a reproducible demo should
+7. [`demo_checklist.md`](developer/demo_checklist.md): what a reproducible demo should
    show.
-5. [`architecture.md`](architecture.md): component map and agent
+8. [`architecture.md`](architecture.md): component map and agent
    responsibilities.
-6. [`workflow.md`](workflow.md): multi-agent Reflexion execution flow.
-7. [`evaluation_metrics.md`](evaluation_metrics.md): scoring dimensions and
+9. [`workflow.md`](workflow.md): multi-agent Reflexion execution flow.
+10. [`evaluation_metrics.md`](evaluation_metrics.md): scoring dimensions and
    interpretation.
-8. [`model_assumptions.md`](model_assumptions.md): ODE model scope and
+11. [`model_assumptions.md`](model_assumptions.md): ODE model scope and
    biological limitations.
-9. [`future_roadmap.md`](future_roadmap.md): future work, not current claims.
+12. [`future_roadmap.md`](future_roadmap.md): future work, not current claims.
 
 Use [`QUICKSTART.md`](../QUICKSTART.md) only when you need to run the project
 locally. It contains installation and execution details that are intentionally
@@ -145,6 +157,34 @@ When evaluating the project, separate these categories:
   repository materials should be treated as no unless explicit external
   evidence is provided.
 
+## Evidence-Governance Verification
+
+Do not accept `evidence-aware` as a positioning phrase without checking its
+implemented trail. The one-minute path from the repository root is:
+
+```powershell
+.\venv\Scripts\python.exe -m src.scripts.verify_evidence_manifest
+```
+
+A `PASS` means that the recorded decisions reproduce from the E-BOM inputs; it
+does not mean that every claim is supported. For a manual review of at least one
+public claim:
+
+1. Open [`evidence/case_01/evidence_manifest.json`](evidence/case_01/evidence_manifest.json)
+   and identify the stable `claim_id`.
+2. Follow its claim-evidence link to the named evidence records.
+3. Inspect source, version, hash when present, biological context, intended
+   use, and `license_status`.
+4. Confirm the nested license decision and its machine-readable reason codes.
+5. Confirm that the final result is one of `supported`, `limited`,
+   `unsupported`, or `blocked` under the documented deterministic rules.
+6. Verify that missing experimental evidence produces `unsupported`, not an
+   assertion that wet-lab testing failed.
+
+This verifies traceability and decision behavior; it does not establish that
+the biological design is experimentally valid or that a legal professional has
+reviewed every third-party right.
+
 ## Fit Assessment For A Lab Or Collaborator
 
 This project is likely relevant if the recipient works on:
@@ -191,11 +231,13 @@ finished biological-design platform.
 Identify:
 1. what the system currently does;
 2. what biological claims it can and cannot make;
-3. how the multi-agent workflow is structured;
-4. how Cello-compatible output, mock Cello output, simulation, benchmark
+3. how an E-BOM links claims to evidence, biological context, and rights status;
+4. whether claim and license decisions can be reproduced from the public case;
+5. how the multi-agent workflow is structured;
+6. how Cello-compatible output, mock Cello output, simulation, benchmark
    scoring, and readiness reports differ;
-5. which files best demonstrate the project to a potential lab contact;
-6. what evidence would be needed for stronger biological claims.
+7. which files best demonstrate the project to a potential lab contact;
+8. what evidence would be needed for stronger biological claims.
 
 Keep the distinction between computational candidate generation and wet-lab
 validation explicit throughout the review.

@@ -8,6 +8,7 @@ from application.demo_baseline import (
     run_demo_baseline_freeze,
 )
 from application.services import create_application_services
+from schemas.evidence_governance import validate_evidence_manifest
 
 
 def test_demo_baseline_freeze_generates_reproducible_packet(tmp_path: Path) -> None:
@@ -22,10 +23,12 @@ def test_demo_baseline_freeze_generates_reproducible_packet(tmp_path: Path) -> N
     assert packet["intent"] == DEMO_BASELINE_INTENT
     assert packet["packet_hash"]
     assert packet["fixed_demo"]["truth_table"][2] == {"A": 1, "B": 0, "GFP": 1}
+    assert packet["fixed_demo"]["task_set_license"] == "Apache-2.0"
     assert packet["research_run"]["status"] == "completed"
     assert packet["research_run"]["configuration_hash"]
     assert packet["research_run"]["result_hash"]
     assert packet["benchmark_run"]["dataset_id"] == "research_smoke_v1"
+    assert packet["benchmark_run"]["dataset_license"] == "Apache-2.0"
     assert packet["benchmark_run"]["pass_rate"] == 1.0
     assert packet["sequence_analysis"]["summary"]["part_count"] > 0
     assert packet["sequence_analysis"]["summary"]["blocked_count"] == 0
@@ -62,6 +65,18 @@ def test_demo_baseline_freeze_generates_reproducible_packet(tmp_path: Path) -> N
     assert Path(packet["artifacts"]["sequence_evidence_json"]).is_file()
     assert Path(packet["artifacts"]["assembly_plan_json"]).is_file()
     assert Path(packet["artifacts"]["primer_readiness_json"]).is_file()
+    evidence_manifest_path = Path(packet["artifacts"]["evidence_manifest_json"])
+    assert evidence_manifest_path.is_file()
+    assert validate_evidence_manifest(packet["evidence_manifest"]) == []
+    decisions = {
+        item["claim_id"]: item["status"]
+        for item in packet["evidence_manifest"]["claim_decisions"]
+    }
+    assert decisions["computationally_consistent"] == "supported"
+    assert decisions["externally_mapped"] == "unsupported"
+    assert decisions["sequence_supported"] == "limited"
+    assert decisions["experimentally_supported"] == "unsupported"
+
 
     persisted = json.loads(packet_path.read_text(encoding="utf-8"))
     assert persisted["packet_hash"] == packet["packet_hash"]

@@ -1,0 +1,316 @@
+{
+  "schema_version": "evidence-bom@1.0.0",
+  "generated_at": "2026-07-14T12:38:32.568646+00:00",
+  "subject": {
+    "subject_type": "public_demo_snapshot",
+    "identifier": "cello_a_and_not_b_gfp_v1",
+    "intent": "Activate GFP only when input A is present and input B is absent."
+  },
+  "intended_use": "public_evidence_review",
+  "claim_boundary": "This packet is computational screening evidence for a fixed demo intent. It is not wet-lab validation and it is not an experimental protocol.",
+  "evidence": [
+    {
+      "evidence_id": "case01_task_contract",
+      "evidence_type": "synthetic_task_contract",
+      "source_uri": "benchmark_suite/task_sets/exp003_design_tasks_v1.json",
+      "source_version": "1.0.0",
+      "content_hash": "1a6aee07d48ae1521bb5ee0b8deb639f82f1df9a1135f00ced410902ca428a9e",
+      "license_expression": "Apache-2.0",
+      "rights_uri": "LICENSE",
+      "license_status": "attribution_required",
+      "attribution_required": true,
+      "permitted_uses": [
+        "internal_evaluation",
+        "public_evidence_review"
+      ],
+      "prohibited_uses": [],
+      "biological_context": {
+        "chassis": "Escherichia coli"
+      },
+      "method": "curated_project_fixture",
+      "scope": "Computational task definition only.",
+      "availability": "available",
+      "notes": [],
+      "metadata": {
+        "claim_eligible": true
+      }
+    },
+    {
+      "evidence_id": "case01_simulation_result",
+      "evidence_type": "computational_simulation",
+      "source_uri": "generated:research_run",
+      "source_version": "resource-aware-regulatory-ode@1.9.0",
+      "content_hash": "55cc49bb2a3398b5ffe909c9e561147ac2676b6859041ba6310742b8e2bc53b4",
+      "license_expression": "Apache-2.0",
+      "rights_uri": "LICENSE",
+      "license_status": "attribution_required",
+      "attribution_required": true,
+      "permitted_uses": [
+        "internal_evaluation",
+        "public_evidence_review"
+      ],
+      "prohibited_uses": [],
+      "biological_context": {
+        "chassis": "Escherichia coli"
+      },
+      "method": "resource_aware_regulatory_ode",
+      "scope": "Relative computational screening under named assumptions.",
+      "availability": "available",
+      "notes": [],
+      "metadata": {
+        "claim_eligible": true
+      }
+    },
+    {
+      "evidence_id": "case01_benchmark_result",
+      "evidence_type": "synthetic_benchmark",
+      "source_uri": "benchmark_suite/datasets/research_smoke_v1.json",
+      "source_version": "1.0.0",
+      "content_hash": "d0f3a158805334dd36f5ddedc2529bf0be33d016f98effaa24a8fdd760aeecc8",
+      "license_expression": "Apache-2.0",
+      "rights_uri": "LICENSE",
+      "license_status": "attribution_required",
+      "attribution_required": true,
+      "permitted_uses": [
+        "internal_evaluation",
+        "public_evidence_review"
+      ],
+      "prohibited_uses": [],
+      "biological_context": {},
+      "method": "deterministic_project_benchmark",
+      "scope": "Software-contract evidence; not measured circuit performance.",
+      "availability": "available",
+      "notes": [],
+      "metadata": {
+        "claim_eligible": true
+      }
+    },
+    {
+      "evidence_id": "case01_sequence_checks",
+      "evidence_type": "illustrative_sequence_check",
+      "source_uri": "generated:sequence_analysis",
+      "source_version": null,
+      "content_hash": "ab1cb8c4095fea09cb2898398c924d8eb44dded81fa5dcc2534853af730ea9ef",
+      "license_expression": "Apache-2.0",
+      "rights_uri": "LICENSE",
+      "license_status": "attribution_required",
+      "attribution_required": true,
+      "permitted_uses": [
+        "internal_evaluation",
+        "public_evidence_review"
+      ],
+      "prohibited_uses": [],
+      "biological_context": {
+        "chassis": "Escherichia coli"
+      },
+      "method": "deterministic_sequence_analysis",
+      "scope": "Illustrative demo sequences only.",
+      "availability": "available",
+      "notes": [
+        "Passing checks do not establish empirical part characterization."
+      ],
+      "metadata": {
+        "claim_eligible": false
+      }
+    },
+    {
+      "evidence_id": "case01_external_cello_mapping",
+      "evidence_type": "external_tool_mapping",
+      "source_uri": null,
+      "source_version": null,
+      "content_hash": null,
+      "license_expression": null,
+      "rights_uri": null,
+      "license_status": "unknown",
+      "attribution_required": false,
+      "permitted_uses": [],
+      "prohibited_uses": [],
+      "biological_context": {},
+      "method": null,
+      "scope": "External Cello mapping evidence was not produced for this snapshot.",
+      "availability": "missing",
+      "notes": [],
+      "metadata": {}
+    },
+    {
+      "evidence_id": "case01_experimental_validation",
+      "evidence_type": "experimental_measurement",
+      "source_uri": null,
+      "source_version": null,
+      "content_hash": null,
+      "license_expression": null,
+      "rights_uri": null,
+      "license_status": "unknown",
+      "attribution_required": false,
+      "permitted_uses": [],
+      "prohibited_uses": [],
+      "biological_context": {},
+      "method": null,
+      "scope": "No wet-lab measurement is included in this snapshot.",
+      "availability": "missing",
+      "notes": [],
+      "metadata": {}
+    }
+  ],
+  "claim_evidence_links": [
+    {
+      "claim_id": "computationally_consistent",
+      "evidence_ids": [
+        "case01_task_contract",
+        "case01_simulation_result",
+        "case01_benchmark_result"
+      ],
+      "relationship": "supports",
+      "required": true,
+      "note": "Logic, simulation, and benchmark evidence support only a computational claim."
+    },
+    {
+      "claim_id": "externally_mapped",
+      "evidence_ids": [
+        "case01_external_cello_mapping"
+      ],
+      "relationship": "supports",
+      "required": true,
+      "note": "External mapping must remain unsupported when Cello was not run."
+    },
+    {
+      "claim_id": "sequence_supported",
+      "evidence_ids": [
+        "case01_sequence_checks"
+      ],
+      "relationship": "supports",
+      "required": true,
+      "note": "Illustrative sequence checks are insufficient for a full biological claim."
+    },
+    {
+      "claim_id": "experimentally_supported",
+      "evidence_ids": [
+        "case01_experimental_validation"
+      ],
+      "relationship": "supports",
+      "required": true,
+      "note": "Experimental support requires measured evidence."
+    }
+  ],
+  "claim_decisions": [
+    {
+      "claim_id": "computationally_consistent",
+      "status": "supported",
+      "evidence_ids": [
+        "case01_task_contract",
+        "case01_simulation_result",
+        "case01_benchmark_result"
+      ],
+      "license_decision": {
+        "status": "attribution_required",
+        "intended_use": "public_evidence_review",
+        "evidence_ids": [
+          "case01_task_contract",
+          "case01_simulation_result",
+          "case01_benchmark_result"
+        ],
+        "reason_codes": [
+          "ATTRIBUTION_MUST_BE_PRESERVED"
+        ],
+        "attribution_evidence_ids": [
+          "case01_task_contract",
+          "case01_simulation_result",
+          "case01_benchmark_result"
+        ]
+      },
+      "reason_codes": [],
+      "note": "Logic, simulation, and benchmark evidence support only a computational claim."
+    },
+    {
+      "claim_id": "externally_mapped",
+      "status": "unsupported",
+      "evidence_ids": [
+        "case01_external_cello_mapping"
+      ],
+      "license_decision": {
+        "status": "unknown",
+        "intended_use": "public_evidence_review",
+        "evidence_ids": [],
+        "reason_codes": [
+          "NO_EVIDENCE_RECORDS"
+        ],
+        "attribution_evidence_ids": []
+      },
+      "reason_codes": [
+        "REQUIRED_EVIDENCE_UNAVAILABLE"
+      ],
+      "note": "External mapping must remain unsupported when Cello was not run."
+    },
+    {
+      "claim_id": "sequence_supported",
+      "status": "limited",
+      "evidence_ids": [
+        "case01_sequence_checks"
+      ],
+      "license_decision": {
+        "status": "attribution_required",
+        "intended_use": "public_evidence_review",
+        "evidence_ids": [
+          "case01_sequence_checks"
+        ],
+        "reason_codes": [
+          "ATTRIBUTION_MUST_BE_PRESERVED"
+        ],
+        "attribution_evidence_ids": [
+          "case01_sequence_checks"
+        ]
+      },
+      "reason_codes": [
+        "EVIDENCE_NOT_ELIGIBLE_FOR_FULL_CLAIM"
+      ],
+      "note": "Illustrative sequence checks are insufficient for a full biological claim."
+    },
+    {
+      "claim_id": "experimentally_supported",
+      "status": "unsupported",
+      "evidence_ids": [
+        "case01_experimental_validation"
+      ],
+      "license_decision": {
+        "status": "unknown",
+        "intended_use": "public_evidence_review",
+        "evidence_ids": [],
+        "reason_codes": [
+          "NO_EVIDENCE_RECORDS"
+        ],
+        "attribution_evidence_ids": []
+      },
+      "reason_codes": [
+        "REQUIRED_EVIDENCE_UNAVAILABLE"
+      ],
+      "note": "Experimental support requires measured evidence."
+    }
+  ],
+  "overall_license_decision": {
+    "status": "attribution_required",
+    "intended_use": "public_evidence_review",
+    "evidence_ids": [
+      "case01_task_contract",
+      "case01_simulation_result",
+      "case01_benchmark_result",
+      "case01_sequence_checks"
+    ],
+    "reason_codes": [
+      "ATTRIBUTION_MUST_BE_PRESERVED"
+    ],
+    "attribution_evidence_ids": [
+      "case01_task_contract",
+      "case01_simulation_result",
+      "case01_benchmark_result",
+      "case01_sequence_checks"
+    ]
+  },
+  "summary": {
+    "evidence_count": 6,
+    "available_evidence_count": 4,
+    "supported_claim_count": 1,
+    "limited_claim_count": 1,
+    "unsupported_claim_count": 2,
+    "blocked_claim_count": 0
+  }
+}

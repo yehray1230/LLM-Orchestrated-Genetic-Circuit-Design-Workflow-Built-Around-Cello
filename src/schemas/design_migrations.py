@@ -70,6 +70,12 @@ def migrate_design_ir_v1_to_v2(payload: dict[str, Any]) -> MigrationResult:
             artifact_manifest_path=_optional_string(
                 item.get("artifact_manifest_path")
             ),
+            license_expression=_optional_string(item.get("license_expression")),
+            rights_uri=_optional_string(item.get("rights_uri")),
+            license_status=str(item.get("license_status") or "unknown"),
+            attribution_required=bool(item.get("attribution_required", False)),
+            permitted_uses=list(item.get("permitted_uses") or []),
+            prohibited_uses=list(item.get("prohibited_uses") or []),
             metadata=dict(item.get("metadata") or {}),
         )
         for index, item in enumerate(_dict_list(payload.get("provenance")), start=1)
@@ -352,6 +358,12 @@ def design_ir_v2_to_v1_payload(payload: dict[str, Any]) -> dict[str, Any]:
                 "generated_by": item.generated_by,
                 "generated_at": item.generated_at,
                 "artifact_manifest_path": item.artifact_manifest_path,
+                "license_expression": item.license_expression,
+                "rights_uri": item.rights_uri,
+                "license_status": item.license_status,
+                "attribution_required": item.attribution_required,
+                "permitted_uses": list(item.permitted_uses),
+                "prohibited_uses": list(item.prohibited_uses),
                 "metadata": dict(item.metadata),
             }
             for item in design.provenance

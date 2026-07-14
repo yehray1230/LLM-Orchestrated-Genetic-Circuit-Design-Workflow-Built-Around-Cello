@@ -51,6 +51,33 @@ def test_v1_to_v2_migration_layers_construct_context_and_assumptions() -> None:
     assert design.validate() == []
 
 
+def test_provenance_license_fields_survive_v1_v2_round_trip() -> None:
+    payload = _v1_design()
+    payload["provenance"][0].update(
+        {
+            "license_expression": "CC-BY-4.0",
+            "rights_uri": "https://example.org/rights",
+            "license_status": "attribution_required",
+            "attribution_required": True,
+            "permitted_uses": ["public_evidence_review"],
+            "prohibited_uses": ["commercial_distribution"],
+        }
+    )
+
+    migrated = migrate_design_ir_v1_to_v2(payload).design
+    provenance = migrated.provenance[0]
+    assert provenance.license_expression == "CC-BY-4.0"
+    assert provenance.rights_uri == "https://example.org/rights"
+    assert provenance.license_status == "attribution_required"
+    assert provenance.attribution_required is True
+    assert provenance.permitted_uses == ["public_evidence_review"]
+    projected = design_ir_v2_to_v1_payload(migrated.to_dict())
+    assert projected["provenance"][0]["license_expression"] == "CC-BY-4.0"
+    assert projected["provenance"][0]["prohibited_uses"] == [
+        "commercial_distribution"
+    ]
+
+
 def test_v2_to_v1_projection_preserves_existing_consumers() -> None:
     migrated = migrate_design_ir_v1_to_v2(_v1_design()).design
     projected = design_ir_v2_to_v1_payload(migrated.to_dict())

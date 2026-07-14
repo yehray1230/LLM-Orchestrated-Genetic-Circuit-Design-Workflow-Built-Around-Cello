@@ -5,11 +5,13 @@ from io import StringIO
 import json
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from api.dependencies import get_services
 from api.main import app
 from tests.test_assembly_planner import _services
+import tools.primer_designer as primer_designer
 from tools.primer_designer import design_assembly_primers
 
 
@@ -29,6 +31,19 @@ def _request() -> dict[str, object]:
     }
 
 
+def test_primer_design_reports_optional_gpl_dependency(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("tools.primer_designer._primer3", None)
+
+    with pytest.raises(RuntimeError, match="optional GPL-2.0 dependency"):
+        design_assembly_primers({"fragments": []})
+
+
+@pytest.mark.skipif(
+    primer_designer._primer3 is None,
+    reason="requires optional GPL-2.0 dependency primer3-py",
+)
 def test_primer_design_uses_adapters_and_marks_short_fragments_for_synthesis(
     tmp_path: Path,
 ) -> None:
@@ -54,6 +69,10 @@ def test_primer_design_uses_adapters_and_marks_short_fragments_for_synthesis(
     assert insert["warnings"][0]["code"] == "DIRECT_SYNTHESIS_RECOMMENDED"
 
 
+@pytest.mark.skipif(
+    primer_designer._primer3 is None,
+    reason="requires optional GPL-2.0 dependency primer3-py",
+)
 def test_deliverable_service_writes_complete_package(tmp_path: Path) -> None:
     services = _services(tmp_path)
 
@@ -104,6 +123,10 @@ def test_deliverable_service_writes_complete_package(tmp_path: Path) -> None:
     assert package["primers"]["status"] == "ready"
 
 
+@pytest.mark.skipif(
+    primer_designer._primer3 is None,
+    reason="requires optional GPL-2.0 dependency primer3-py",
+)
 def test_deliverable_api_and_artifact_download(tmp_path: Path) -> None:
     services = _services(tmp_path)
     app.dependency_overrides[get_services] = lambda: services
@@ -127,6 +150,10 @@ def test_deliverable_api_and_artifact_download(tmp_path: Path) -> None:
     assert "text/csv" in download.headers["content-type"]
 
 
+@pytest.mark.skipif(
+    primer_designer._primer3 is None,
+    reason="requires optional GPL-2.0 dependency primer3-py",
+)
 def test_html_assembly_workspace_renders_report_and_downloads(
     tmp_path: Path,
 ) -> None:

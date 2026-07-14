@@ -7,8 +7,15 @@ name = "genetic_circuit_design_workflow"
 version = "2.0.0"
 description = "An LLM-orchestrated genetic-circuit design workflow built around Cello"
 readme = "README.md"
+license = { text = "Apache-2.0" }
 requires-python = ">=3.10"
 dependencies = []
+
+[project.optional-dependencies]
+primer-design = ["primer3-py>=2.3"]
+
+[tool.setuptools]
+license-files = ["LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md"]
 
 [tool.ruff]
 exclude = ["pytest_temp*", ".pytest_cache", ".ruff_cache", "venv", ".venv"]

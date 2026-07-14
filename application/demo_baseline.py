@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from application.case01_evidence import build_case01_evidence_manifest
 from benchmark_suite.design_task_dataset import load_design_task_set
 from benchmark_suite.readiness_evaluator import evaluate_readiness
 from schemas.assembly_plan import AssemblyFragment, AssemblyJunction, AssemblyPlan
@@ -106,6 +107,7 @@ def run_canonical_task_baseline(
             "fixed_demo": {
                 "task_set_id": task_set.task_set_id,
                 "task_set_version": task_set.version,
+                "task_set_license": task_set.license,
                 "task_set_content_hash": task_set.content_hash,
                 "task_id": task.task_id,
                 "category": task.category,
@@ -257,6 +259,7 @@ def run_canonical_task_baseline(
         "fixed_demo": {
             "task_set_id": task_set.task_set_id,
             "task_set_version": task_set.version,
+            "task_set_license": task_set.license,
             "task_set_content_hash": task_set.content_hash,
             "task_id": task.task_id,
             "category": task.category,
@@ -293,6 +296,9 @@ def run_canonical_task_baseline(
             "run_manifest_json": started.get("run_manifest_path"),
         }
 
+    if task_id == DEMO_BASELINE_TASK_ID:
+        packet["evidence_manifest"] = build_case01_evidence_manifest(packet)
+
     packet["packet_hash"] = canonical_payload_hash(make_reproducible_packet(packet))
 
     packet_dir = output_root / f"demo_baseline_{packet['packet_hash'][:12]}"
@@ -302,6 +308,7 @@ def run_canonical_task_baseline(
     sequence_json = packet_dir / "sequence_analysis.json"
     sequence_evidence_json = packet_dir / "sequence_evidence_report.json"
     assembly_plan_json = packet_dir / "assembly_plan.json"
+    evidence_manifest_json = packet_dir / "evidence_manifest.json"
     primer_readiness_json = packet_dir / "primer_readiness.json"
 
     sequence_json.write_text(
@@ -320,6 +327,11 @@ def run_canonical_task_baseline(
         json.dumps(primer_readiness, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+    if packet.get("evidence_manifest"):
+        evidence_manifest_json.write_text(
+            json.dumps(packet["evidence_manifest"], ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
 
     packet["artifacts"]["packet_json"] = str(packet_json.resolve())
     packet["artifacts"]["packet_markdown"] = str(packet_markdown.resolve())
@@ -328,6 +340,10 @@ def run_canonical_task_baseline(
         sequence_evidence_json.resolve()
     )
     packet["artifacts"]["assembly_plan_json"] = str(assembly_plan_json.resolve())
+    if packet.get("evidence_manifest"):
+        packet["artifacts"]["evidence_manifest_json"] = str(
+            evidence_manifest_json.resolve()
+        )
     packet["artifacts"]["primer_readiness_json"] = str(primer_readiness_json.resolve())
 
     packet_json.write_text(
@@ -607,6 +623,7 @@ def _benchmark_summary(result: dict[str, Any]) -> dict[str, Any]:
         "benchmark_run_id": result.get("benchmark_run_id"),
         "dataset_id": result.get("dataset", {}).get("dataset_id"),
         "dataset_version": result.get("dataset", {}).get("version"),
+        "dataset_license": result.get("dataset", {}).get("license"),
         "profile_id": result.get("profile_id"),
         "scoring_version": result.get("scoring_version"),
         "case_count": summary.get("case_count"),
@@ -621,6 +638,7 @@ def _benchmark_summary(result: dict[str, Any]) -> dict[str, Any]:
 def make_reproducible_packet(packet: dict[str, Any]) -> dict[str, Any]:
     transient_keys = {
         "created_at",
+        "generated_at",
         "run_id",
         "run_manifest_path",
         "run_manifest_json",
@@ -773,6 +791,7 @@ def _packet_markdown(packet: dict[str, Any]) -> str:
             f"- Sequence analysis: `{artifacts.get('sequence_analysis_json')}`",
             f"- Assembly plan: `{artifacts.get('assembly_plan_json')}`",
             f"- Primer readiness: `{artifacts.get('primer_readiness_json')}`",
+            f"- Evidence manifest: `{artifacts.get('evidence_manifest_json')}`",
             f"- Run manifest: `{artifacts.get('run_manifest_json')}`",
             "",
         ]
