@@ -83,6 +83,18 @@ from schemas.temporal_evaluation import (
     get_temporal_evaluator_config,
 )
 from schemas.notification import Notification
+from schemas.evidence_governance import (
+    EVIDENCE_BOM_SCHEMA_VERSION,
+    ClaimDecision,
+    ClaimEvidenceLink,
+    EvidenceRecord,
+    LicenseDecision,
+    build_evidence_manifest,
+    evaluate_claim,
+    evaluate_license_decision,
+    validate_evidence_manifest,
+    verify_evidence_manifest,
+)
 
 __all__ = [
     "BiologicalPart",
@@ -152,4 +164,14 @@ __all__ = [
     "TEMPORAL_EVALUATOR_CONFIGS",
     "get_temporal_evaluator_config",
     "Notification",
+    "EVIDENCE_BOM_SCHEMA_VERSION",
+    "ClaimDecision",
+    "ClaimEvidenceLink",
+    "EvidenceRecord",
+    "LicenseDecision",
+    "build_evidence_manifest",
+    "evaluate_claim",
+    "evaluate_license_decision",
+    "validate_evidence_manifest",
+    "verify_evidence_manifest",
 ]

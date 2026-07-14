@@ -5,6 +5,7 @@ from io import StringIO
 import json
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from api.dependencies import get_services
@@ -27,6 +28,15 @@ def _request() -> dict[str, object]:
         "golden_gate_enzyme": "BsaI",
         "golden_gate_overhangs": None,
     }
+
+
+def test_primer_design_reports_optional_gpl_dependency(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("tools.primer_designer._primer3", None)
+
+    with pytest.raises(RuntimeError, match="optional GPL-2.0 dependency"):
+        design_assembly_primers({"fragments": []})
 
 
 def test_primer_design_uses_adapters_and_marks_short_fragments_for_synthesis(

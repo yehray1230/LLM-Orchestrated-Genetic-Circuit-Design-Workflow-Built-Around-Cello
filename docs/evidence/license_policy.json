@@ -1,0 +1,85 @@
+{
+  "schema_version": "evidence-license-policy@1.0.0",
+  "status": "active",
+  "reviewed_at": "2026-07-14",
+  "policy_owner": "repository_owner",
+  "default_intended_use": "public_evidence_review",
+  "selected_license_expression": "Apache-2.0",
+  "public_reuse_gate": "go_with_attribution",
+  "project_materials": [
+    {
+      "material_type": "source_code",
+      "license_expression": "Apache-2.0",
+      "license_status": "attribution_required",
+      "reason_code": "ROOT_LICENSE_ACTIVATED"
+    },
+    {
+      "material_type": "documentation",
+      "license_expression": "Apache-2.0",
+      "license_status": "attribution_required",
+      "reason_code": "ROOT_LICENSE_APPLIES"
+    },
+    {
+      "material_type": "synthetic_fixtures",
+      "license_expression": "Apache-2.0",
+      "license_status": "attribution_required",
+      "reason_code": "FIXTURE_METADATA_MIGRATED"
+    },
+    {
+      "material_type": "generated_evidence",
+      "license_expression": "Apache-2.0",
+      "license_status": "attribution_required",
+      "reason_code": "PROJECT_GENERATED_EVIDENCE_LICENSED"
+    }
+  ],
+  "external_sources": [
+    {
+      "source_id": "cidarlab_cello_v1",
+      "bundled_or_ingested": false,
+      "observed_license_expression": "BSD-2-Clause",
+      "source_uri": "https://github.com/CIDARLAB/cello",
+      "decision": "not_applicable_until_used"
+    },
+    {
+      "source_id": "cello_2_protocol_source",
+      "bundled_or_ingested": false,
+      "observed_license_expression": "MIT",
+      "source_uri": "https://www.nature.com/articles/s41596-021-00675-2",
+      "decision": "not_applicable_until_exact_source_is_used"
+    },
+    {
+      "source_id": "external_ucf_or_part_library",
+      "bundled_or_ingested": false,
+      "observed_license_expression": null,
+      "source_uri": null,
+      "decision": "per_source_review_required"
+    },
+    {
+      "source_id": "primer3_py",
+      "bundled_or_ingested": false,
+      "observed_license_expression": "GPL-2.0-only",
+      "source_uri": "https://github.com/libnano/primer3-py",
+      "decision": "optional_dependency_separate_from_apache_base"
+    }
+  ],
+  "decision_options": [
+    {
+      "license_expression": "Apache-2.0",
+      "recommendation": "selected",
+      "rationale": "Permissive license with explicit patent and contribution terms."
+    },
+    {
+      "license_expression": "MIT",
+      "recommendation": "not_selected",
+      "rationale": "Short permissive license with broad ecosystem recognition."
+    }
+  ],
+  "activation_requirements": [
+    "owner_selects_license",
+    "root_license_file_added",
+    "package_metadata_updated",
+    "fixture_license_metadata_migrated",
+    "case01_regenerated",
+    "governance_and_regression_tests_pass"
+  ]
+}

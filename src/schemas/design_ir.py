@@ -14,6 +14,12 @@ class ProvenanceRecord:
     generated_by: str | None = None
     generated_at: str | None = None
     artifact_manifest_path: str | None = None
+    license_expression: str | None = None
+    rights_uri: str | None = None
+    license_status: str = "unknown"
+    attribution_required: bool = False
+    permitted_uses: list[str] = field(default_factory=list)
+    prohibited_uses: list[str] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
 
 

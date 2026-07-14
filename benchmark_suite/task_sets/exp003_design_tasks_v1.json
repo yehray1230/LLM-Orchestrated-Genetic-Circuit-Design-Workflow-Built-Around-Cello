@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "name": "EXP-003 five-case genetic circuit design benchmark",
   "description": "Fixed natural-language design tasks for the Phase 6-lite reproducibility harness.",
-  "license": "project-fixture",
+  "license": "Apache-2.0",
   "provenance": {
     "kind": "synthetic_project_fixture",
     "wet_lab_validated": false,

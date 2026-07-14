@@ -16,6 +16,29 @@ revision. It is an exploratory, AI-assisted implementation of that idea—not a
 virtual cell, a complete biological CAD platform, or an experimentally
 validated circuit-design system.
 
+## What Makes This Prototype Different
+
+Natural-language input, multi-agent orchestration, and Cello-compatible output
+are parts of the workflow, but they are not the primary differentiation. The
+research focus is an **evidence-governance layer** for deciding what may be
+claimed about an AI-generated candidate.
+
+- A machine-readable Evidence Bill of Materials (E-BOM) links public claims to
+  named evidence, provenance, biological context, and intended use.
+- Deterministic claim and license gates classify claims as `supported`,
+  `limited`, `unsupported`, or `blocked`.
+- Missing experimental evidence remains explicitly `unsupported`; it is never
+  treated as evidence that an experiment failed.
+- Project-owned Apache-2.0 material is kept distinct from third-party software,
+  UCFs, part libraries, sequence records, and experimental data whose upstream
+  terms still apply.
+
+The intended output is therefore not only a candidate design. It is a candidate
+plus an inspectable account of which statements are supported, by what, under
+which rights and biological constraints, and what evidence is still missing.
+See the [Evidence Governance and E-BOM Specification](docs/evidence_governance_spec.md)
+and the [positioning and comparison landscape](docs/competitive_landscape.md).
+
 ## The Problem
 
 Natural-language and LLM-generated biological designs can be persuasive while
@@ -75,10 +98,27 @@ profiles, content-addressed benchmark metadata, explicit claim-boundary
 policies, and a sanitized public snapshot for the fixed Case 01 demonstration.
 
 - [Case 01 public evidence](docs/evidence/case_01/README.md)
+- [Case 01 machine-readable E-BOM](docs/evidence/case_01/evidence_manifest.json)
 - [Demo summary](demo_cases/DEMO_SUMMARY.md)
 - [Evaluation metrics](docs/evaluation_metrics.md)
 - [Model assumptions](docs/model_assumptions.md)
 - [MVP verification plan and execution record](docs/developer/MVP_TEST_PLAN.md)
+
+### One-Minute Evidence Governance Proof
+
+From the repository root, run:
+
+```powershell
+.\venv\Scripts\python.exe -m src.scripts.verify_evidence_manifest
+```
+
+The command independently rebuilds the recorded claim, license, and summary
+decisions from the public Case 01 E-BOM. A `PASS` confirms that those governance
+decisions reproduce and prints every supported, limited, unsupported, and
+blocked claim. It does not mean that every biological claim is supported.
+Use `--json` for a machine-readable proof result. See the
+[Case 01 one-minute proof](docs/evidence/case_01/README.md#one-minute-public-proof-gate)
+for the expected decisions and their interpretation.
 
 The bundled `research_smoke_v1` benchmark contains synthetic infrastructure
 fixtures, not measured circuits. Current evidence supports software and
@@ -182,6 +222,8 @@ audience-aware routing while preserving a universal project identity.
 | [Workflow](docs/workflow.md) | Execution, repair, mock, and fallback behavior |
 | [Model assumptions](docs/model_assumptions.md) | Equations, parameters, and missing mechanisms |
 | [Evaluation metrics](docs/evaluation_metrics.md) | Scores, versions, and interpretation |
+| [Evidence governance specification](docs/evidence_governance_spec.md) | E-BOM, claim decisions, license gates, and interoperability boundaries |
+| [Positioning and comparison landscape](docs/competitive_landscape.md) | Source-backed comparison with Cello and CELLM |
 | [AI reviewer guide](docs/ai_reviewer_guide.md) | Repository review protocol |
 | [Evidence capture guide (Traditional Chinese)](docs/evidence_capture_guide_zh-Hant.md) | Real-run screenshots, recording script, metadata, and claim boundaries |
 | [Future roadmap](docs/future_roadmap.md) | Open research and engineering directions |
@@ -196,3 +238,15 @@ code, deterministic tests, document review, and explicit claim-boundary work.
 The appropriate basis for evaluating it is the clarity of the problem, the
 inspectability of the implementation, the available evidence, and the honesty
 of its unresolved questions—not an authorship narrative.
+
+## License and Third-Party Software
+
+Original project code, documentation, synthetic fixtures, and generated
+evidence are licensed under [Apache-2.0](LICENSE).
+
+Dependencies and external biological data retain their upstream terms; see
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md). In particular,
+`primer3-py` is GPL-2.0 and is intentionally excluded from the Apache-2.0
+base installation. Install the optional `primer-design` extra only after
+reviewing the GPL redistribution boundary. Cello, UCFs, part libraries, and
+external datasets are not licensed by this repository's Apache-2.0 grant.

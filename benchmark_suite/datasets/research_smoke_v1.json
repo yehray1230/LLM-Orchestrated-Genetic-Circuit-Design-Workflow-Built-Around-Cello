@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "name": "Research evaluation smoke benchmark",
   "description": "Synthetic, deterministic fixtures for validating score direction, evidence sensitivity, and comparison/report infrastructure.",
-  "license": "project-fixture",
+  "license": "Apache-2.0",
   "provenance": {
     "kind": "synthetic_fixture",
     "wet_lab_validated": false,

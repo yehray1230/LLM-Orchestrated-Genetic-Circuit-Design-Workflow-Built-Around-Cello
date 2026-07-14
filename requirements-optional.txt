@@ -1,2 +1,5 @@
 # Optional plasmid-map rendering for assembly deliverables.
 dna-features-viewer>=3.1
+
+# Optional primer design backend (GPL-2.0; not part of Apache-2.0 base install).
+primer3-py>=2.3

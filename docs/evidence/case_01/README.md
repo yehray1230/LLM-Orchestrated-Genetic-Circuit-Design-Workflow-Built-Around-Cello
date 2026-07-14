@@ -5,6 +5,61 @@ This directory is the public, sanitized evidence index for the fixed
 the demo report inspectable without committing local run directories or
 workstation-specific paths.
 
+The tracked [`evidence_manifest.json`](evidence_manifest.json) is the Case 01
+Evidence Bill of Materials (E-BOM). It maps public claim IDs to source,
+checksum, biological scope, availability, and license-policy decisions. The
+project-authored evidence is licensed under Apache-2.0 and requires preservation
+of the applicable license and attribution notices.
+
+The active repository-level [license policy](../license_policy.json) permits
+reuse of original project material with attribution. External tools, UCFs,
+biological-part libraries, and datasets remain subject to their own terms; see
+[`THIRD_PARTY_NOTICES.md`](../../../THIRD_PARTY_NOTICES.md).
+
+## One-minute public proof gate
+
+From the repository root, run:
+
+```powershell
+.\venv\Scripts\python.exe -m src.scripts.verify_evidence_manifest
+```
+
+Expected first line:
+
+```text
+Evidence Governance Public Proof Gate: PASS
+```
+
+The verifier does more than check JSON syntax. It reconstructs the evidence
+records and claim links, recalculates every claim and license decision, and
+checks the recorded summary. Any schema error, unknown evidence reference,
+tampered decision, inconsistent summary, unreadable file, or invalid JSON
+produces `FAIL` and a non-zero process exit code.
+
+Use a specific manifest path or request machine-readable output when needed:
+
+```powershell
+.\venv\Scripts\python.exe -m src.scripts.verify_evidence_manifest docs/evidence/case_01/evidence_manifest.json --json
+```
+
+`PASS` means that the governance decisions reproduce from the recorded inputs.
+It deliberately does **not** mean that every claim is supported or that the
+candidate has been experimentally validated.
+
+## Public claim decisions
+
+| Claim | Decision | License decision | Reason | Safe interpretation |
+| --- | --- | --- | --- | --- |
+| `computationally_consistent` | `supported` | `attribution_required` | Available computational evidence reproduces the recorded result. | The fixed candidate is consistent under the recorded computational checks. |
+| `externally_mapped` | `unsupported` | `unknown` | `REQUIRED_EVIDENCE_UNAVAILABLE` | No external Cello/UCF mapping evidence is present. |
+| `sequence_supported` | `limited` | `attribution_required` | `EVIDENCE_NOT_ELIGIBLE_FOR_FULL_CLAIM` | Sequence checks exist, but they do not establish a buildable construct. |
+| `experimentally_supported` | `unsupported` | `unknown` | `REQUIRED_EVIDENCE_UNAVAILABLE` | No wet-lab measurement is present; this is missing evidence, not a failed experiment. |
+
+Current manifest summary: 6 evidence records, 4 available; 1 supported claim,
+1 limited claim, 2 unsupported claims, and 0 blocked claims. The overall
+license decision is `attribution_required` for the available project-authored
+evidence.
+
 ## Claim boundary
 
 This snapshot records deterministic computational screening results. It is not

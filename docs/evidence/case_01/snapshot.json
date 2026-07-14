@@ -1,6 +1,17 @@
 {
   "snapshot_schema": "public-demo-evidence@1.0.0",
-  "source_revision": "d1378ab",
+  "source_revision": "working-tree-evidence-governance-public-proof-gate",
+  "license_policy": {
+    "project_license": "Apache-2.0",
+    "license_status": "attribution_required",
+    "public_reuse_gate": "go_with_attribution",
+    "third_party_notices": "THIRD_PARTY_NOTICES.md"
+  },
+  "task_set": {
+    "task_set_id": "exp003_design_tasks_v1",
+    "version": "1.0.0",
+    "content_hash": "1a6aee07d48ae1521bb5ee0b8deb639f82f1df9a1135f00ced410902ca428a9e"
+  },
   "intent": "Activate GFP only when input A is present and input B is absent.",
   "claim_boundary": "Computational screening evidence only; not external Cello mapping, wet-lab validation, a primer design, or an experimental protocol.",
   "research_run": {
@@ -54,11 +65,12 @@
     "next_required_stage": "sequence_optimized",
     "public_interpretation": "Non-experimental staged workflow status only."
   },
-  "packet_hash": "cc928f18c446e3ad2755a65cb20d10ac4cd3d33869c6aae8aab09b1221a508cc",
+  "packet_hash": "b4f2a1a66847f5733acc97987b8c0d9b663a3f03453e7088208e66830ebb3141",
   "captured_file_sha256": {
     "assembly_plan.json": "e4bdb1c29d94f376898a0267c4dfd43daeed76fb1723e00d49697d75908541ff",
-    "demo_baseline_packet.json": "7d9e96d32d5b47508ca9e3daa3833c62cdda6d74d648232718ccd1ee1c65c3a0",
-    "demo_baseline_summary.md": "2eeb829bdf730b012e27c44222172329cd9f1f204dca2dabb5a42724a107edbf",
+    "demo_baseline_packet.json": "630db49b24afa5ab928edc94471ac7ffa74c8d99ab9376c19c3422969b4cb3b1",
+    "demo_baseline_summary.md": "40e479dcd70048d4f5db6ab6c2851b1f1cbca23f9e2a52c19d0e1e415128cd05",
+    "evidence_manifest.json": "0cb207a46c35a904cbcaa335b5c35c393ecc2d24f263e9f6858e44dfefec40ce",
     "primer_readiness.json": "af8b4ea56fe4ccd0ed7b14b1397665dd0c3b0857ff8bfb61bd9b41375b29da3b",
     "sequence_analysis.json": "bcd92603bbd75a1c1edfc8b4fbe21861bfcac987c6de9ad407ef4fd665578132",
     "sequence_evidence_report.json": "8c7f96ddc70c7cf3735298798b86125af89a881a1a2fd0c7689a208adf27dee6"

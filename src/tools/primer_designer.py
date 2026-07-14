@@ -3,7 +3,10 @@ from __future__ import annotations
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any
 
-import primer3
+try:
+    import primer3 as _primer3
+except ModuleNotFoundError:
+    _primer3 = None
 from Bio.Seq import Seq
 
 from schemas.assembly_deliverables import (
@@ -16,6 +19,16 @@ from schemas.assembly_deliverables import (
 
 MIN_PCR_TEMPLATE_LENGTH = 60
 SECONDARY_STRUCTURE_WARNING_TM = 45.0
+
+
+def _primer3_backend() -> Any:
+    if _primer3 is None:
+        raise RuntimeError(
+            "Primer design requires the optional GPL-2.0 dependency "
+            "'primer3-py'. Install the 'primer-design' extra only after "
+            "reviewing its redistribution terms."
+        )
+    return _primer3
 
 
 def design_assembly_primers(
@@ -31,6 +44,7 @@ def design_assembly_primers(
     primer_max_gc: float = 65.0,
 ) -> PrimerDesignResult:
     fragment_sets: list[FragmentPrimerSet] = []
+    primer3_backend = _primer3_backend()
     result_warnings: list[PrimerWarning] = []
     for fragment in assembly_plan.get("fragments") or []:
         core = _dna(fragment.get("core_sequence"))
@@ -61,7 +75,7 @@ def design_assembly_primers(
             )
             continue
 
-        primer_payload = primer3.bindings.design_primers(
+        primer_payload = primer3_backend.bindings.design_primers(
             {
                 "SEQUENCE_ID": fragment_id,
                 "SEQUENCE_TEMPLATE": core,
@@ -135,7 +149,7 @@ def design_assembly_primers(
             primer_min_gc,
             primer_max_gc,
         )
-        heterodimer = primer3.bindings.calc_heterodimer(
+        heterodimer = primer3_backend.bindings.calc_heterodimer(
             forward.sequence,
             reverse.sequence,
         )
@@ -194,14 +208,15 @@ def _primer(
 ) -> Primer:
     sequence = adapter + binding
     warnings: list[PrimerWarning] = []
+    primer3_backend = _primer3_backend()
     if not min_size <= len(binding) <= max_size:
         warnings.append(_warning("PRIMER_LENGTH", len(binding), min_size, max_size))
     if not min_tm <= tm <= max_tm:
         warnings.append(_warning("PRIMER_TM", tm, min_tm, max_tm))
     if not min_gc <= gc_percent <= max_gc:
         warnings.append(_warning("PRIMER_GC", gc_percent, min_gc, max_gc))
-    hairpin = primer3.bindings.calc_hairpin(sequence)
-    homodimer = primer3.bindings.calc_homodimer(sequence)
+    hairpin = primer3_backend.bindings.calc_hairpin(sequence)
+    homodimer = primer3_backend.bindings.calc_homodimer(sequence)
     if hairpin.structure_found and hairpin.tm >= SECONDARY_STRUCTURE_WARNING_TM:
         warnings.append(
             PrimerWarning(
