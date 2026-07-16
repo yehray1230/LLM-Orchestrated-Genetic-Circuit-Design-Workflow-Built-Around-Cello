@@ -29,6 +29,10 @@ Most repository evidence validates software contracts and deterministic
 behavior. The fixed public baseline does not establish real-provider LLM
 quality, cross-model robustness, or external Cello performance.
 
+For a first research conversation, use [Case 01 public evidence](../evidence/case_01/README.md).
+The most useful next comparison is deterministic baseline vs single-agent vs
+multi-agent on fixed tasks with recorded prompts and blinded human review.
+
 ## Open contribution surfaces
 
 - repeated real-model evaluation with fixed tasks and blinded review;
