@@ -52,7 +52,7 @@ and open questions that may benefit from review across several disciplines.
 * **多智能體協同架構**：實作了包含專案經理（PM）、構建者（Builder）、翻譯者（Translator）、評論者（Critic）與整合者（Consolidator）的 Reflexion 迴圈，可完成從語意理解到 Verilog 生成與錯誤修復的完整流程。
 * **Cello 映射與邊界處理**：整合了 Cello 映射包裝器（CelloWrapper），能區分「真實外部 Cello 對接」與用於流程測試的「模擬（Mock）Cello 映射」，明示元件分配的來源與不確定性。
 * **資源感知 ODE 模擬器**：實作了簡化的 ODE 動態模擬，將游離核糖體與 RNAP 資源爭奪（Metabolic Burden）納入考量，並支持 C-terminal 活性降解標籤（LVA/LAV/ASV）與降解常數的耦合。
-* **基準評估與 Readiness 分數系統**：設計了 `research-v1.8@1.8.0` 加權評分標準，評估維度涵蓋邏輯功能、動態邊際、 robustness（Monte Carlo 對數常態複製數微擾）、代謝負載與序列品質等；並建立了 Readiness 等級（從概念到序列優化）。
+* **基準評估與 Readiness 分數系統**：設計了具版本的研究評分設定；固定 Case 01 公開基線使用 `research-v2-preview@1.9.0`，另保留 `research-v1.8@1.8.0` 作為 API 與歷史相容設定。評估維度涵蓋邏輯功能、動態邊際、robustness（Monte Carlo 對數常態複製數微擾）、代謝負載與序列品質等；並建立了 Readiness 等級（從概念到序列優化）。所有分數都只是計算排序訊號，不是實驗成功機率。
 * **序列級品質控制與密碼子優化**：利用 Biopython 與 pydna 檢測同聚物、重複序列、限制酶切位點（如 Golden Gate 過渡位點與 Gibson 組裝 overlap $T_m$ 預估），並針對大腸桿菌（E. coli）進行同義密碼子優化（Codon Optimization）。
 * **標準生物資訊格式匯出**：實作了 **SBOL 3 Turtle** 與 **GenBank (`.gb`)** 文件生成器，並以 repository 內的語法、解析與 round-trip regression checks 驗證目前契約。這不等同於已完成 SnapGene 或其他第三方工具的廣泛相容性認證。
 * **互動式 Demo 介面**：開發了 Web 應用，讓研究人員能直觀檢視智能體對話、評分報告與模擬動態曲線。

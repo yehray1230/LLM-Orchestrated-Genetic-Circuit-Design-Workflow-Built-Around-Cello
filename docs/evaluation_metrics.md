@@ -79,6 +79,11 @@ biophysical_score =
 `rbs_accessibility` is `0` when the implemented RBS-blocking check fires and `1` otherwise. This is a computational ranking score, not calibrated biological probability. A candidate with perfect implemented inputs can reach `1.0`; noise, retroactivity, RBS blocking, and burden reduce it monotonically.
 
 `research-v2-preview` 將語義忠實度、噪聲耐受性、retroactivity 耐受性、RBS 可及性與代謝負荷組合為 0–1 分數。此分數只用於計算排序，不是經實驗校準的成功機率。
+
+The fixed public Case 01 baseline uses `research-v2-preview@1.9.0`. This is
+intentional and should be read as a versioned demo profile, not as a silent
+replacement for the API default `research-v1.8@1.8.0`. Public reports must
+quote the profile and version that produced the reported score.
 # 評估指標
 
 This document explains how the current benchmark system scores candidate genetic-circuit designs. The metrics are intended for computational triage: they rank and compare candidate designs inside the Reflexion loop so weak candidates can be repaired, rejected, or deprioritized.
